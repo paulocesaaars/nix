@@ -111,7 +111,7 @@ Aponte para o Python do ambiente virtual do projeto. No Windows, `.cursor/mcp.js
 {
   "mcpServers": {
     "nix": {
-      "command": "C:/Git/nix/.venv/Scripts/python.exe",
+      "command": "${workspaceFolder}/nix/.venv/Scripts/python.exe",
       "args": ["-m", "nix"]
     }
   }
