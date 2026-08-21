@@ -6,27 +6,65 @@
 
 <p align="center">
   <a href="https://github.com/paulocesaaars/nix/releases/latest"><img src="https://img.shields.io/github/v/release/paulocesaaars/nix?label=download&style=for-the-badge" alt="Baixar a última versão"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue?style=for-the-badge" alt="Python 3.11+"></a>
 </p>
 
-Servidor MCP que expõe um vault do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe um vault do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
+## Por que usar
+
+- O agente do editor **encontra ideias**, não só palavras: busca semântica + léxica no vault.
+- **Cria e atualiza notas** no formato do Obsidian, sem sair do Cursor.
+- Tudo roda **na sua máquina**. Nenhum trecho do vault vai para API de embedding.
+- Você controla quando o índice muda: não há watcher em segundo plano.
+
 ## Requisitos
 
-- Python 3.11+
+- Python 3.11+ no `PATH`
 - Um vault do Obsidian (notas `.md`)
+- ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
 
-## Instalação - Usuário
+## Instalação
 
-Baixe a [última release](https://github.com/paulocesaaars/nix/releases/latest) e extraia na raiz do seu projeto com o nome de `nix`.
+Há dois caminhos. Os dois criam `.venv`, instalam o pacote e disparam `nix init` (pergunta o caminho do vault, ou aceite `--vault`).
 
-Rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
+### No seu projeto (usuário)
+
+1. Baixe a [última release](https://github.com/paulocesaaars/nix/releases/latest) (`nix-x.y.z.zip`).
+2. Extraia **na raiz do workspace** e renomeie a pasta para `nix` (o zip vem como `nix-1.0.0/`).
+3. Rode o instalador **dentro dessa pasta**:
 
 ```bat
+cd nix
 setup.bat
 :: ou, se já souber o vault:
 setup.bat --vault "C:/Users/voce/Vault"
+```
+
+```bash
+cd nix
+chmod +x setup.sh
+./setup.sh
+# ou: ./setup.sh --vault "$HOME/Vault"
+```
+
+No Windows use barras `/` no caminho do vault (`C:/Users/voce/Vault`). Barra invertida quebra o TOML.
+
+<p>
+  <img src="nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
+</p>
+
+Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp).
+
+### A partir do repositório (desenvolvedor)
+
+Clone o repositório e rode o mesmo instalador na raiz:
+
+```bat
+setup.bat
+:: ou: setup.bat --vault "C:/Users/voce/Vault"
 ```
 
 ```bash
@@ -35,96 +73,29 @@ chmod +x setup.sh
 # ou: ./setup.sh --vault "$HOME/Vault"
 ```
 
-cd /nix
-./.venv/Scripts/python.exe -m nix --init
 
-## Instalação - Desenvolvedor
 
-O caminho mais curto: rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
-
-```bat
-setup.bat
-:: ou, se já souber o vault:
-setup.bat --vault "C:/Users/voce/Vault"
-```
-
-```bash
-chmod +x setup.sh
-./setup.sh
-# ou: ./setup.sh --vault "$HOME/Vault"
-```
-
-Instalação manual:
+Instalação manual (equivale ao instalador, com dependências de desenvolvimento):
 
 ```bash
 python -m venv .venv
-# Windows (Git Bash):
-source .venv/Scripts/activate
-# Linux/macOS:
-# source .venv/bin/activate
+# Windows (Git Bash): source .venv/Scripts/activate
+# Linux/macOS:        source .venv/bin/activate
 
 pip install -r requirements-dev.txt
 pip install -e .
-nix init                          # pergunta o caminho do vault e cria ~/.nix/config.toml
-# ou: nix init --vault "C:/Users/voce/Vault"
+python -m nix init                # ou: python -m nix init --vault "C:/Users/voce/Vault"
 ```
 
-O comando `nix` e `python -m nix` são equivalentes **depois** de ativar o venv. O Cursor não herda o `PATH` do terminal — no MCP use o Python do `.venv` (veja [Registro no cliente MCP](#registro-no-cliente-mcp)).
-
-## Primeiros passos
-
-Depois do `init` (o instalador já dispara isso):
-
-```bash
-nix doctor
-nix sync                          # indexa o vault (incremental)
-nix status
-```
-
-O primeiro `nix sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face.
-
-Arquivo de configuração (primeiro encontrado): `$NIX_CONFIG` → `./nix.toml` → `~/.nix/config.toml`. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo.
-
-Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
-
-## Comandos
-
-| Comando | Função |
-| --- | --- |
-| `nix` | Inicia o servidor MCP stdio |
-| `nix init [--vault PATH] [--force]` | Cria o arquivo de configuração e grava o caminho do vault |
-| `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
-| `nix status [--json]` | Notas, chunks, último sync e defasagem |
-| `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |
-
-Alterações feitas **fora** do Nix (Obsidian, editor) **não** são indexadas sozinhas — rode `nix sync` ou peça `sync_index` ao agente. Escritas feitas pelas ferramentas atualizam o índice na mesma operação; se a vetorização falhar, o arquivo permanece no vault e um `nix sync` corrige o índice.
-
-## Ferramentas MCP
-
-Doze ferramentas, definidas em `src/nix/core/tools/registry.py`:
-
-| Ferramenta | Uso |
-| --- | --- |
-| `search_notes` | Busca híbrida (semântica + léxica), com filtros de pasta, tags e datas |
-| `read_note` | Lê a nota inteira |
-| `list_notes` | Lista notas indexadas (pasta, tag); inclui tags |
-| `get_linked_notes` | Navega wikilinks (`outgoing`, `incoming` ou `both`) |
-| `create_note` | Cria nota e indexa na hora (write-through) |
-| `append_to_note` | Anexa conteúdo e reindexa |
-| `update_note` | `replace` exige `confirm=true`; `patch` anexa |
-| `delete_note` | Remove nota e índice; exige `confirm=true` |
-| `sync_index` | Sincronização manual (`full`, `dry_run`) |
-| `index_status` | Contagens, último sync e defasagem |
-| `vault_insights` | Órfãs, duplicatas, sugestão de links ou resumo |
-| `remember` | Grava fato duradouro em `vault.longterm_folder` |
-
-Notas também aparecem como recurso `nix://note/{+rel_path}`.
+`nix` e `python -m nix` são equivalentes **depois** de ativar o venv. O Cursor não herda o `PATH` do terminal — no MCP use sempre o Python do `.venv`.
 
 ## Registro no cliente MCP
 
-O cliente inicia o processo. O Cursor **não** herda o `PATH` do terminal: o comando `nix` do venv não é encontrado e a conexão fecha (`'nix' não é reconhecido`).
+O cliente inicia o processo. A IDE **não** herda o `PATH` do terminal: o comando `nix` do venv não é encontrado e a conexão fecha (`'nix' não é reconhecido`).
 
-Aponte para o Python do ambiente virtual do projeto. No Windows, `.cursor/mcp.json`:
+Aponte para o Python do ambiente virtual. Recarregue os servidores MCP depois de salvar.
+
+**Cursor** — `.cursor/mcp.json` no workspace:
 
 ```json
 {
@@ -137,22 +108,88 @@ Aponte para o Python do ambiente virtual do projeto. No Windows, `.cursor/mcp.js
 }
 ```
 
-Ajuste `command` para o `python.exe` (Windows) ou `.venv/bin/python` (Linux/macOS) da sua instalação. Recarregue os servidores MCP no Cursor.
+Ajuste `command` conforme o caso:
 
-stdout é do protocolo: logs só em `~/.nix/logs/nix.log`. Consultas e argumentos só entram no log se `logging.log_prompts = true`.
+| Onde o Nix está | Windows | Linux / macOS |
+| --- | --- | --- |
+| Pasta `nix/` dentro do projeto | `${workspaceFolder}/nix/.venv/Scripts/python.exe` | `${workspaceFolder}/nix/.venv/bin/python` |
+| O workspace **é** o repositório Nix | `${workspaceFolder}/.venv/Scripts/python.exe` | `${workspaceFolder}/.venv/bin/python` |
 
-## Avaliação de recuperação
+O mesmo padrão (`caminho/do/python` + `["-m", "nix"]`) vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `~/.nix/logs/nix.log`.
 
-O conjunto `eval/` ainda não está neste repositório. O alvo de acurácia top-5 é ≥ 90% ([PRD.md](PRD.md), seção 9). Quando o harness existir:
+## Primeiros passos
+
+Depois do `init` (o instalador já dispara isso):
 
 ```bash
-python eval/run.py --questions eval/questions.json
+# Windows
+.venv\Scripts\python.exe -m nix doctor
+.venv\Scripts\python.exe -m nix sync
+.venv\Scripts\python.exe -m nix status
+
+# Linux / macOS
+.venv/bin/python -m nix doctor
+.venv/bin/python -m nix sync
+.venv/bin/python -m nix status
 ```
+
+O primeiro `sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face. Nas seguintes, só o que mudou é reprocessado.
+
+Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
+
+## Indexação
+
+Esta é a regra central:
+
+> Alterações feitas **fora** do Nix (Obsidian, editor) **não** são indexadas sozinhas. Alterações feitas pelas ferramentas MCP atualizam o índice na mesma operação.
+
+Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. Se a vetorização de uma escrita falhar, o arquivo permanece no vault (fonte da verdade) e um `nix sync` corrige o índice.
+
+## CLI
+
+| Comando | Função |
+| --- | --- |
+| `nix` | Inicia o servidor MCP stdio |
+| `nix init [--vault PATH] [--force]` | Cria a configuração e grava o caminho do vault |
+| `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
+| `nix status [--json]` | Notas, chunks, último sync e defasagem |
+| `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |
+
+## Ferramentas MCP
+
+Doze ferramentas, definidas em `src/nix/core/tools/registry.py`. Notas também aparecem como recurso `nix://note/{+rel_path}`.
+
+| Ferramenta | Uso |
+| --- | --- |
+| `search_notes` | Busca híbrida (semântica + léxica), com filtros de pasta, tags e datas |
+| `read_note` | Lê a nota inteira |
+| `list_notes` | Lista notas indexadas (pasta, tag) |
+| `get_linked_notes` | Navega wikilinks (`outgoing`, `incoming` ou `both`) |
+| `create_note` | Cria nota e indexa na hora (write-through) |
+| `append_to_note` | Anexa conteúdo e reindexa |
+| `update_note` | `replace` exige `confirm=true`; `patch` anexa |
+| `delete_note` | Remove nota e índice; exige `confirm=true` |
+| `sync_index` | Sincronização manual (`full`, `dry_run`) |
+| `index_status` | Contagens, último sync e defasagem |
+| `vault_insights` | Órfãs, duplicatas, sugestão de links ou resumo |
+| `remember` | Grava fato duradouro em `vault.longterm_folder` |
+
+## Configuração
+
+Arquivo (primeiro encontrado): `$NIX_CONFIG` → `./nix.toml` → `~/.nix/config.toml`. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`).
+
+Pontos úteis do TOML gerado pelo `init`:
+
+| Chave | Padrão | Função |
+| --- | --- | --- |
+| `vault.path` | — | Pasta raiz do Obsidian |
+| `vault.exclude` | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas |
+| `vault.default_new_note_folder` | `Inbox` | Destino de notas sem pasta no caminho |
+| `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
+| `index.data_dir` | `~/.nix/data` | SQLite + Chroma (fora do vault) |
+| `logging.file` | `~/.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
+
+## Documentação
 
 - [PRD.md](PRD.md) — produto, requisitos e regras de negócio
 - [ARCHITECTURE.md](ARCHITECTURE.md) — componentes, indexação, recuperação e MCP stdio
-
-git add .github .gitattributes scripts/check_version.py README.md
-git commit -m "Adiciona workflow de release com pacote zip"
-git push
-git tag v1.0.0 && git push origin v1.0.0
