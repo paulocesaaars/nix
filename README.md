@@ -15,6 +15,8 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
 ## Instalação
 
+Baixe `nix-X.Y.Z.zip` na página de [releases](https://github.com/paulocesaaars/nix/releases) e extraia (ou clone o repositório). O arquivo `.sha256` ao lado permite conferir o download: `sha256sum -c nix-X.Y.Z.zip.sha256`.
+
 O caminho mais curto: rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
 
 ```bat

@@ -1,0 +1,6 @@
+# Arquivos de desenvolvimento do repositório ficam fora do zip do release
+.github/                 export-ignore
+.cursor/                 export-ignore
+.gitattributes           export-ignore
+AGENTS.md                export-ignore
+scripts/check_version.py export-ignore
