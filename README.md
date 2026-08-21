@@ -17,9 +17,28 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 - Python 3.11+
 - Um vault do Obsidian (notas `.md`)
 
-## Instalação
+## Instalação - Usuário
 
-Baixe `nix-X.Y.Z.zip` na [última release](https://github.com/paulocesaaars/nix/releases/latest) e extraia (ou clone o repositório). Todas as versões ficam em [releases](https://github.com/paulocesaaars/nix/releases). O arquivo `.sha256` ao lado do zip permite conferir o download: `sha256sum -c nix-X.Y.Z.zip.sha256`.
+Baixe a [última release](https://github.com/paulocesaaars/nix/releases/latest) e extraia na raiz do seu projeto com o nome de `nix`.
+
+Rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
+
+```bat
+setup.bat
+:: ou, se já souber o vault:
+setup.bat --vault "C:/Users/voce/Vault"
+```
+
+```bash
+chmod +x setup.sh
+./setup.sh
+# ou: ./setup.sh --vault "$HOME/Vault"
+```
+
+cd /nix
+./.venv/Scripts/python.exe -m nix --init
+
+## Instalação - Desenvolvedor
 
 O caminho mais curto: rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
 
