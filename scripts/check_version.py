@@ -1,14 +1,12 @@
-"""Confere se a versão da tag do release bate com a versão declarada no código."""
+"""Confere se a versão da tag do release bate com a versão declarada no pyproject.toml."""
 
 from __future__ import annotations
 
-import re
 import sys
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION_PATTERN = re.compile(r'^__version__\s*=\s*["\'](?P<version>[^"\']+)["\']', re.MULTILINE)
 
 
 def _fail(message: str) -> None:
@@ -24,32 +22,20 @@ def _pyproject_version() -> str:
     return version
 
 
-def _package_version() -> str:
-    source = (ROOT / "src" / "nix" / "__init__.py").read_text(encoding="utf-8")
-    match = VERSION_PATTERN.search(source)
-    if match is None:
-        _fail("src/nix/__init__.py não declara __version__. Adicione a versão antes de publicar.")
-    return match.group("version")
-
-
 def main() -> None:
     if len(sys.argv) != 2:
-        _fail("Uso: python scripts/check_version.py <versao>  (ex.: 0.1.0)")
+        _fail("Uso: python scripts/check_version.py <versao>  (ex.: 1.0.0)")
 
     expected = sys.argv[1]
-    divergences = {
-        "pyproject.toml": _pyproject_version(),
-        "src/nix/__init__.py": _package_version(),
-    }
-    wrong = {origin: found for origin, found in divergences.items() if found != expected}
-    if wrong:
-        detail = "; ".join(f"{origin} = {found}" for origin, found in wrong.items())
+    declared = _pyproject_version()
+    if declared != expected:
         _fail(
-            f"A tag pede a versão {expected}, mas o código declara: {detail}. "
-            f"Atualize a versão para {expected} nesses arquivos ou publique a tag v{divergences['pyproject.toml']}."
+            f"A tag pede a versão {expected}, mas o pyproject.toml declara {declared}. "
+            f"Troque [project].version para {expected} e recrie a tag, "
+            f"ou publique a tag v{declared}."
         )
 
-    print(f"Versão {expected} confirmada em pyproject.toml e src/nix/__init__.py.")
+    print(f"Versão {expected} confirmada no pyproject.toml.")
 
 
 if __name__ == "__main__":
