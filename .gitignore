@@ -1,0 +1,31 @@
+# Ambiente
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Ferramentas
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Artefatos do Nix (índice, logs, backups)
+.nix/
+*.db
+chroma/
+
+# Segredos e config local
+nix.toml
+.env
+.env.*
+
+# Sistema
+.DS_Store
+Thumbs.db
