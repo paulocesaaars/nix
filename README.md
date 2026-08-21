@@ -128,3 +128,8 @@ python eval/run.py --questions eval/questions.json
 
 - [PRD.md](PRD.md) — produto, requisitos e regras de negócio
 - [ARCHITECTURE.md](ARCHITECTURE.md) — componentes, indexação, recuperação e MCP stdio
+
+git add .github .gitattributes scripts/check_version.py README.md
+git commit -m "Adiciona workflow de release com pacote zip"
+git push
+git tag v0.1.0 && git push origin v0.1.0
