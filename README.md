@@ -4,6 +4,10 @@
   <img src="nix.jpeg" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
 </p>
 
+<p align="center">
+  <a href="https://github.com/paulocesaaars/nix/releases/latest"><img src="https://img.shields.io/github/v/release/paulocesaaars/nix?label=download&style=for-the-badge" alt="Baixar a última versão"></a>
+</p>
+
 Servidor MCP que expõe um vault do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
@@ -15,7 +19,7 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
 ## Instalação
 
-Baixe `nix-X.Y.Z.zip` na página de [releases](https://github.com/paulocesaaars/nix/releases) e extraia (ou clone o repositório). O arquivo `.sha256` ao lado permite conferir o download: `sha256sum -c nix-X.Y.Z.zip.sha256`.
+Baixe `nix-X.Y.Z.zip` na [última release](https://github.com/paulocesaaars/nix/releases/latest) e extraia (ou clone o repositório). Todas as versões ficam em [releases](https://github.com/paulocesaaars/nix/releases). O arquivo `.sha256` ao lado do zip permite conferir o download: `sha256sum -c nix-X.Y.Z.zip.sha256`.
 
 O caminho mais curto: rode o instalador na raiz do repositório. Ele cria `.venv`, instala os pacotes e inicia `nix init`.
 

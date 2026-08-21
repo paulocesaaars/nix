@@ -3,4 +3,10 @@
 .cursor/                 export-ignore
 .gitattributes           export-ignore
 AGENTS.md                export-ignore
+ARCHITECTURE.md          export-ignore
+requirements-dev.txt     export-ignore
+PRD.md                   export-ignore
+README.md                export-ignore
+.gitignore               export-ignore
+
 scripts/check_version.py export-ignore
