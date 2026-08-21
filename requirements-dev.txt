@@ -1,0 +1,4 @@
+-r requirements.txt
+ruff>=0.9.0
+mypy>=1.14.0
+types-setuptools>=75.0.0

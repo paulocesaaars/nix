@@ -1,0 +1,62 @@
+# ~/.nix/config.toml — gerado por `nix init`
+# Precedência: variável de ambiente > este arquivo > padrão.
+# Sobrescreva qualquer campo com NIX_SECAO__CAMPO (ex.: NIX_VAULT__PATH).
+
+[vault]
+# Obrigatório. Diretório raiz do vault do Obsidian.
+# Windows: use / (C:/Users/voce/Vault). Barra invertida quebra o TOML (\U é escape).
+path = ""
+include = ["**/*.md"]
+exclude = [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
+follow_symlinks = false
+default_new_note_folder = "Inbox"
+# created = "auto" preenche a data ISO no momento da criação
+default_frontmatter = { created = "auto", source = "nix" }
+# Pasta usada pela ferramenta MCP `remember`
+longterm_folder = "Nix/Memória"
+
+[index]
+# Artefatos derivados (SQLite + Chroma). Fora do vault por padrão (AD-08).
+data_dir = "~/.nix/data"
+embedding_model = "BAAI/bge-m3"
+# Primeiro uso baixa o ONNX (~2,3 GB) do Hugging Face.
+embedding_batch_size = 32
+chunk_size_tokens = 800
+chunk_overlap_tokens = 120
+min_chunk_tokens = 80
+# Nunca indexa automaticamente arquivos alterados fora do Nix (RN-01).
+# true é rejeitado na validação — use `nix sync` ou a ferramenta `sync_index`.
+auto_sync_external_changes = false
+# Reindexa imediatamente o que as ferramentas MCP escrevem (RN-02)
+auto_index_agent_writes = true
+# Se false, index_status ainda marca stale, mas não devolve stale_reason
+warn_when_stale = true
+# Indexa PDFs referenciados pelas notas
+index_attachments = true
+# Usado só se retrieval.rerank = true
+rerank_model = "Xenova/ms-marco-MiniLM-L-6-v2"
+
+[retrieval]
+top_k = 5
+candidate_pool = 20
+hybrid = true
+# Peso da busca léxica no RRF (0 = só densa, 1 = só léxica)
+lexical_weight = 0.4
+rrf_k = 60
+neighbor_expansion = 1
+min_score = 0.25
+rerank = false
+# true = FTS com OR (mais recall); false = AND (mais precisão)
+expand_query = true
+
+[safety]
+confirm_destructive = true
+backup_before_overwrite = true
+backup_dir = "~/.nix/backups"
+backup_retention_days = 30
+
+[logging]
+level = "info"
+file = "~/.nix/logs/nix.log"
+# true inclui consultas e argumentos de ferramentas no log
+log_prompts = false
