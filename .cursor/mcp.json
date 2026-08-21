@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nix": {
+      "command": "C:/Git/nix/.venv/Scripts/python.exe",
+      "args": ["-m", "nix"]
+    }
+  }
+}
