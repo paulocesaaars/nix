@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "nix": {
-      "command": "nix"
+      "command": "/Users/paulo/nix/bin/nix"
     }
   }
 }

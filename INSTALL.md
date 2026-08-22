@@ -186,6 +186,8 @@ Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 
+`command` deve apontar para o wrapper **dentro da pasta da instalação** (`NIX_HOME`), não para o nome `nix` no PATH. O editor aberto pelo Dock ou pelo menu **não** herda o PATH do terminal (`spawn nix ENOENT`). O caminho aparece em `nix doctor`, na linha `comando nix:`.
+
 **Cursor** — `.cursor/mcp.json` no workspace:
 
 **Windows**
@@ -200,19 +202,21 @@ O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 }
 ```
 
-**macOS / Linux** (depois do instalador, com `nix` no PATH)
+No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho absoluto, por exemplo `C:/Users/voce/nix/bin/nix.cmd`.
+
+**macOS / Linux**
 
 ```json
 {
   "mcpServers": {
     "nix": {
-      "command": "nix"
+      "command": "/Users/voce/nix/bin/nix"
     }
   }
 }
 ```
 
-No Windows a IDE **não** herda o PATH do terminal: use `nix.cmd` via `NIX_HOME`. No macOS/Linux, `bin/nix.cmd` fecha a conexão com `EACCES` — use o comando `nix`. Se `nix` não for encontrado, abra de novo o Cursor depois do instalador (ou registre o PATH à mão, abaixo).
+Troque `/Users/voce/nix` pela pasta da instalação. `"command": "nix"` falha na IDE. `bin/nix.cmd` fecha a conexão com `EACCES`. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
 O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
