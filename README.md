@@ -208,8 +208,8 @@ Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no
 3. Crie e envie a tag (o `v` no prefixo é obrigatório):
 
 ```bash
-git tag v1.0.2
-git push origin v1.0.2
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release `Nix v1.0.2` aparece com o zip e o checksum `.sha256`.
