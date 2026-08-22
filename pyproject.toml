@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "1.0.0"
+version = "1.0.1"
 description = "Servidor MCP stdio para vaults do Obsidian"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,11 @@ authors = [{ name = "Paulo" }]
 license = { text = "MIT" }
 
 [project.scripts]
-nix = "nix.cli.app:main"
+nix = "nix_launch:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["nix_launch"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -24,10 +28,14 @@ nix = ["py.typed", "config/template.toml", "cli/ascii-art.txt"]
 line-length = 120
 target-version = "py311"
 src = ["src"]
+extend-include = ["__main__.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"__main__.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nix"]
@@ -36,6 +44,7 @@ known-first-party = ["nix"]
 python_version = "3.12"
 mypy_path = "src"
 packages = ["nix"]
+modules = ["nix_launch"]
 strict = true
 warn_return_any = true
 warn_unused_ignores = true

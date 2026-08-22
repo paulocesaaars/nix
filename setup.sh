@@ -31,4 +31,5 @@ PY="$(pick_python)" || {
 
 echo "Nix — instalação do ambiente e configuração"
 echo "Usando: $PY"
+chmod +x "$ROOT/nix" 2>/dev/null || true
 exec "$PY" "$BOOTSTRAP" "$@"

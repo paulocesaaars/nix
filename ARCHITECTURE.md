@@ -82,6 +82,8 @@ graph TB
 ```
 nix/
 ├── setup.bat / setup.sh    # cria .venv, instala pacotes e inicia `nix init`
+├── nix.cmd / nix           # wrapper da CLI: acha o .venv local, preserva o CWD
+├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
 ├── scripts/bootstrap.py    # lógica compartilhada do instalador
 ├── nix.jpeg                # foto da Nix (mascote no README)
 ├── pyproject.toml          # metadados do pacote e entry point do comando `nix`
@@ -92,58 +94,60 @@ nix/
 ├── ARCHITECTURE.md
 ├── AGENTS.md
 ├── .cursor/
-│   ├── mcp.json            # exemplo: Python do .venv + `python -m nix`
+│   ├── mcp.json            # exemplo: Python do .venv + `python -P -m nix`
 │   └── skills/revisao-codigo/
-└── src/nix/
-    ├── __init__.py
-    ├── __main__.py             # python -m nix
-    ├── config/
-    │   ├── schema.py           # modelos Pydantic da configuração
-    │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
-    │   └── template.toml       # config comentado gerado por `nix init`
-    ├── core/
-    │   ├── vault/
-    │   │   ├── reader.py       # varredura, filtros, leitura segura
-    │   │   ├── writer.py       # escrita atômica, backup, YAML, confinamento
-    │   │   ├── markdown.py     # frontmatter, cabeçalhos, wikilinks, tags
-    │   │   ├── paths.py        # normalização e validação de caminhos
-    │   │   └── longterm.py     # remember → notas no vault
-    │   ├── index/
-    │   │   ├── store.py        # SQLite: arquivos, chunks, metadados
-    │   │   ├── chunker.py      # divisão consciente da estrutura
-    │   │   ├── embedder.py     # FastEmbed em lote (ONNX bge-m3); stdout capturado
-    │   │   ├── vectorstore.py  # adaptador Chroma
-    │   │   ├── sync.py         # diff e sincronização incremental
-    │   │   ├── writeback.py    # reindexação write-through
-    │   │   ├── attachments.py  # texto de PDFs referenciados
-    │   │   ├── graph.py        # grafo de wikilinks (cache)
-    │   │   └── staleness.py    # aviso de defasagem (só Markdown)
-    │   ├── retrieval/
-    │   │   ├── vector.py       # busca densa
-    │   │   ├── lexical.py      # busca FTS5
-    │   │   ├── fusion.py       # Reciprocal Rank Fusion
-    │   │   ├── rerank.py       # cross-encoder opcional
-    │   │   └── service.py      # fachada de recuperação
-    │   ├── insights/           # órfãs, duplicatas, links, resumo
-    │   └── tools/
-    │       ├── registry.py     # definição canônica das ferramentas
-    │       ├── search.py
-    │       ├── notes.py
-    │       └── maintenance.py
-    ├── cli/
-    │   ├── app.py              # entrypoint Typer (sem args → servidor stdio)
-    │   ├── ascii-art.txt
-    │   ├── commands/
-    │   │   ├── setup.py        # init, doctor
-    │   │   └── index_cmds.py   # sync, status (status via call_tool)
-    │   └── render.py           # banner, tabelas de sync/status, erros em stderr
-    ├── mcp/
-    │   ├── server.py           # FastMCP/MCPServer stdio
-    │   ├── traffic.py          # log de interações MCP (arquivo)
-    │   └── resources.py        # nix://note/{+rel_path}
-    └── observability/
-        ├── logging.py
-        └── stdio.py            # isola stdout de bibliotecas
+└── src/
+    ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/
+    └── nix/
+        ├── __init__.py
+        ├── __main__.py             # python -m nix (pacote instalado)
+        ├── config/
+        │   ├── schema.py           # modelos Pydantic da configuração
+        │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
+        │   └── template.toml       # config comentado gerado por `nix init`
+        ├── core/
+        │   ├── vault/
+        │   │   ├── reader.py       # varredura, filtros, leitura segura
+        │   │   ├── writer.py       # escrita atômica, backup, YAML, confinamento
+        │   │   ├── markdown.py     # frontmatter, cabeçalhos, wikilinks, tags
+        │   │   ├── paths.py        # normalização e validação de caminhos
+        │   │   └── longterm.py     # remember → notas no vault
+        │   ├── index/
+        │   │   ├── store.py        # SQLite: arquivos, chunks, metadados
+        │   │   ├── chunker.py      # divisão consciente da estrutura
+        │   │   ├── embedder.py     # FastEmbed em lote (ONNX bge-m3); stdout capturado
+        │   │   ├── vectorstore.py  # adaptador Chroma
+        │   │   ├── sync.py         # diff e sincronização incremental
+        │   │   ├── writeback.py    # reindexação write-through
+        │   │   ├── attachments.py  # texto de PDFs referenciados
+        │   │   ├── graph.py        # grafo de wikilinks (cache)
+        │   │   └── staleness.py    # aviso de defasagem (só Markdown)
+        │   ├── retrieval/
+        │   │   ├── vector.py       # busca densa
+        │   │   ├── lexical.py      # busca FTS5
+        │   │   ├── fusion.py       # Reciprocal Rank Fusion
+        │   │   ├── rerank.py       # cross-encoder opcional
+        │   │   └── service.py      # fachada de recuperação
+        │   ├── insights/           # órfãs, duplicatas, links, resumo
+        │   └── tools/
+        │       ├── registry.py     # definição canônica das ferramentas
+        │       ├── search.py
+        │       ├── notes.py
+        │       └── maintenance.py
+        ├── cli/
+        │   ├── app.py              # entrypoint Typer (sem args → servidor stdio)
+        │   ├── ascii-art.txt
+        │   ├── commands/
+        │   │   ├── setup.py        # init, doctor
+        │   │   └── index_cmds.py   # sync, status (status via call_tool)
+        │   └── render.py           # banner, tabelas de sync/status, erros em stderr
+        ├── mcp/
+        │   ├── server.py           # FastMCP/MCPServer stdio
+        │   ├── traffic.py          # log de interações MCP (arquivo)
+        │   └── resources.py        # nix://note/{+rel_path}
+        └── observability/
+            ├── logging.py
+            └── stdio.py            # isola stdout de bibliotecas
 ```
 
 O ambiente é gerenciado com `venv` e `pip`. O instalador (`setup.bat` / `setup.sh` → `scripts/bootstrap.py`) cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`) e dispara `nix init`. Quem preferir o fluxo manual usa os mesmos passos. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`.
@@ -361,7 +365,7 @@ O instalador na raiz do repositório não entra no núcleo: só orquestra o ambi
 
 ```
 setup.bat / setup.sh          # acha Python 3.11+, chama scripts/bootstrap.py
-scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → python -m nix init
+scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → python -P -m nix init
 ```
 
 Argumentos extras (`--vault PATH`, `--force`) vão para `nix init`. Se `.venv` já existir, é reutilizado.
@@ -382,28 +386,30 @@ Se `nix` roda sem subcomando num terminal interativo, um aviso vai para stderr e
 
 ### 9.2 Servidor MCP
 
-Transporte **somente stdio**. O cliente inicia o processo (`python -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP (`nix://note/{+rel_path}` — barras no caminho; `|` também é aceito), permitindo que o cliente anexe uma nota inteira ao contexto sem consumir uma chamada de ferramenta.
+Transporte **somente stdio**. O cliente inicia o processo (`python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP (`nix://note/{+rel_path}` — barras no caminho; `|` também é aceito), permitindo que o cliente anexe uma nota inteira ao contexto sem consumir uma chamada de ferramenta.
 
 O servidor tenta `FastMCP` e, se o SDK recente expuser só `MCPServer`, usa essa classe — ambas precisam de `.tool()`, `.run()` e `transport="stdio"`. Falha de instância ou de transporte vira `ConfigError` com ação corretiva (`pip install 'mcp>=1.9.0'`). `NixError` na subida vai para stderr e encerra com código 1, sem vazar traceback no stdout.
 
-Registro no Cursor (`.cursor/mcp.json`). O processo da IDE **não** tem o `PATH` do venv — use o Python do ambiente, não o comando `nix`:
+Registro no Cursor (`.cursor/mcp.json`). O processo da IDE **não** tem o `PATH` do venv — use o Python do ambiente, não o comando `nix`. O `-P` impede que a pasta `nix/` do workspace sombreie o pacote:
 
 ```json
 {
   "mcpServers": {
     "nix": {
-      "command": "C:/Git/nix/.venv/Scripts/python.exe",
-      "args": ["-m", "nix"]
+      "command": "${workspaceFolder}/nix/.venv/Scripts/python.exe",
+      "args": ["-P", "-m", "nix"]
     }
   }
 }
 ```
 
+Se o workspace **é** o repositório Nix, `command` aponta para `${workspaceFolder}/.venv/Scripts/python.exe` (ou `.venv/bin/python` no Unix). `nix.cmd` / `./nix` na raiz do checkout também iniciam o servidor e localizam o `.venv` pela pasta do script, independente do CWD.
+
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug.
 
 ## 10. Configuração
 
-Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` → `./nix.toml` → `~/.nix/config.toml`. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`).
+Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` → `nix.toml` no CWD e nos diretórios pais → `nix.toml` na raiz do checkout e no projeto que o contém → `~/.nix/config.toml`. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`).
 
 Seções fora de `vault` / `index` / `retrieval` / `safety` / `logging` são ignoradas e geram aviso. As chaves legadas `[openai]`, `[agent]`, `[mcp]` e `[limits]` têm mensagem específica; `agent.longterm_folder` é copiado para `vault.longterm_folder` **só nesta sessão** até o TOML ser editado.
 

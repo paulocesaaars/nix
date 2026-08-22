@@ -123,14 +123,14 @@ Depois do `init` (o instalador já dispara isso):
 
 ```bash
 # Windows
-.venv\Scripts\python.exe -m nix doctor
-.venv\Scripts\python.exe -m nix sync
-.venv\Scripts\python.exe -m nix status
+nix.cmd doctor
+nix.cmd sync
+nix.cmd status
 
 # Linux / macOS
-.venv/bin/python -m nix doctor
-.venv/bin/python -m nix sync
-.venv/bin/python -m nix status
+./nix doctor
+./nix sync
+./nix status
 ```
 
 O primeiro `sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face. Nas seguintes, só o que mudou é reprocessado.
@@ -188,6 +188,23 @@ Pontos úteis do TOML gerado pelo `init`:
 | `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
 | `index.data_dir` | `~/.nix/data` | SQLite + Chroma (fora do vault) |
 | `logging.file` | `~/.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
+
+## Publicar uma versão
+
+Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no remoto. O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) confere a versão, roda `ruff` e `mypy`, monta `nix-x.y.z.zip` e publica em [Releases](https://github.com/paulocesaaars/nix/releases).
+
+1. Atualize `[project].version` em `pyproject.toml` (ex.: `1.0.2`). A tag **precisa** bater com esse valor — senão o job falha.
+2. Faça o commit e o push na branch principal.
+3. Crie e envie a tag (o `v` no prefixo é obrigatório):
+
+```bash
+git tag v1.0.2
+git push origin v1.0.2
+```
+
+4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release `Nix v1.0.2` aparece com o zip e o checksum `.sha256`.
+
+Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.0.2`).
 
 ## Documentação
 

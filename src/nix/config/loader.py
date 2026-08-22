@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tomllib
 from pathlib import Path
@@ -34,17 +35,51 @@ def default_config_path() -> Path:
     return default_config_dir() / "config.toml"
 
 
-def resolve_config_path(explicit: Path | None = None) -> Path | None:
-    """Retorna o primeiro arquivo existente na ordem de busca, ou o destino padrão."""
+def checkout_root() -> Path | None:
+    """Raiz do checkout do Nix se o pacote está em `src/nix` (instalação editável)."""
+    start = Path(__file__).resolve()
+    for parent in start.parents:
+        if (parent / "src" / "nix" / "__init__.py").is_file() and (parent / "pyproject.toml").is_file():
+            return parent
+    return None
+
+
+def _config_candidates(explicit: Path | None) -> list[Path]:
     if explicit is not None:
-        return explicit
+        return [explicit]
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(path: Path) -> None:
+        expanded = path.expanduser()
+        try:
+            key = str(expanded.resolve()).casefold()
+        except OSError:
+            key = str(expanded).casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(expanded)
+
     env = os.environ.get("NIX_CONFIG")
-    candidates = []
     if env:
-        candidates.append(Path(env).expanduser())
-    candidates.append(Path.cwd() / "nix.toml")
-    candidates.append(default_config_path())
-    for path in candidates:
+        add(Path(env))
+    here = Path.cwd()
+    with contextlib.suppress(OSError):
+        here = here.resolve()
+    for directory in [here, *here.parents]:
+        add(directory / "nix.toml")
+    checkout = checkout_root()
+    if checkout is not None:
+        add(checkout / "nix.toml")
+        add(checkout.parent / "nix.toml")
+    add(default_config_path())
+    return candidates
+
+
+def resolve_config_path(explicit: Path | None = None) -> Path | None:
+    """Retorna o primeiro arquivo existente na ordem de busca."""
+    for path in _config_candidates(explicit):
         if path.is_file():
             return path
     return None

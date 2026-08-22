@@ -94,7 +94,7 @@ ruff check src && mypy src
 
 Dependências ficam em `requirements.txt` (runtime) e `requirements-dev.txt` (desenvolvimento);
 o `pyproject.toml` guarda apenas metadados do pacote e o *entry point* do comando `nix`.
-No cliente MCP da IDE, use o Python do `.venv` (`python -m nix`), não o comando `nix` no PATH.
+No cliente MCP da IDE, use o Python do `.venv` (`python -P -m nix`), não o comando `nix` no PATH.
 
 ### Comunicação e idioma
 

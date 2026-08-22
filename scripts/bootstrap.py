@@ -85,7 +85,7 @@ def main() -> None:
     print("Iniciando configuração (nix init)...")
     try:
         result = subprocess.run(
-            [str(python), "-m", "nix", "init", *extra],
+            [str(python), "-P", "-m", "nix", "init", *extra],
             cwd=ROOT,
         )
     except KeyboardInterrupt:

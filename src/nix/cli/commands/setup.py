@@ -81,6 +81,13 @@ def _ask_vault() -> Path:
         return path.resolve()
 
 
+def _print_next_steps() -> None:
+    console.print(
+        "Rode [cyan]./nix doctor[/cyan] e [cyan]./nix sync[/cyan] na pasta do Nix "
+        "([cyan]nix.cmd[/cyan] no Windows)."
+    )
+
+
 def _resolve_vault(explicit: str | None) -> Path:
     if explicit is not None and explicit.strip():
         return _validate_vault(explicit)
@@ -117,13 +124,13 @@ def cmd_init(
             f"Configuração em [bold]{dest}[/bold]. "
             f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}"
         )
-        console.print("Rode [cyan]nix doctor[/cyan] e [cyan]nix sync[/cyan].")
+        _print_next_steps()
         return
     template = files("nix.config").joinpath("template.toml").read_text(encoding="utf-8")
     dest.write_text(_apply_vault_path(template, vault_path), encoding="utf-8")
     console.print(f"Arquivo criado em [bold]{dest}[/bold].")
     console.print(f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}")
-    console.print("Rode [cyan]nix doctor[/cyan] e [cyan]nix sync[/cyan].")
+    _print_next_steps()
 
 
 @with_errors

@@ -129,7 +129,7 @@ Esta é a regra de negócio central do produto:
 | RF-51 | O servidor MCP deve expor as 12 ferramentas de busca, leitura, escrita, insights e sincronização do vault (`search_notes`, `read_note`, `list_notes`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
-| RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP, usando o Python do `.venv` (`python -m nix`), não o comando `nix` no PATH da IDE | Must |
+| RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP, usando o Python do `.venv` (`python -P -m nix`), não o comando `nix` no PATH da IDE | Must |
 | RF-55 | stdout pertence ao protocolo: logs só em arquivo; bibliotecas não podem escrever no canal | Must |
 
 ## 6. Histórias de usuário e critérios de aceite
@@ -174,7 +174,7 @@ Esta é a regra de negócio central do produto:
 **HU-06 — Usar o Nix dentro do Cursor (ou equivalente)**
 > Como usuário, quero acessar meu vault de dentro do editor.
 
-- Dado o Nix registrado no cliente MCP com o Python do `.venv` (`command` apontando para `.venv/Scripts/python.exe` ou `.venv/bin/python`, `args: ["-m", "nix"]`), quando peço ao agente do editor algo sobre minhas notas, então ele usa as ferramentas do Nix e recebe trechos com caminho e citação.
+- Dado o Nix registrado no cliente MCP com o Python do `.venv` (`command` apontando para `.venv/Scripts/python.exe` ou `.venv/bin/python`, `args: ["-P", "-m", "nix"]`), quando peço ao agente do editor algo sobre minhas notas, então ele usa as ferramentas do Nix e recebe trechos com caminho e citação.
 - Dado que o cliente tenta o comando `nix` sem o PATH do venv, quando a IDE inicia o processo, então a conexão falha (`'nix' não é reconhecido`) — o registro correto usa o interpretador do ambiente.
 - Dado que peço uma alteração de nota via MCP, quando ela é aplicada, então o índice é atualizado automaticamente.
 - Dado `update_note` em modo replace ou `delete_note`, quando o cliente chama a ferramenta, então a escrita só ocorre com `confirm=true` após aprovação (anotação `destructiveHint`).
@@ -221,7 +221,7 @@ Esta é a regra de negócio central do produto:
 - Servidor MCP stdio com 12 ferramentas, recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
 - CLI de bootstrap: `init [--vault] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
 - Instalador `setup.bat` / `setup.sh` (venv + pacotes + `nix init`).
-- Registro MCP via Python do venv (exemplo em `.cursor/mcp.json`); a IDE não herda o PATH do terminal.
+- Registro MCP via Python do venv (`python -P -m nix`, exemplo em `.cursor/mcp.json`); a IDE não herda o PATH do terminal. A pasta `nix/` aninhada no workspace não sombreia o pacote.
 - Escrita com write-through, confirmação e backup.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).

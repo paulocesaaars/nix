@@ -49,8 +49,12 @@ set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" goto :fail
 
 echo.
-echo Pronto. Depois rode: .venv\Scripts\python.exe -m nix doctor
-echo Para indexar o vault: .venv\Scripts\python.exe -m nix sync
+echo Pronto. Na pasta do Nix:
+echo   nix.cmd doctor
+echo   nix.cmd sync
+echo Na raiz do workspace (Nix em .\nix\):
+echo   python -m nix doctor
+echo   python -m nix sync
 goto :end
 
 :fail
