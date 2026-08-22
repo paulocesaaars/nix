@@ -10,7 +10,7 @@ uninstall.ps1 text eol=lf
 # Arquivos de desenvolvimento do repositório ficam fora do zip do release
 .github/                 export-ignore
 .cursor/                 export-ignore
-.gitattributes           export-ignore
+mock/                    export-ignore
 AGENTS.md                export-ignore
 ARCHITECTURE.md          export-ignore
 PRD.md                   export-ignore
@@ -18,6 +18,9 @@ README.md                export-ignore
 nix.jpeg                 export-ignore
 nix.png                  export-ignore
 requirements-dev.txt     export-ignore
+.gitattributes           export-ignore
 .gitignore               export-ignore
+
+
 
 scripts/check_version.py export-ignore
