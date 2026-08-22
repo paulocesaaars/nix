@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "nix": {
-      "command": "${env:NIX_HOME}/bin/nix.cmd"
+      "command": "nix"
     }
   }
 }

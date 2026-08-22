@@ -33,9 +33,8 @@ cd nix
 
 ```bash
 cd nix
-chmod +x setup.sh
-./setup.sh
-# ou: ./setup.sh --vault "$HOME/Vault"
+bash setup.sh
+# ou: bash setup.sh --vault "$HOME/Vault"
 ```
 
 Depois de informar o vault, o instalador confirma que a **configuração foi concluída**. Abra um **novo terminal** e rode `nix doctor` / `nix sync` — o PATH já estará registrado (se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão)).
@@ -84,10 +83,9 @@ cd nix
 
 ```bash
 cd nix
-chmod +x uninstall.sh
-./uninstall.sh
-# ou: ./uninstall.sh --yes
-# ou: ./uninstall.sh --keep-data --yes
+bash uninstall.sh
+# ou: bash uninstall.sh --yes
+# ou: bash uninstall.sh --keep-data --yes
 ```
 
 Abra um **novo terminal** depois: o `nix` deste projeto deixa de valer. Se o registro permanente falhar, veja [Remover NIX_HOME e o PATH à mão](#remover-nix_home-e-o-path-à-mão). Remova também o servidor `nix` do `mcp.json` do editor.
@@ -186,11 +184,11 @@ Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 ## Registro no cliente MCP
 
-O cliente inicia o processo. A IDE **não** herda o `PATH` do terminal: o comando `nix` do venv não é encontrado e a conexão fecha (`'nix' não é reconhecido`).
-
-Aponte para o Python do ambiente virtual e passe `-P` (Python 3.11+), para o diretório `nix/` do workspace não ser importado no lugar do pacote. Recarregue os servidores MCP depois de salvar.
+O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 
 **Cursor** — `.cursor/mcp.json` no workspace:
+
+**Windows**
 
 ```json
 {
@@ -202,12 +200,19 @@ Aponte para o Python do ambiente virtual e passe `-P` (Python 3.11+), para o dir
 }
 ```
 
-| Sistema | `command` |
-| --- | --- |
-| Windows | `${workspaceFolder}/nix/.venv/Scripts/python.exe` |
-| Linux / macOS | `${workspaceFolder}/nix/.venv/bin/python` |
+**macOS / Linux** (depois do instalador, com `nix` no PATH)
 
-Em qualquer um dos casos os `args` são `["-P", "-m", "nix"]`. Não use o comando `nix` do PATH no `mcp.json`: a IDE **não** herda o PATH do terminal.
+```json
+{
+  "mcpServers": {
+    "nix": {
+      "command": "nix"
+    }
+  }
+}
+```
+
+No Windows a IDE **não** herda o PATH do terminal: use `nix.cmd` via `NIX_HOME`. No macOS/Linux, `bin/nix.cmd` fecha a conexão com `EACCES` — use o comando `nix`. Se `nix` não for encontrado, abra de novo o Cursor depois do instalador (ou registre o PATH à mão, abaixo).
 
 O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 

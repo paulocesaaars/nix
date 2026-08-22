@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Remove o Nix (PATH, venv, índice local). Não altera a sessão atual nem o vault.
-# Uso: ./uninstall.sh [--yes] [--keep-data]
+# Uso: bash uninstall.sh [--yes] [--keep-data]
 set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"

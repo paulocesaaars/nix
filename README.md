@@ -51,9 +51,8 @@ cd nix
 
 ```bash
 cd nix
-chmod +x setup.sh
-./setup.sh
-# ou: ./setup.sh --vault "$HOME/Vault"
+bash setup.sh
+# ou: bash setup.sh --vault "$HOME/Vault"
 ```
 
 No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
@@ -74,9 +73,8 @@ setup.bat
 ```
 
 ```bash
-chmod +x setup.sh
-./setup.sh
-# ou: ./setup.sh --vault "$HOME/Vault"
+bash setup.sh
+# ou: bash setup.sh --vault "$HOME/Vault"
 ```
 
 ```powershell
@@ -102,15 +100,15 @@ python -m nix init                # ou: python -m nix init --vault "C:/Obsidian/
 
 ## Desinstalar
 
-Na pasta do Nix: `uninstall.bat`, `.\uninstall.ps1` ou `./uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, o `.venv`, o índice (`.nix/`) e o `nix.toml`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
+Na pasta do Nix: `uninstall.bat`, `.\uninstall.ps1` ou `bash uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, o `.venv`, o índice (`.nix/`) e o `nix.toml`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
 
 ## Registro no cliente MCP
 
-O cliente inicia o processo. A IDE **não** herda o `PATH` do terminal: o comando `nix` do venv não é encontrado e a conexão fecha (`'nix' não é reconhecido`).
-
-Aponte para o Python do ambiente virtual. Recarregue os servidores MCP depois de salvar.
+O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 
 **Cursor** — `.cursor/mcp.json` no workspace:
+
+**Windows**
 
 ```json
 {
@@ -122,14 +120,21 @@ Aponte para o Python do ambiente virtual. Recarregue os servidores MCP depois de
 }
 ```
 
-Ajuste `command` conforme o caso:
+**macOS / Linux** (depois do instalador, com `nix` no PATH)
 
-| Onde o Nix está | Windows | Linux / macOS |
-| --- | --- | --- |
-| Pasta `nix/` dentro do projeto | `${workspaceFolder}/nix/.venv/Scripts/python.exe` | `${workspaceFolder}/nix/.venv/bin/python` |
-| O workspace **é** o repositório Nix | `${workspaceFolder}/.venv/Scripts/python.exe` | `${workspaceFolder}/.venv/bin/python` |
+```json
+{
+  "mcpServers": {
+    "nix": {
+      "command": "nix"
+    }
+  }
+}
+```
 
-O mesmo padrão (`caminho/do/python` + `["-m", "nix"]`) vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+No Windows a IDE **não** herda o PATH do terminal: `nix.cmd` via `NIX_HOME` é o caminho que funciona. No macOS/Linux, `bin/nix.cmd` fecha a conexão com `EACCES` — use o comando `nix`. Se `nix` não for encontrado, abra de novo o Cursor depois do instalador (ou veja [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão)).
+
+O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 
@@ -212,8 +217,8 @@ Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no
 3. Crie e envie a tag (o `v` no prefixo é obrigatório):
 
 ```bash
-git tag v1.1.2
-git push origin v1.1.2
+git tag v1.1.3
+git push origin v1.1.3
 ```
 
 4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release `Nix v1.0.2` aparece com o zip e o checksum `.sha256`.

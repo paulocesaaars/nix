@@ -100,7 +100,7 @@ nix/
 ├── ARCHITECTURE.md
 ├── AGENTS.md
 ├── .cursor/
-│   ├── mcp.json            # exemplo: Python do .venv + `python -P -m nix`
+│   ├── mcp.json            # exemplo: `nix` no PATH (macOS/Linux); Windows usa bin/nix.cmd
 │   └── skills/revisao-codigo/
 └── src/
     ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/
@@ -404,7 +404,9 @@ Transporte **somente stdio**. O cliente inicia o processo (`python -P -m nix` no
 
 O servidor tenta `FastMCP` e, se o SDK recente expuser só `MCPServer`, usa essa classe — ambas precisam de `.tool()`, `.run()` e `transport="stdio"`. Falha de instância ou de transporte vira `ConfigError` com ação corretiva (`pip install 'mcp>=1.9.0'`). `NixError` na subida vai para stderr e encerra com código 1, sem vazar traceback no stdout.
 
-Registro no Cursor (`.cursor/mcp.json`). O processo da IDE **não** tem o `PATH` do venv — use o Python do ambiente, não o comando `nix`. O `-P` impede que a pasta `nix/` do workspace sombreie o pacote:
+Registro no Cursor (`.cursor/mcp.json`). Os wrappers `bin/nix` e `bin/nix.cmd` já chamam o Python do `.venv` com `-P -m nix` (o `-P` impede que a pasta `nix/` do workspace sombreie o pacote).
+
+**Windows**
 
 ```json
 {
@@ -416,7 +418,19 @@ Registro no Cursor (`.cursor/mcp.json`). O processo da IDE **não** tem o `PATH`
 }
 ```
 
-Se o workspace **é** o repositório Nix, `command` aponta para `${workspaceFolder}/.venv/Scripts/python.exe` (ou `.venv/bin/python` no Unix). O comando `nix` no PATH do terminal (via `NIX_HOME`) **não** substitui esse registro: a IDE não herda o PATH do usuário.
+**macOS / Linux**
+
+```json
+{
+  "mcpServers": {
+    "nix": {
+      "command": "nix"
+    }
+  }
+}
+```
+
+No Windows a IDE **não** herda o PATH do terminal: `nix.cmd` via `NIX_HOME` é o caminho que funciona. No macOS/Linux, `bin/nix.cmd` fecha a conexão com `EACCES` — use o comando `nix` depois do instalador.
 
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug.
 

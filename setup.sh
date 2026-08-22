@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Instala o Nix (venv, PATH, nix init). Não altera a sessão atual.
-# Uso: ./setup.sh
+# Uso: bash setup.sh
 set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
