@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "1.0.2"
+version = "1.1.0"
 description = "Servidor MCP stdio para vaults do Obsidian"
 readme = "README.md"
 requires-python = ">=3.11"
