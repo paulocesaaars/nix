@@ -22,7 +22,13 @@ O instalador cria `.venv`, instala o pacote e dispara `nix init` (pergunta o cam
 cd nix
 setup.bat
 :: ou, se já souber o vault:
-setup.bat --vault "C:/Users/voce/Vault"
+setup.bat --vault "C:/Obsidian/MeuVault"
+```
+
+```powershell
+cd nix
+.\setup.ps1
+# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
@@ -32,20 +38,78 @@ chmod +x setup.sh
 # ou: ./setup.sh --vault "$HOME/Vault"
 ```
 
-No Windows use barras `/` no caminho do vault (`C:/Users/voce/Vault`). Barra invertida quebra o TOML.
+Depois de informar o vault, o instalador confirma que a **configuração foi concluída**. Abra um **novo terminal** e rode `nix doctor` / `nix sync` — o PATH já estará registrado (se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão)).
+
+Quem já usa o gerenciador **Nix** (NixOS/Nixpkgs) vai ver um aviso: o comando `nix` deste projeto entra na frente do PATH. Use o caminho absoluto do outro `nix` se ainda precisar dele.
+
+No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
 
 ## Comandos depois da instalação
 
-Os comandos da CLI não dependem de você estar *dentro* da pasta `nix`. Na raiz do workspace:
+O instalador grava `NIX_HOME` e coloca `{NIX_HOME}/bin` no PATH. **Num terminal novo**, em qualquer diretório:
 
 ```bat
-nix.cmd doctor
-nix.cmd sync
+nix doctor
+nix sync
 ```
 
 ```bash
-./nix doctor
-./nix sync
+nix doctor
+nix sync
+```
+
+Se `nix` não for encontrado, o terminal ainda está com o PATH antigo: feche-o e abra outro. O `nix doctor` também imprime o comando de ativação manual (`bin/env.sh` / `env.cmd` / `env.ps1`).
+
+## Registrar NIX_HOME e o PATH à mão
+
+O instalador tenta gravar `NIX_HOME` (pasta do Nix) e `{NIX_HOME}/bin` no PATH do usuário. Se isso falhar (permissão, política, registro bloqueado), a configuração do vault **continua**; registre as variáveis você mesmo e **abra um terminal novo**.
+
+Use a pasta real da instalação no lugar de `C:\Git\nix` / `/c/Git/nix`.
+
+### Windows (interface)
+
+1. `Win+R`, rode `sysdm.cpl` → **Avançado** → **Variáveis de Ambiente**.
+2. Em **Variáveis do usuário**, **Novo**:
+   - Nome: `NIX_HOME`
+   - Valor: pasta do Nix, por exemplo `C:\Git\nix`
+3. Selecione **Path** (usuário) → **Editar** → **Novo** → `%NIX_HOME%\bin`
+4. Confirme com **OK** em todas as janelas.
+
+### Windows (PowerShell, permanente)
+
+```powershell
+$nixHome = "C:\Git\nix"   # pasta do Nix
+[Environment]::SetEnvironmentVariable("NIX_HOME", $nixHome, "User")
+$bin = Join-Path $nixHome "bin"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($p -notlike "*$bin*") {
+  [Environment]::SetEnvironmentVariable("Path", "$p;$bin", "User")
+}
+```
+
+### Linux, macOS e Git Bash
+
+Acrescente ao `~/.bashrc` (e ao `~/.profile` se o terminal for de login):
+
+```bash
+export NIX_HOME="/c/Git/nix"   # Linux/macOS: $HOME/nix ou o caminho da extração
+export PATH="$NIX_HOME/bin:$PATH"
+```
+
+Depois: `source ~/.bashrc` ou abra um terminal novo.
+
+### Só nesta sessão (não grava)
+
+```bat
+call C:\Git\nix\bin\env.cmd
+```
+
+```bash
+source /c/Git/nix/bin/env.sh
+```
+
+```powershell
+. C:\Git\nix\bin\env.ps1
 ```
 
 ## Registro no cliente MCP
@@ -60,8 +124,7 @@ Aponte para o Python do ambiente virtual e passe `-P` (Python 3.11+), para o dir
 {
   "mcpServers": {
     "nix": {
-      "command": "${workspaceFolder}/nix/.venv/Scripts/python.exe",
-      "args": ["-P", "-m", "nix"]
+      "command": "${env:NIX_HOME}/bin/nix.cmd"
     }
   }
 }
@@ -72,9 +135,9 @@ Aponte para o Python do ambiente virtual e passe `-P` (Python 3.11+), para o dir
 | Windows | `${workspaceFolder}/nix/.venv/Scripts/python.exe` |
 | Linux / macOS | `${workspaceFolder}/nix/.venv/bin/python` |
 
-Em qualquer um dos casos os `args` são `["-P", "-m", "nix"]`. O wrapper (`nix.cmd` no Windows, `./nix` no Unix) também inicia o servidor e resolve o `.venv` pela própria pasta — útil se você preferir não apontar o `python.exe`.
+Em qualquer um dos casos os `args` são `["-P", "-m", "nix"]`. Não use o comando `nix` do PATH no `mcp.json`: a IDE **não** herda o PATH do terminal.
 
-O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `~/.nix/logs/nix.log`.
+O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 
@@ -123,7 +186,7 @@ Doze ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
 
 ## Configuração
 
-Arquivo (primeiro encontrado): `$NIX_CONFIG` → `nix.toml` no diretório atual e nos pais → `nix.toml` na pasta do Nix e no projeto que a contém → `~/.nix/config.toml`. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`).
+Arquivo (primeiro encontrado): `$NIX_CONFIG` (se definido, só ele) → `nix.toml` na pasta do Nix (`$NIX_HOME` ou o checkout) → `nix.toml` no diretório atual e nos pais (último recurso). Caminhos relativos resolvem contra o diretório do TOML. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`). `nix init` grava nesse mesmo caminho.
 
 Pontos úteis do TOML gerado pelo `init`:
 
@@ -133,5 +196,5 @@ Pontos úteis do TOML gerado pelo `init`:
 | `vault.exclude` | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas |
 | `vault.default_new_note_folder` | `Inbox` | Destino de notas sem pasta no caminho |
 | `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
-| `index.data_dir` | `~/.nix/data` | SQLite + Chroma (fora do vault) |
-| `logging.file` | `~/.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
+| `index.data_dir` | `.nix/data` | SQLite + Chroma (na pasta do app, fora do vault) |
+| `logging.file` | `.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |

@@ -11,7 +11,7 @@ Documento de produto e requisitos: [PRD.md](./PRD.md).
 1. **Núcleo independente de interface.** Toda a lógica vive em `nix.core`. CLI e MCP são adaptadores finos que chamam os mesmos serviços. Nenhuma regra de negócio é duplicada.
 2. **Local por padrão.** Embeddings e banco vetorial rodam na máquina do usuário, sem custo e sem enviar o vault para terceiros. O Nix não faz chamadas remotas.
 3. **Indexação sob consentimento.** Não existe watcher de arquivos. O vault só é varrido quando o usuário pede (`nix sync` / ferramenta `sync_index`) ou quando as próprias ferramentas escrevem (write-through).
-4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar `index.data_dir` (padrão `~/.nix/data`) e rodar `nix sync --full` reconstrói tudo.
+4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar `index.data_dir` (padrão `.nix/data` na pasta do aplicativo) e rodar `nix sync --full` reconstrói tudo.
 5. **Ferramentas antes de prompts.** A capacidade exposta ao cliente é um conjunto pequeno e bem tipado de ferramentas, definido uma vez em `core/tools/registry.py`.
 6. **Falhar de forma explícita.** Erros de configuração, defasagem de índice e ausência de resultados são comunicados, nunca mascarados.
 
@@ -53,8 +53,8 @@ graph TB
     end
 
     subgraph Infra["Infraestrutura local"]
-        CHROMA[("ChromaDB<br/>~/.nix/data/chroma")]
-        SQLITE[("SQLite<br/>~/.nix/data/index.db")]
+        CHROMA[("ChromaDB<br/>.nix/data/chroma")]
+        SQLITE[("SQLite<br/>.nix/data/index.db")]
         EMB["FastEmbed / bge-m3<br/>CPU"]
         FS[("Vault Obsidian<br/>*.md")]
     end
@@ -81,11 +81,15 @@ graph TB
 
 ```
 nix/
-├── setup.bat / setup.sh    # cria .venv, instala pacotes e inicia `nix init`
-├── nix.cmd / nix           # wrapper da CLI: acha o .venv local, preserva o CWD
+├── setup.bat / setup.sh / setup.ps1  # cria .venv, instala pacotes, registra PATH e inicia `nix init`
+├── bin/nix / bin/nix.cmd   # wrappers da CLI: acham o .venv da instalação, preservam o CWD
+├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH (terminal antigo)
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
-├── scripts/bootstrap.py    # lógica compartilhada do instalador
+├── scripts/bootstrap.py    # venv + pip + init
+├── scripts/register_path.py # NIX_HOME e PATH do usuário
 ├── nix.jpeg                # foto da Nix (mascote no README)
+├── nix.toml                # config local (não versionado; gerado por `nix init`)
+├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs
 ├── pyproject.toml          # metadados do pacote e entry point do comando `nix`
 ├── requirements.txt        # dependências de runtime
 ├── requirements-dev.txt    # dependências de desenvolvimento
@@ -103,6 +107,7 @@ nix/
         ├── __main__.py             # python -m nix (pacote instalado)
         ├── config/
         │   ├── schema.py           # modelos Pydantic da configuração
+        │   ├── paths.py            # app_root, nix.toml, resolução de caminhos relativos
         │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
         │   └── template.toml       # config comentado gerado por `nix init`
         ├── core/
@@ -154,7 +159,7 @@ O ambiente é gerenciado com `venv` e `pip`. O instalador (`setup.bat` / `setup.
 
 ## 5. Modelo de dados
 
-### 5.1 SQLite (`index.data_dir/index.db`, padrão `~/.nix/data/index.db`)
+### 5.1 SQLite (`index.data_dir/index.db`, padrão `.nix/data/index.db` na pasta do app)
 
 Guarda o estado do índice: o que já foi processado, com qual conteúdo e com qual modelo. É a base do diff incremental.
 
@@ -364,16 +369,19 @@ Todas as ferramentas recebem `rel_path` relativo ao vault. `core/vault/paths.py`
 O instalador na raiz do repositório não entra no núcleo: só orquestra o ambiente.
 
 ```
-setup.bat / setup.sh          # acha Python 3.11+, chama scripts/bootstrap.py
-scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → python -P -m nix init
+setup.bat / setup.sh / setup.ps1  # acha Python 3.11+, chama scripts/bootstrap.py
+scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → register_path → python -P -m nix init
+scripts/register_path.py      # NIX_HOME + `{NIX_HOME}/bin` no PATH (registro Windows / rc Unix)
+bin/nix / bin/nix.cmd         # shims no PATH do usuário
+bin/env.sh / env.cmd / env.ps1  # ativação manual se um terminal antigo não herdou o PATH
 ```
 
-Argumentos extras (`--vault PATH`, `--force`) vão para `nix init`. Se `.venv` já existir, é reutilizado.
+Argumentos extras (`--vault PATH`, `--force`) vão para `nix init`. Se `.venv` já existir, é reutilizado. O instalador grava `NIX_HOME` e coloca `{NIX_HOME}/bin` no PATH (registro do usuário no Windows; bloco POSIX nos rcs existentes, criando `~/.bashrc` só se nenhum rc existir; no Git Bash com `MSYSTEM`, cria `~/.bashrc` se preciso). Windows e shell são registrados à parte: a falha de um não desfaz o outro. Se algum registro falhar, a instalação **não aborta**: aponta para o INSTALL.md e segue o `init`. Depois do vault, informa que a configuração foi concluída; o comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
 ```
 nix                           # inicia o servidor MCP stdio
 nix init [--vault PATH] [--force]
-                              # pergunta (ou recebe) o vault; cria ~/.nix/config.toml
+                              # pergunta (ou recebe) o vault; cria nix.toml na pasta do Nix
                               # sem --force, arquivo existente só atualiza vault.path
 nix sync [--full] [--dry-run] [--json]
 nix status [--json]           # via call_tool("index_status")
@@ -396,28 +404,27 @@ Registro no Cursor (`.cursor/mcp.json`). O processo da IDE **não** tem o `PATH`
 {
   "mcpServers": {
     "nix": {
-      "command": "${workspaceFolder}/nix/.venv/Scripts/python.exe",
-      "args": ["-P", "-m", "nix"]
+      "command": "${env:NIX_HOME}/bin/nix.cmd"
     }
   }
 }
 ```
 
-Se o workspace **é** o repositório Nix, `command` aponta para `${workspaceFolder}/.venv/Scripts/python.exe` (ou `.venv/bin/python` no Unix). `nix.cmd` / `./nix` na raiz do checkout também iniciam o servidor e localizam o `.venv` pela pasta do script, independente do CWD.
+Se o workspace **é** o repositório Nix, `command` aponta para `${workspaceFolder}/.venv/Scripts/python.exe` (ou `.venv/bin/python` no Unix). O comando `nix` no PATH do terminal (via `NIX_HOME`) **não** substitui esse registro: a IDE não herda o PATH do usuário.
 
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug.
 
 ## 10. Configuração
 
-Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` → `nix.toml` no CWD e nos diretórios pais → `nix.toml` na raiz do checkout e no projeto que o contém → `~/.nix/config.toml`. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`).
+Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` (se definido, é o único candidato) → `{app_root}/nix.toml` → `nix.toml` no CWD e nos diretórios pais (último recurso). `app_root` é o checkout editável, senão `$NIX_HOME`, senão o CWD. Caminhos relativos resolvem contra o diretório do arquivo, não o CWD. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no mesmo caminho (`config_write_path`). Estado (SQLite, Chroma, backups, logs) fica em `{app_root}/.nix/`.
 
 Seções fora de `vault` / `index` / `retrieval` / `safety` / `logging` são ignoradas e geram aviso. As chaves legadas `[openai]`, `[agent]`, `[mcp]` e `[limits]` têm mensagem específica; `agent.longterm_folder` é copiado para `vault.longterm_folder` **só nesta sessão** até o TOML ser editado.
 
 ```toml
-# ~/.nix/config.toml — gerado por `nix init`
+# nix.toml — gerado por `nix init` na pasta do Nix
 
 [vault]
-path = "C:/Users/paulo/Obsidian/MeuVault"
+path = "C:/Obsidian/MeuVault"
 include = ["**/*.md"]
 exclude = [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
 follow_symlinks = false
@@ -426,7 +433,7 @@ default_frontmatter = { created = "auto", source = "nix" }
 longterm_folder = "Nix/Memória"
 
 [index]
-data_dir = "~/.nix/data"
+data_dir = ".nix/data"
 embedding_model = "BAAI/bge-m3"
 embedding_batch_size = 32
 chunk_size_tokens = 800
@@ -453,16 +460,16 @@ expand_query = true
 [safety]
 confirm_destructive = true
 backup_before_overwrite = true
-backup_dir = "~/.nix/backups"
+backup_dir = ".nix/backups"
 backup_retention_days = 30
 
 [logging]
 level = "info"
-file = "~/.nix/logs/nix.log"
+file = ".nix/logs/nix.log"
 log_prompts = false
 ```
 
-Toda a configuração é validada por Pydantic no carregamento: caminho do vault deve existir e ser diretório, modelos devem estar entre os suportados, valores numéricos em faixas válidas. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, `vault.path` deve usar `/` (ex.: `C:/Users/voce/Vault`); barra invertida quebra o TOML.
+Toda a configuração é validada por Pydantic no carregamento: caminho do vault deve existir e ser diretório, modelos devem estar entre os suportados, valores numéricos em faixas válidas. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, `vault.path` deve usar `/` (ex.: `C:/Obsidian/MeuVault`); barra invertida quebra o TOML.
 
 ## 11. Segurança
 
@@ -497,7 +504,7 @@ O carregamento do modelo de embedding é preguiçoso. O FastEmbed 0.8 não lista
 | AD-05 | Sincronização manual, sem watcher | `watchdog` observando o vault | Requisito de controle do usuário; evita processo em background e reindexações em rajada durante edição |
 | AD-06 | Registry único de ferramentas | Implementações separadas para CLI e MCP | Elimina divergência de comportamento e duplicação de regras de segurança |
 | AD-07 | Busca híbrida desde a fundação | Somente densa | Notas pessoais são cheias de nomes próprios e siglas que o embedding dilui |
-| AD-08 | Artefatos de índice fora do vault por padrão | `.nix/` dentro do vault | Evita poluir a sincronização do Obsidian com binários e conflitos de merge |
+| AD-08 | Artefatos de índice na pasta do aplicativo (`.nix/`), fora do vault | `.nix/` dentro do vault | Evita poluir a sincronização do Obsidian; o estado acompanha o aplicativo |
 | AD-09 | MCP somente stdio | HTTP loopback | O cliente inicia o processo; não há porta, autenticação nem processo órfão |
 | AD-10 | Instalador em script (`setup.bat` / `setup.sh` + `scripts/bootstrap.py`) | Pacote PyInstaller, Makefile | Não empacota Python; usa o 3.11+ do sistema, funciona em Windows e Unix, e reutiliza `nix init` |
 

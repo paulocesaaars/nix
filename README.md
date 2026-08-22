@@ -40,7 +40,13 @@ Há dois caminhos. Os dois criam `.venv`, instalam o pacote e disparam `nix init
 cd nix
 setup.bat
 :: ou, se já souber o vault:
-setup.bat --vault "C:/Users/voce/Vault"
+setup.bat --vault "C:/Obsidian/MeuVault"
+```
+
+```powershell
+cd nix
+.\setup.ps1
+# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
@@ -50,13 +56,13 @@ chmod +x setup.sh
 # ou: ./setup.sh --vault "$HOME/Vault"
 ```
 
-No Windows use barras `/` no caminho do vault (`C:/Users/voce/Vault`). Barra invertida quebra o TOML.
+No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
 
 <p>
   <img src="nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
 </p>
 
-Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp).
+Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp). O instalador grava `NIX_HOME` e coloca `nix` no PATH; ao terminar, informa que a configuração foi concluída. Abra um novo terminal e rode `nix doctor` / `nix sync`. Se o registro automático falhar, veja [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão) (seção **Registrar NIX_HOME e o PATH à mão**). Se o gerenciador Nix (NixOS) já estiver no PATH, o instalador avisa: este `nix` passa a ter prioridade.
 
 ### A partir do repositório (desenvolvedor)
 
@@ -64,13 +70,18 @@ Clone o repositório e rode o mesmo instalador na raiz:
 
 ```bat
 setup.bat
-:: ou: setup.bat --vault "C:/Users/voce/Vault"
+:: ou: setup.bat --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 # ou: ./setup.sh --vault "$HOME/Vault"
+```
+
+```powershell
+.\setup.ps1
+# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 
@@ -84,10 +95,10 @@ python -m venv .venv
 
 pip install -r requirements-dev.txt
 pip install -e .
-python -m nix init                # ou: python -m nix init --vault "C:/Users/voce/Vault"
+python -m nix init                # ou: python -m nix init --vault "C:/Obsidian/MeuVault"
 ```
 
-`nix` e `python -m nix` são equivalentes **depois** de ativar o venv. O Cursor não herda o `PATH` do terminal — no MCP use sempre o Python do `.venv`.
+`nix` e `python -m nix` são equivalentes depois do instalador (num **terminal novo**) ou de ativar o venv. O Cursor não herda o `PATH` do terminal — no MCP use sempre o Python do `.venv`.
 
 ## Registro no cliente MCP
 
@@ -101,8 +112,7 @@ Aponte para o Python do ambiente virtual. Recarregue os servidores MCP depois de
 {
   "mcpServers": {
     "nix": {
-      "command": "${workspaceFolder}/nix/.venv/Scripts/python.exe",
-      "args": ["-m", "nix"]
+      "command": "${env:NIX_HOME}/bin/nix.cmd"
     }
   }
 }
@@ -115,23 +125,23 @@ Ajuste `command` conforme o caso:
 | Pasta `nix/` dentro do projeto | `${workspaceFolder}/nix/.venv/Scripts/python.exe` | `${workspaceFolder}/nix/.venv/bin/python` |
 | O workspace **é** o repositório Nix | `${workspaceFolder}/.venv/Scripts/python.exe` | `${workspaceFolder}/.venv/bin/python` |
 
-O mesmo padrão (`caminho/do/python` + `["-m", "nix"]`) vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `~/.nix/logs/nix.log`.
+O mesmo padrão (`caminho/do/python` + `["-m", "nix"]`) vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 
-Depois do `init` (o instalador já dispara isso):
+Depois do `init` (o instalador já dispara isso), **abra um novo terminal** e rode:
 
 ```bash
-# Windows
-nix.cmd doctor
-nix.cmd sync
-nix.cmd status
-
-# Linux / macOS
-./nix doctor
-./nix sync
-./nix status
+nix doctor
+nix sync
+nix status
 ```
+
+Se `nix` não for encontrado, o terminal ainda tem o PATH antigo: feche-o e abra outro.
+
+## Registrar NIX_HOME e o PATH à mão
+
+Se o instalador não gravar as variáveis, o passo a passo está só no [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão) (o zip da release inclui esse arquivo). Grave o que faltou e abra um **terminal novo**.
 
 O primeiro `sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face. Nas seguintes, só o que mudou é reprocessado.
 
@@ -176,7 +186,7 @@ Doze ferramentas, definidas em `src/nix/core/tools/registry.py`. Notas também a
 
 ## Configuração
 
-Arquivo (primeiro encontrado): `$NIX_CONFIG` → `./nix.toml` → `~/.nix/config.toml`. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`).
+Arquivo (primeiro encontrado): `$NIX_CONFIG` (se definido, só ele) → `nix.toml` na pasta do Nix (`$NIX_HOME` ou o checkout) → `nix.toml` no CWD e nos pais (último recurso). Caminhos relativos resolvem contra o diretório do TOML. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`). `nix init` grava nesse mesmo caminho.
 
 Pontos úteis do TOML gerado pelo `init`:
 
@@ -186,8 +196,8 @@ Pontos úteis do TOML gerado pelo `init`:
 | `vault.exclude` | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas |
 | `vault.default_new_note_folder` | `Inbox` | Destino de notas sem pasta no caminho |
 | `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
-| `index.data_dir` | `~/.nix/data` | SQLite + Chroma (fora do vault) |
-| `logging.file` | `~/.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
+| `index.data_dir` | `.nix/data` | SQLite + Chroma (na pasta do app, fora do vault) |
+| `logging.file` | `.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
 
 ## Publicar uma versão
 

@@ -75,6 +75,7 @@ editar arquivos, use **`revisao-codigo`**.
 - **MCP:** stdout pertence ao protocolo — sem `print`, logs só em arquivo. O transporte
   é **somente stdio**; o cliente (Cursor, Claude Code, Copilot) inicia o processo.
 - **Configuração e segredos:** leia configuração apenas pelo objeto validado de `config/`.
+  O TOML do usuário é `nix.toml` na pasta do aplicativo; índice, backups e logs ficam em `.nix/`.
   Não commite segredos; use variáveis de ambiente.
 - **Tipagem e estilo:** *type hints* obrigatórios em funções públicas; `ruff` e `mypy`
   sem erros. Mensagens de erro devem indicar a **ação corretiva**.
@@ -82,19 +83,6 @@ editar arquivos, use **`revisao-codigo`**.
   escreva testes quando o usuário pedir explicitamente. A validação padrão de uma
   alteração é `ruff` e `mypy` limpos mais uma verificação manual do comportamento.
 
-### Comandos
-
-Ambiente (escolha um): `setup.bat` no Windows, `./setup.sh` no Unix, ou o fluxo manual abaixo. O instalador só orquestra venv + pip + `nix init` — **nenhuma regra de negócio** vive em `scripts/bootstrap.py`.
-
-```bash
-python -m venv .venv && source .venv/Scripts/activate   # Linux/macOS: .venv/bin/activate
-pip install -r requirements-dev.txt && pip install -e .
-ruff check src && mypy src
-```
-
-Dependências ficam em `requirements.txt` (runtime) e `requirements-dev.txt` (desenvolvimento);
-o `pyproject.toml` guarda apenas metadados do pacote e o *entry point* do comando `nix`.
-No cliente MCP da IDE, use o Python do `.venv` (`python -P -m nix`), não o comando `nix` no PATH.
 
 ### Comunicação e idioma
 
