@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 from importlib.resources import files
 from pathlib import Path
@@ -12,19 +13,15 @@ import typer
 
 from nix.cli.deps import with_errors
 from nix.cli.render import console, print_banner
-from nix.config.loader import (
-    default_config_path,
-    load_config,
-    public_dict,
-    resolve_config_path,
-)
+from nix.config.loader import config_write_path, load_config, public_dict, resolve_config_path
+from nix.config.paths import app_root, env_home
 from nix.core.errors import ConfigError
 
 _PATH_LINE = re.compile(r"(?m)^path\s*=\s*.*$")
 
 
 def _toml_path(path: Path) -> str:
-    return json.dumps(path.expanduser().resolve().as_posix(), ensure_ascii=False)
+    return json.dumps(path.resolve().as_posix(), ensure_ascii=False)
 
 
 def _apply_vault_path(text: str, vault: Path) -> str:
@@ -40,9 +37,9 @@ def _validate_vault(raw: str) -> Path:
     if not text:
         raise ConfigError(
             "O caminho do vault está vazio. Informe a pasta do Obsidian, "
-            "por exemplo C:/Users/voce/Vault."
+            "por exemplo C:/Obsidian/MeuVault."
         )
-    path = Path(text).expanduser()
+    path = Path(text)
     if not path.exists():
         raise ConfigError(
             f"O caminho {path} não existe. Crie a pasta do vault ou informe outro caminho."
@@ -57,12 +54,12 @@ def _validate_vault(raw: str) -> Path:
 def _ask_vault() -> Path:
     console.print(
         "Informe a pasta do vault do Obsidian. "
-        "No Windows use [cyan]/[/cyan] ([dim]C:/Users/voce/Vault[/dim])."
+        "No Windows use [cyan]/[/cyan] ([dim]C:/Obsidian/MeuVault[/dim])."
     )
     while True:
         raw = typer.prompt("Caminho do vault")
         try:
-            path = Path(raw.strip().strip('"').strip("'")).expanduser()
+            path = Path(raw.strip().strip('"').strip("'"))
         except (OSError, RuntimeError):
             console.print("[red]Caminho inválido. Tente de novo.[/red]")
             continue
@@ -82,10 +79,15 @@ def _ask_vault() -> Path:
 
 
 def _print_next_steps() -> None:
-    console.print(
-        "Rode [cyan]./nix doctor[/cyan] e [cyan]./nix sync[/cyan] na pasta do Nix "
-        "([cyan]nix.cmd[/cyan] no Windows)."
-    )
+    console.print("[bold]Configuração concluída.[/bold]")
+
+
+def _session_activate_hint() -> str:
+    root = app_root()
+    sh = (root / "bin" / "env.sh").as_posix()
+    cmd = str(root / "bin" / "env.cmd")
+    ps1 = str(root / "bin" / "env.ps1")
+    return f"source {sh} (Git Bash/Unix), call {cmd} (cmd) ou . {ps1} (PowerShell)"
 
 
 def _resolve_vault(explicit: str | None) -> Path:
@@ -107,10 +109,7 @@ def cmd_init(
         help="Caminho do vault; se omitido, pergunta no terminal",
     ),
 ) -> None:
-    dest = Path.home() / ".nix" / "config.toml"
-    env_dest = resolve_config_path()
-    if env_dest is not None and env_dest.exists() and not force:
-        dest = env_dest
+    dest = config_write_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
     print_banner(
         "[bold]Olá. Eu sou o Nix[/bold] — ponte MCP entre o vault e os agentes de desenvolvimento.\n"
@@ -140,11 +139,28 @@ def cmd_doctor(
     from nix import __version__
 
     console.print(f"Nix {__version__} · Python {sys.version.split()[0]}")
+    home_path = env_home()
+    home = str(home_path) if home_path is not None else ""
+    nix_cmd = shutil.which("nix") or shutil.which("nix.cmd")
+    if home:
+        console.print(f"NIX_HOME: {home}")
+    if nix_cmd:
+        console.print(f"comando nix: {nix_cmd}")
+    elif not home:
+        console.print(
+            f"[yellow]NIX_HOME ausente e `nix` não está no PATH desta sessão. "
+            f"Rode `{_session_activate_hint()}`.[/yellow]"
+        )
+    else:
+        console.print(
+            f"[yellow]comando `nix` não está no PATH desta sessão. "
+            f"Rode `{_session_activate_hint()}`.[/yellow]"
+        )
     path = resolve_config_path()
     if path:
         console.print(f"Config: {path}")
     else:
-        console.print(f"Config: {default_config_path()} (ainda não existe — rode `nix init`)")
+        console.print(f"Config: {config_write_path()} (ainda não existe — rode `nix init`)")
     try:
         config = load_config()
         console.print("Config carregada: ok")
@@ -159,7 +175,7 @@ def cmd_doctor(
     else:
         console.print(f"vault.path: {config.vault.path or '(vazio)'}")
         console.print(f"index.embedding_model: {config.index.embedding_model}")
-        console.print(f"index.data_dir: {config.index.data_dir}")
+        console.print(f"index.data_dir: {config.index.data_dir} → {config.index.data_path}")
         for warning in config.legacy_warnings:
             console.print(f"[yellow]{warning}[/yellow]")
     try:

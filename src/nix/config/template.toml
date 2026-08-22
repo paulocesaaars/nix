@@ -1,10 +1,11 @@
-# ~/.nix/config.toml — gerado por `nix init`
+# nix.toml — gerado por `nix init` na pasta do Nix.
+# Caminhos relativos resolvem contra o diretório deste arquivo, não o CWD.
 # Precedência: variável de ambiente > este arquivo > padrão.
 # Sobrescreva qualquer campo com NIX_SECAO__CAMPO (ex.: NIX_VAULT__PATH).
 
 [vault]
 # Obrigatório. Diretório raiz do vault do Obsidian.
-# Windows: use / (C:/Users/voce/Vault). Barra invertida quebra o TOML (\U é escape).
+# Windows: use / (C:/Obsidian/MeuVault). Barra invertida quebra o TOML (\U é escape).
 path = ""
 include = ["**/*.md"]
 exclude = [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
@@ -16,8 +17,8 @@ default_frontmatter = { created = "auto", source = "nix" }
 longterm_folder = "Nix/Memória"
 
 [index]
-# Artefatos derivados (SQLite + Chroma). Fora do vault por padrão (AD-08).
-data_dir = "~/.nix/data"
+# Artefatos derivados (SQLite + Chroma). Na pasta do app, fora do vault (AD-08).
+data_dir = ".nix/data"
 embedding_model = "BAAI/bge-m3"
 # Primeiro uso baixa o ONNX (~2,3 GB) do Hugging Face.
 embedding_batch_size = 32
@@ -52,11 +53,11 @@ expand_query = true
 [safety]
 confirm_destructive = true
 backup_before_overwrite = true
-backup_dir = "~/.nix/backups"
+backup_dir = ".nix/backups"
 backup_retention_days = 30
 
 [logging]
 level = "info"
-file = "~/.nix/logs/nix.log"
+file = ".nix/logs/nix.log"
 # true inclui consultas e argumentos de ferramentas no log
 log_prompts = false

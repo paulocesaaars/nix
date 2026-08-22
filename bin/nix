@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+_pick_python() {
+  local candidate
+  for candidate in "$ROOT/.venv/bin/python" "$ROOT/.venv/Scripts/python.exe"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  if [[ -n "${NIX_HOME:-}" ]]; then
+    for candidate in "$NIX_HOME/.venv/bin/python" "$NIX_HOME/.venv/Scripts/python.exe"; do
+      if [[ -f "$candidate" ]]; then
+        printf '%s' "$candidate"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+PYTHON="$(_pick_python)" || {
+  echo "[erro] Não achei o interpretador em $ROOT/.venv. PATH permanente: veja o INSTALL.md. Só nesta sessão: source \"$ROOT/bin/env.sh\"." >&2
+  exit 1
+}
+exec "$PYTHON" -P -m nix "$@"

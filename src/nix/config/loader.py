@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from nix.config.paths import app_root, default_config_path, resolve_app_path
 from nix.config.schema import NixConfig
 from nix.core.errors import ConfigError
 
@@ -27,53 +28,40 @@ _LEGACY_HINTS: dict[str, str] = {
 }
 
 
-def default_config_dir() -> Path:
-    return Path.home() / ".nix"
-
-
-def default_config_path() -> Path:
-    return default_config_dir() / "config.toml"
-
-
-def checkout_root() -> Path | None:
-    """Raiz do checkout do Nix se o pacote está em `src/nix` (instalação editável)."""
-    start = Path(__file__).resolve()
-    for parent in start.parents:
-        if (parent / "src" / "nix" / "__init__.py").is_file() and (parent / "pyproject.toml").is_file():
-            return parent
-    return None
+def config_write_path() -> Path:
+    """Destino do `nix init` e do TOML canônico: `$NIX_CONFIG` ou `{app_root}/nix.toml`."""
+    env = os.environ.get("NIX_CONFIG")
+    if env and env.strip():
+        return resolve_app_path(env.strip(), app_root())
+    return default_config_path()
 
 
 def _config_candidates(explicit: Path | None) -> list[Path]:
     if explicit is not None:
         return [explicit]
+    env = os.environ.get("NIX_CONFIG")
+    if env and env.strip():
+        return [resolve_app_path(env.strip(), app_root())]
+
     candidates: list[Path] = []
     seen: set[str] = set()
 
     def add(path: Path) -> None:
-        expanded = path.expanduser()
         try:
-            key = str(expanded.resolve()).casefold()
+            key = str(path.resolve()).casefold()
         except OSError:
-            key = str(expanded).casefold()
+            key = str(path).casefold()
         if key in seen:
             return
         seen.add(key)
-        candidates.append(expanded)
+        candidates.append(path)
 
-    env = os.environ.get("NIX_CONFIG")
-    if env:
-        add(Path(env))
+    add(default_config_path())
     here = Path.cwd()
     with contextlib.suppress(OSError):
         here = here.resolve()
     for directory in [here, *here.parents]:
         add(directory / "nix.toml")
-    checkout = checkout_root()
-    if checkout is not None:
-        add(checkout / "nix.toml")
-        add(checkout.parent / "nix.toml")
-    add(default_config_path())
     return candidates
 
 
@@ -99,8 +87,8 @@ def _read_toml(path: Path) -> dict[str, Any]:
         if "hex" in detail or "escape" in detail or "\\u" in detail:
             extra = (
                 " Em caminhos Windows use barras / "
-                "(ex.: C:/Users/voce/Vault) ou dobre as invertidas "
-                "(C:\\\\Users\\\\...). Uma única \\ antes de U/x/n é escape TOML."
+                "(ex.: C:/Obsidian/MeuVault) ou dobre as invertidas "
+                "(C:\\\\Obsidian\\\\MeuVault). Uma única \\ antes de U/x/n é escape TOML."
             )
         raise ConfigError(
             f"TOML inválido em {path}: {exc}.{extra} "
@@ -213,7 +201,7 @@ def load_config(
     if resolved is not None and resolved.is_file():
         data = _read_toml(resolved)
     elif require_file:
-        hint = path or default_config_path()
+        hint = path or config_write_path()
         raise ConfigError(
             f"Arquivo de configuração não encontrado em {hint}. Rode `nix init` para criá-lo."
         )
@@ -222,7 +210,8 @@ def load_config(
     merged.pop("config_path", None)
     unknown, legacy_warnings = _apply_legacy(merged)
     try:
-        config = NixConfig.model_validate(merged)
+        anchor = resolved.parent if resolved is not None else app_root()
+        config = NixConfig.model_validate(merged, context={"path_anchor": anchor})
     except (ValidationError, ConfigError) as exc:
         if isinstance(exc, ConfigError):
             raise

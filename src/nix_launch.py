@@ -13,10 +13,25 @@ import sys
 from pathlib import Path
 
 
+def find_checkout_root(start: Path) -> Path | None:
+    """Sobe a partir de `start` até achar `pyproject.toml` + `src/nix`."""
+    try:
+        resolved = start.resolve()
+    except OSError:
+        resolved = start
+    for parent in [resolved, *resolved.parents]:
+        if (parent / "src" / "nix" / "__init__.py").is_file() and (parent / "pyproject.toml").is_file():
+            return parent
+    return None
+
+
 def checkout_root() -> Path:
     """Raiz do checkout (pasta com `src/` e `pyproject.toml`)."""
+    found = find_checkout_root(Path(__file__).resolve())
+    if found is not None:
+        return found
     here = Path(__file__).resolve()
-    if here.parent.name == "src" and (here.parent / "nix").is_dir():
+    if here.parent.name == "src":
         return here.parent.parent
     return here.parent
 

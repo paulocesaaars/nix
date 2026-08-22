@@ -58,7 +58,7 @@ jobs:
 
       - name: Verificar lint e tipos
         run: |
-          ruff check src
+          ruff check src scripts
           mypy src
 
       - name: Montar pacote zip

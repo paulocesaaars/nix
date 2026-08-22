@@ -49,20 +49,18 @@ set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" goto :fail
 
 echo.
-echo Pronto. Na pasta do Nix:
-echo   nix.cmd doctor
-echo   nix.cmd sync
-echo Na raiz do workspace (Nix em .\nix\):
-echo   python -m nix doctor
-echo   python -m nix sync
-goto :end
+echo O comando nix vale num terminal novo.
+call :maybe_pause
+endlocal & exit /b 0
 
 :fail
 if not defined EXITCODE set "EXITCODE=1"
 echo.
 echo A instalacao nao concluiu. Veja a mensagem acima e tente de novo.
+call :maybe_pause
+endlocal & exit /b %EXITCODE%
 
-:end
-echo.
-pause
-exit /b %EXITCODE%
+:maybe_pause
+echo %CMDCMDLINE% | find /I "/c" >nul
+if not errorlevel 1 pause
+exit /b 0

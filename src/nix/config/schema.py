@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from nix.config.paths import app_root, resolve_app_path
 from nix.core.errors import ConfigError
 
 SUPPORTED_EMBEDDING_MODELS: tuple[str, ...] = (
@@ -23,12 +24,16 @@ SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
 LogLevel = Literal["debug", "info", "warning", "error"]
 
 
-def expand_path(value: str) -> Path:
-    """Expande `~` e variáveis; não exige que o caminho exista."""
-    return Path(value).expanduser()
+class AnchoredSettings(BaseModel):
+    """Caminhos relativos resolvem contra `path_anchor` (diretório do TOML)."""
+
+    path_anchor: Path | None = Field(default=None, exclude=True)
+
+    def resolve_path(self, value: str) -> Path:
+        return resolve_app_path(value, self.path_anchor)
 
 
-class VaultSettings(BaseModel):
+class VaultSettings(AnchoredSettings):
     path: str = ""
     include: list[str] = Field(default_factory=lambda: ["**/*.md"])
     exclude: list[str] = Field(
@@ -43,11 +48,11 @@ class VaultSettings(BaseModel):
 
     @property
     def root(self) -> Path:
-        return expand_path(self.path).resolve()
+        return self.resolve_path(self.path)
 
 
-class IndexSettings(BaseModel):
-    data_dir: str = "~/.nix/data"
+class IndexSettings(AnchoredSettings):
+    data_dir: str = ".nix/data"
     embedding_model: str = "BAAI/bge-m3"
     embedding_batch_size: int = Field(default=32, ge=1, le=256)
     chunk_size_tokens: int = Field(default=800, ge=100, le=4000)
@@ -92,7 +97,7 @@ class IndexSettings(BaseModel):
 
     @property
     def data_path(self) -> Path:
-        return expand_path(self.data_dir)
+        return self.resolve_path(self.data_dir)
 
 
 class RetrievalSettings(BaseModel):
@@ -107,28 +112,28 @@ class RetrievalSettings(BaseModel):
     expand_query: bool = True
 
 
-class SafetySettings(BaseModel):
+class SafetySettings(AnchoredSettings):
     confirm_destructive: bool = True
     backup_before_overwrite: bool = True
-    backup_dir: str = "~/.nix/backups"
+    backup_dir: str = ".nix/backups"
     backup_retention_days: int = Field(default=30, ge=1, le=365)
 
     @property
     def backup_path(self) -> Path:
-        return expand_path(self.backup_dir)
+        return self.resolve_path(self.backup_dir)
 
 
-class LoggingSettings(BaseModel):
+class LoggingSettings(AnchoredSettings):
     level: LogLevel = "info"
-    file: str = "~/.nix/logs/nix.log"
+    file: str = ".nix/logs/nix.log"
     log_prompts: bool = False
 
     @property
     def file_path(self) -> Path:
-        return expand_path(self.file)
+        return self.resolve_path(self.file)
 
 
-class NixConfig(BaseModel):
+class NixConfig(AnchoredSettings):
     """Configuração validada. Carregada exclusivamente por `nix.config.loader`."""
 
     vault: VaultSettings = Field(default_factory=VaultSettings)
@@ -140,13 +145,30 @@ class NixConfig(BaseModel):
     unknown_sections: list[str] = Field(default_factory=list, exclude=True)
     legacy_warnings: list[str] = Field(default_factory=list, exclude=True)
 
+    @model_validator(mode="after")
+    def apply_path_anchor(self, info: ValidationInfo) -> NixConfig:
+        ctx = info.context or {}
+        raw = ctx.get("path_anchor")
+        if isinstance(raw, Path):
+            anchor = raw
+        elif self.path_anchor is not None:
+            anchor = self.path_anchor
+        else:
+            anchor = app_root()
+        self.path_anchor = anchor
+        self.vault.path_anchor = anchor
+        self.index.path_anchor = anchor
+        self.safety.path_anchor = anchor
+        self.logging.path_anchor = anchor
+        return self
+
     def require_vault(self) -> Path:
         if not self.vault.path.strip():
             if self.config_path is None:
                 raise ConfigError(
                     "Não há arquivo de configuração e vault.path está vazio. "
-                    "Rode `nix init`, defina vault.path em ~/.nix/config.toml "
-                    "e depois `nix doctor`."
+                    "Rode `nix init` para criar nix.toml na pasta do Nix, "
+                    "defina vault.path e depois `nix doctor`."
                 )
             raise ConfigError(
                 "vault.path não está definido. Edite o arquivo de configuração "

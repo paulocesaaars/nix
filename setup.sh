@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
+# Instala o Nix (venv, PATH, nix init). Não altera a sessão atual.
+# Uso: ./setup.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
-
+ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
 BOOTSTRAP="$ROOT/scripts/bootstrap.py"
 if [[ ! -f "$BOOTSTRAP" ]]; then
   echo "[erro] Não achei scripts/bootstrap.py. Rode setup.sh na raiz do repositório Nix." >&2
@@ -31,5 +31,9 @@ PY="$(pick_python)" || {
 
 echo "Nix — instalação do ambiente e configuração"
 echo "Usando: $PY"
-chmod +x "$ROOT/nix" 2>/dev/null || true
-exec "$PY" "$BOOTSTRAP" "$@"
+chmod +x "$ROOT/bin/nix" 2>/dev/null || true
+
+"$PY" "$BOOTSTRAP" "$@"
+
+echo
+echo "O comando nix vale num terminal novo."
