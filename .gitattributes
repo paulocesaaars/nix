@@ -1,6 +1,10 @@
 # Wrappers da CLI: o script Unix precisa de LF para o shebang funcionar.
-/nix text eol=lf
-/nix.cmd text eol=crlf
+bin/nix text eol=lf
+bin/nix.cmd text eol=crlf
+bin/env.sh text eol=lf
+bin/env.cmd text eol=crlf
+bin/env.ps1 text eol=lf
+setup.ps1 text eol=lf
 
 # Arquivos de desenvolvimento do repositório ficam fora do zip do release
 .github/                 export-ignore
