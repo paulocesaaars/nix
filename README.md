@@ -100,6 +100,10 @@ python -m nix init                # ou: python -m nix init --vault "C:/Obsidian/
 
 `nix` e `python -m nix` são equivalentes depois do instalador (num **terminal novo**) ou de ativar o venv. O Cursor não herda o `PATH` do terminal — no MCP use sempre o Python do `.venv`.
 
+## Desinstalar
+
+Na pasta do Nix: `uninstall.bat`, `.\uninstall.ps1` ou `./uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, o `.venv`, o índice (`.nix/`) e o `nix.toml`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
+
 ## Registro no cliente MCP
 
 O cliente inicia o processo. A IDE **não** herda o `PATH` do terminal: o comando `nix` do venv não é encontrado e a conexão fecha (`'nix' não é reconhecido`).
@@ -208,8 +212,8 @@ Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no
 3. Crie e envie a tag (o `v` no prefixo é obrigatório):
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.2
+git push origin v1.1.2
 ```
 
 4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release `Nix v1.0.2` aparece com o zip e o checksum `.sha256`.

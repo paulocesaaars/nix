@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "1.1.0"
+version = "1.1.2"
 description = "Servidor MCP stdio para vaults do Obsidian"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,6 +37,7 @@ ignore = ["B008"]
 [tool.ruff.lint.per-file-ignores]
 "__main__.py" = ["E402"]
 "scripts/bootstrap.py" = ["E402"]
+"scripts/uninstall.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nix", "nix_launch"]

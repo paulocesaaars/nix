@@ -3,13 +3,13 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 
-echo Nix — instalação do ambiente e configuração
+echo Nix — desinstalacao
 echo.
 
-set "BOOTSTRAP=%~dp0scripts\bootstrap.py"
-if not exist "%BOOTSTRAP%" (
-    echo [erro] Nao achei scripts\bootstrap.py.
-    echo Rode setup.bat na raiz do repositorio Nix.
+set "UNINSTALL=%~dp0scripts\uninstall.py"
+if not exist "%UNINSTALL%" (
+    echo [erro] Nao achei scripts\uninstall.py.
+    echo Rode uninstall.bat na raiz do repositorio Nix.
     goto :fail
 )
 
@@ -44,18 +44,17 @@ if not defined PYCMD (
 )
 
 echo Usando: %PYCMD%
-%PYCMD% "%BOOTSTRAP%" %*
+%PYCMD% "%UNINSTALL%" %*
 set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" goto :fail
 
-echo.
 call :maybe_pause
 endlocal & exit /b 0
 
 :fail
 if not defined EXITCODE set "EXITCODE=1"
 echo.
-echo A instalacao nao concluiu. Veja a mensagem acima e tente de novo.
+echo A desinstalacao nao concluiu. Veja a mensagem acima e tente de novo.
 call :maybe_pause
 endlocal & exit /b %EXITCODE%
 

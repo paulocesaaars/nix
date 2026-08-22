@@ -1,10 +1,11 @@
-# Instala o Nix (venv, PATH, nix init). Não altera a sessão atual.
+# Remove o Nix (PATH, venv, índice local). Não altera a sessão atual nem o vault.
+# Uso: .\uninstall.ps1 [--yes] [--keep-data]
 $NixSourced = ($MyInvocation.InvocationName -eq ".")
 $Root = $PSScriptRoot
-$Bootstrap = Join-Path $Root "scripts\bootstrap.py"
+$Uninstall = Join-Path $Root "scripts\uninstall.py"
 
-if (-not (Test-Path -LiteralPath $Bootstrap)) {
-    Write-Error "Não achei scripts/bootstrap.py. Rode setup.ps1 na raiz do repositório Nix."
+if (-not (Test-Path -LiteralPath $Uninstall)) {
+    Write-Error "Não achei scripts/uninstall.py. Rode uninstall.ps1 na raiz do repositório Nix."
     if ($NixSourced) { return }
     exit 1
 }
@@ -38,18 +39,16 @@ if (-not $PyCmd) {
     exit 1
 }
 
-Write-Host "Nix — instalação do ambiente e configuração"
+Write-Host "Nix — desinstalação"
 Write-Host "Usando: $($PyCmd -join ' ')"
 
 if ($PyCmd.Length -eq 1) {
-    & $PyCmd[0] $Bootstrap @args
+    & $PyCmd[0] $Uninstall @args
 }
 else {
-    & $PyCmd[0] $PyCmd[1] $Bootstrap @args
+    & $PyCmd[0] $PyCmd[1] $Uninstall @args
 }
 if ($LASTEXITCODE -ne 0) {
     if ($NixSourced) { return }
     exit $LASTEXITCODE
 }
-
-Write-Host ""

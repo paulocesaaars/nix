@@ -4,7 +4,7 @@
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `setup.bat` / `setup.sh` (venv + `NIX_HOME` + `nix` no PATH) |
+| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `setup.bat` / `setup.sh` (venv + `NIX_HOME` + `nix` no PATH); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v0.1 |
 | Autor | Paulo |
 | Data | 2026-08-21 |
@@ -120,6 +120,7 @@ Esta é a regra de negócio central do produto:
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
 | RF-45 | Um instalador (`setup.bat` no Windows, `setup.sh` no Unix) deve criar `.venv`, instalar os pacotes do projeto, registrar `NIX_HOME` e o comando `nix` no PATH do usuário, e iniciar `nix init` | Must |
+| RF-46 | Um desinstalador (`uninstall.bat` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário, apagar `.venv`, `.nix/` e `nix.toml`, e não tocar no vault | Must |
 
 ### 5.6 Interface MCP
 
@@ -165,6 +166,15 @@ Esta é a regra de negócio central do produto:
 - Dado que já existe outro `nix` no PATH (gerenciador NixOS/Nixpkgs), quando o instalador registra o comando, então um aviso é emitido e este projeto passa a ter prioridade no PATH.
 - Dado `--vault CAMINHO` no instalador, quando ele chega no `init`, então o argumento é repassado e o prompt do vault é pulado.
 - Dado que `.venv` já existe, quando rodei o instalador de novo, então o ambiente é reutilizado, os pacotes são reinstalados por cima e o registro de `NIX_HOME`/PATH é idempotente.
+
+**HU-07 — Desinstalar o ambiente**
+> Como usuário, quero um único executável que desfaça a instalação sem apagar o vault.
+
+- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `./uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, `.venv`, `.nix/` e `nix.toml` são apagados, e o vault permanece intacto.
+- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o `.venv` some, mas `nix.toml` e `.nix/` permanecem.
+- Dado `--yes` (ou `-y`), quando não há terminal interativo, então a confirmação é dispensada e a desinstalação segue.
+- Dado que `NIX_HOME` aponta para outra pasta, quando desinstalo esta cópia, então a variável e o bloco de shell da outra instalação não são removidos.
+- Dado que a desinstalação concluiu, quando abro um **novo** terminal, então o comando `nix` deste projeto não é encontrado no PATH.
 
 **HU-05 — Registrar conhecimento pelo editor**
 > Como usuário, quero pedir ao agente do editor que crie uma nota, e que ela já fique pesquisável.
@@ -223,6 +233,7 @@ Esta é a regra de negócio central do produto:
 - Servidor MCP stdio com 12 ferramentas, recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
 - CLI de bootstrap: `init [--vault] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
 - Instalador `setup.bat` / `setup.sh` (venv + pacotes + `NIX_HOME`/`nix` no PATH + `nix init`).
+- Desinstalador `uninstall.bat` / `uninstall.sh` (remove PATH/`NIX_HOME`, `.venv`, `.nix/` e `nix.toml`; não toca no vault).
 - Registro MCP via Python do venv (`python -P -m nix`, exemplo em `.cursor/mcp.json`); a IDE não herda o PATH do terminal. A pasta `nix/` aninhada no workspace não sombreia o pacote.
 - Escrita com write-through, confirmação e backup.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
@@ -260,3 +271,4 @@ Interface gráfica ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consu
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
 - **Instalador** — `setup.bat` / `setup.sh`: cria `.venv`, instala o pacote e dispara `nix init`.
+- **Desinstalador** — `uninstall.bat` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `.venv`, `.nix/` e `nix.toml`; não altera o vault.

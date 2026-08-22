@@ -5,6 +5,7 @@ bin/env.sh text eol=lf
 bin/env.cmd text eol=crlf
 bin/env.ps1 text eol=lf
 setup.ps1 text eol=lf
+uninstall.ps1 text eol=lf
 
 # Arquivos de desenvolvimento do repositório ficam fora do zip do release
 .github/                 export-ignore

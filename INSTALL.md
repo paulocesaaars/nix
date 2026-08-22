@@ -60,6 +60,40 @@ nix sync
 
 Se `nix` não for encontrado, o terminal ainda está com o PATH antigo: feche-o e abra outro. O `nix doctor` também imprime o comando de ativação manual (`bin/env.sh` / `env.cmd` / `env.ps1`).
 
+## Desinstalação
+
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `.venv` e, por padrão, também `.nix/` (índice, backups, logs) e `nix.toml`. **O vault do Obsidian e o código-fonte desta pasta não são alterados.**
+
+Rode **dentro da pasta do Nix** e confirme com `s`. Em script, passe `--yes`.
+
+```bat
+cd nix
+uninstall.bat
+:: ou, sem pergunta:
+uninstall.bat --yes
+:: para manter nix.toml e o índice:
+uninstall.bat --keep-data --yes
+```
+
+```powershell
+cd nix
+.\uninstall.ps1
+# ou: .\uninstall.ps1 --yes
+# ou: .\uninstall.ps1 --keep-data --yes
+```
+
+```bash
+cd nix
+chmod +x uninstall.sh
+./uninstall.sh
+# ou: ./uninstall.sh --yes
+# ou: ./uninstall.sh --keep-data --yes
+```
+
+Abra um **novo terminal** depois: o `nix` deste projeto deixa de valer. Se o registro permanente falhar, veja [Remover NIX_HOME e o PATH à mão](#remover-nix_home-e-o-path-à-mão). Remova também o servidor `nix` do `mcp.json` do editor.
+
+O modelo `BAAI/bge-m3` (~2,3 GB) pode permanecer no cache do Hugging Face; o desinstalador não apaga esse cache (pode ser compartilhado com outros programas).
+
 ## Registrar NIX_HOME e o PATH à mão
 
 O instalador tenta gravar `NIX_HOME` (pasta do Nix) e `{NIX_HOME}/bin` no PATH do usuário. Se isso falhar (permissão, política, registro bloqueado), a configuração do vault **continua**; registre as variáveis você mesmo e **abra um terminal novo**.
@@ -111,6 +145,44 @@ source /c/Git/nix/bin/env.sh
 ```powershell
 . C:\Git\nix\bin\env.ps1
 ```
+
+## Remover NIX_HOME e o PATH à mão
+
+Se o desinstalador não desfizer as variáveis, apague o que o instalador gravou e **abra um terminal novo**. O vault continua intacto.
+
+Use a pasta real da instalação no lugar de `C:\Git\nix` / `/c/Git/nix`.
+
+### Windows (interface)
+
+1. `Win+R`, rode `sysdm.cpl` → **Avançado** → **Variáveis de Ambiente**.
+2. Em **Variáveis do usuário**, selecione **NIX_HOME** → **Excluir** (só se o valor for a pasta deste Nix).
+3. Selecione **Path** (usuário) → **Editar** → remova `%NIX_HOME%\bin` (e o caminho absoluto `...\nix\bin`, se existir).
+4. Confirme com **OK** em todas as janelas.
+
+### Windows (PowerShell, permanente)
+
+```powershell
+$nixHome = "C:\Git\nix"   # pasta do Nix
+$stored = [Environment]::GetEnvironmentVariable("NIX_HOME", "User")
+if ($stored -and ($stored -ieq $nixHome)) {
+  [Environment]::SetEnvironmentVariable("NIX_HOME", $null, "User")
+}
+$bin = Join-Path $nixHome "bin"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($p) {
+  $kept = $p.Split(";") | Where-Object {
+    $t = $_.Trim().Trim('"')
+    $t -and $t -ne "%NIX_HOME%\bin" -and $t -ne $bin
+  }
+  [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "User")
+}
+```
+
+### Linux, macOS e Git Bash
+
+Apague o bloco entre `# >>> nix >>>` e `# <<< nix <<<` em `~/.bashrc`, `~/.zshrc`, `~/.bash_profile` e `~/.profile` (só os arquivos que existirem), se `NIX_HOME` nesse bloco for a pasta desta instalação.
+
+Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 ## Registro no cliente MCP
 

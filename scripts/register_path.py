@@ -1,4 +1,4 @@
-"""Registra NIX_HOME e o comando `nix` no PATH do usuário (só instalador)."""
+"""Registra e remove NIX_HOME e o comando `nix` no PATH do usuário."""
 
 from __future__ import annotations
 
@@ -50,6 +50,56 @@ def _strip_partial_markers(text: str) -> str:
         stripped = (text[:line_start] + text[stop:]).rstrip()
         return f"{stripped}\n" if stripped else ""
     return text
+
+
+def _remove_nix_block(text: str) -> str:
+    begin = text.find(_MARKER_BEGIN)
+    end = text.find(_MARKER_END)
+    if begin != -1 and end != -1 and end > begin:
+        stop = end + len(_MARKER_END)
+        if stop < len(text) and text[stop] == "\n":
+            stop += 1
+        stripped = (text[:begin] + text[stop:]).replace("\n\n\n", "\n\n").rstrip()
+        return f"{stripped}\n" if stripped else ""
+    return _strip_partial_markers(text)
+
+
+def _root_path_tokens(root: Path) -> set[str]:
+    candidates = [root]
+    with contextlib.suppress(OSError):
+        candidates.append(root.resolve())
+    tokens: set[str] = set()
+    for path in candidates:
+        tokens.add(to_posix(path).rstrip("/").casefold())
+        tokens.add(str(path).replace("\\", "/").rstrip("/").casefold())
+    return tokens
+
+
+def _same_install_root(left: Path, right: Path) -> bool:
+    return bool(_root_path_tokens(left) & _root_path_tokens(right))
+
+
+def _block_nix_home(text: str) -> str | None:
+    begin = text.find(_MARKER_BEGIN)
+    end = text.find(_MARKER_END)
+    if begin == -1 or end == -1 or end <= begin:
+        return None
+    for line in text[begin:end].splitlines():
+        stripped = line.strip()
+        if stripped.startswith("export NIX_HOME="):
+            return stripped.split("=", 1)[1].strip().strip("'").strip('"')
+    return None
+
+
+def _block_belongs_to(text: str, root: Path) -> bool:
+    begin = text.find(_MARKER_BEGIN)
+    end = text.find(_MARKER_END)
+    if begin == -1 and end == -1:
+        return False
+    home = _block_nix_home(text)
+    if home is None:
+        return True
+    return home.replace("\\", "/").rstrip("/").casefold() in _root_path_tokens(root)
 
 
 def _upsert_rc_block(path: Path, block: str) -> None:
@@ -151,6 +201,82 @@ def _windows_append_user_path(bin_dir: Path) -> None:
         key.Close()
 
 
+def _windows_get_user_env(name: str) -> str | None:
+    import winreg
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ)
+    except FileNotFoundError:
+        return None
+    try:
+        value, _kind = winreg.QueryValueEx(key, name)
+    except FileNotFoundError:
+        return None
+    finally:
+        key.Close()
+    if not isinstance(value, str):
+        return str(value) if value is not None else None
+    return value
+
+
+def _windows_delete_user_env(name: str) -> None:
+    import winreg
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE)
+    except FileNotFoundError:
+        return
+    try:
+        winreg.DeleteValue(key, name)
+    except FileNotFoundError:
+        return
+    finally:
+        key.Close()
+
+
+def _windows_path_token_is_ours(token: str, bin_dir: Path, *, remove_expand_entry: bool) -> bool:
+    wanted = str(bin_dir).rstrip("\\/").casefold()
+    posix_wanted = to_posix(bin_dir).rstrip("/").casefold()
+    aliases = {_WINDOWS_PATH_ENTRY.casefold(), r"%NIX_HOME%/bin".casefold()}
+    normalized = token.replace("/", "\\").rstrip("\\").casefold()
+    if remove_expand_entry and normalized in aliases:
+        return True
+    expanded = os.path.expandvars(token).rstrip("\\/")
+    if expanded.casefold() == wanted:
+        return True
+    return expanded.replace("\\", "/").rstrip("/").casefold() == posix_wanted
+
+
+def _windows_remove_user_path(bin_dir: Path, *, remove_expand_entry: bool) -> None:
+    import winreg
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE)
+    except FileNotFoundError:
+        return
+    try:
+        try:
+            current, kind = winreg.QueryValueEx(key, "Path")
+        except FileNotFoundError:
+            return
+        if not isinstance(current, str):
+            current = str(current)
+        kept: list[str] = []
+        for raw in current.split(";"):
+            token = raw.strip().strip('"')
+            if not token:
+                continue
+            if _windows_path_token_is_ours(token, bin_dir, remove_expand_entry=remove_expand_entry):
+                continue
+            kept.append(raw)
+        updated = ";".join(kept)
+        if updated == current:
+            return
+        winreg.SetValueEx(key, "Path", 0, kind, updated)
+    finally:
+        key.Close()
+
+
 def _fail(message: str, code: int = 1) -> None:
     print(message, file=sys.stderr)
     raise SystemExit(code)
@@ -169,6 +295,26 @@ def print_manual_env_help(root: Path, failures: list[str]) -> None:
         guide = 'Siga o INSTALL.md, seção "Registrar NIX_HOME e o PATH à mão".'
     print(
         "[erro] Não foi possível registrar NIX_HOME e o PATH automaticamente.\n"
+        f"  NIX_HOME={root}\n"
+        f"  bin={bin_dir}\n"
+        f"{guide}",
+        file=sys.stderr,
+    )
+
+
+def print_manual_unenv_help(root: Path, failures: list[str]) -> None:
+    """Aponta para o INSTALL.md na remoção manual do PATH."""
+    bin_dir = root / "bin"
+    windows = any(item.startswith("Windows") for item in failures)
+    unix = any(item.startswith("shell") for item in failures)
+    if windows and not unix:
+        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão" (Windows).'
+    elif unix and not windows:
+        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão" (Linux, macOS e Git Bash).'
+    else:
+        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão".'
+    print(
+        "[erro] Não foi possível remover NIX_HOME e o PATH automaticamente.\n"
         f"  NIX_HOME={root}\n"
         f"  bin={bin_dir}\n"
         f"{guide}",
@@ -219,6 +365,54 @@ def _register_unix(root: Path, *, ensure_bashrc: bool = False) -> None:
     block = _unix_env_block(root)
     for path in _unix_rc_targets(ensure_bashrc=ensure_bashrc):
         _upsert_rc_block(path, block)
+
+
+def _unregister_windows(root: Path) -> None:
+    stored = _windows_get_user_env("NIX_HOME")
+    ours = stored is None or not stored.strip() or _same_install_root(Path(os.path.expandvars(stored)), root)
+    if stored and ours:
+        _windows_delete_user_env("NIX_HOME")
+    _windows_remove_user_path(root / "bin", remove_expand_entry=ours)
+    with contextlib.suppress(OSError, AttributeError):
+        _windows_broadcast_env()
+
+
+def _unix_rc_existing() -> list[Path]:
+    home = Path.home()
+    names = (".bashrc", ".zshrc", ".bash_profile", ".profile")
+    return [home / name for name in names if (home / name).is_file()]
+
+
+def _remove_rc_block_if_ours(path: Path, root: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not _block_belongs_to(text, root):
+        return
+    updated = _remove_nix_block(text)
+    if updated == text:
+        return
+    path.write_text(updated, encoding="utf-8")
+
+
+def _unregister_unix(root: Path) -> None:
+    for path in _unix_rc_existing():
+        _remove_rc_block_if_ours(path, root)
+
+
+def _drop_bin_from_process_path(bin_dir: Path) -> None:
+    current = os.environ.get("PATH", "")
+    if not current:
+        return
+    wanted = _root_path_tokens(bin_dir)
+    kept: list[str] = []
+    changed = False
+    for raw in current.split(os.pathsep):
+        token = raw.strip().strip('"')
+        if token and token.replace("\\", "/").rstrip("/").casefold() in wanted:
+            changed = True
+            continue
+        kept.append(raw)
+    if changed:
+        os.environ["PATH"] = os.pathsep.join(kept)
 
 
 def _our_bin_names(root: Path) -> set[str]:
@@ -308,4 +502,44 @@ def register_user_command(root: Path) -> bool:
 
     print(f"NIX_HOME={root}")
     print(f"Comando nix: {bin_dir}")
+    return True
+
+
+def unregister_user_command(root: Path) -> bool:
+    """Remove NIX_HOME e `{NIX_HOME}/bin` do PATH permanente deste install.
+
+    Só altera a variável e a entrada `%NIX_HOME%\\bin` se apontarem para `root`.
+    Retorna False se algum alvo permanente falhar; a desinstalação local segue.
+    """
+    home = os.environ.get("NIX_HOME", "").strip()
+    if home and _same_install_root(Path(home), root):
+        os.environ.pop("NIX_HOME", None)
+    _drop_bin_from_process_path(root / "bin")
+
+    failures: list[str] = []
+    if os.name == "nt":
+        failed = _try_register("Windows (NIX_HOME/PATH)", lambda: _unregister_windows(root))
+        if failed:
+            failures.append(failed)
+        msystem = bool(os.environ.get("MSYSTEM"))
+        has_shell_rc = any(
+            (Path.home() / name).is_file()
+            for name in (".bashrc", ".profile", ".bash_profile", ".zshrc")
+        )
+        if msystem or has_shell_rc:
+            failed = _try_register("shell (~/.bashrc)", lambda: _unregister_unix(root))
+            if failed:
+                failures.append(failed)
+    else:
+        failed = _try_register("shell (~/.bashrc)", lambda: _unregister_unix(root))
+        if failed:
+            failures.append(failed)
+
+    if failures:
+        for item in failures:
+            print(f"[erro] {item}", file=sys.stderr)
+        print_manual_unenv_help(root, failures)
+        return False
+
+    print("NIX_HOME e o comando nix foram removidos do PATH permanente.")
     return True
