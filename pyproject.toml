@@ -36,9 +36,10 @@ ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "__main__.py" = ["E402"]
+"scripts/bootstrap.py" = ["E402"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["nix"]
+known-first-party = ["nix", "nix_launch"]
 
 [tool.mypy]
 python_version = "3.12"
