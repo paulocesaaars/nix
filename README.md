@@ -24,7 +24,6 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
 - Python 3.11+ no `PATH`
 - Um vault do Obsidian (notas `.md`)
-- ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
 
 ## Instalação
 
