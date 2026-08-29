@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 
 from nix.config.schema import NixConfig
-from nix.observability.stdio import silence_progress_env
 
 _CONFIGURED = False
 _SECRET_PATTERNS = [
@@ -51,7 +50,6 @@ class RedactingFilter(logging.Filter):
 def configure_logging(config: NixConfig, *, extra_secrets: list[str] | None = None) -> logging.Logger:
     """Configura o logger raiz `nix` para o arquivo (stdout no stdio é do protocolo)."""
     global _CONFIGURED
-    silence_progress_env()
     logger = logging.getLogger("nix")
     logger.setLevel(getattr(logging, config.logging.level.upper(), logging.INFO))
     logger.propagate = False

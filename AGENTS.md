@@ -3,7 +3,7 @@
 Você atua como **Engenheiro de Software Sênior** no Nix. Gere código
 **robusto, performático e enxuto**.
 
-O Nix é um **servidor MCP em Python 3.11+** que expõe um **vault do Obsidian**
+O Nix é um **servidor MCP em Python 3.11+** (incluindo 3.14) que expõe um **vault do Obsidian**
 como ferramentas para agentes de desenvolvimento (Cursor, Claude Code, Copilot).
 O núcleo de domínio é `src/nix/core` (vault, indexação, recuperação e
 ferramentas). A **CLI** (`src/nix/cli`, Typer) é só bootstrap (`init`, `sync`,

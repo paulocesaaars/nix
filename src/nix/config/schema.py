@@ -3,18 +3,53 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from nix.config.paths import app_root, resolve_app_path
 from nix.core.errors import ConfigError
 
-SUPPORTED_EMBEDDING_MODELS: tuple[str, ...] = (
-    "BAAI/bge-m3",
-    "BAAI/bge-small-en-v1.5",
-    "sentence-transformers/all-MiniLM-L6-v2",
+
+class EmbeddingModelOption(NamedTuple):
+    name: str
+    size: str
+    languages: str
+    cpu: str
+    use_when: str
+
+
+EMBEDDING_MODEL_OPTIONS: tuple[EmbeddingModelOption, ...] = (
+    EmbeddingModelOption(
+        name="BAAI/bge-m3",
+        size="~2,3 GB",
+        languages="PT e EN (melhor)",
+        cpu="lento",
+        use_when="Padrão. Máxima qualidade; máquina com folga.",
+    ),
+    EmbeddingModelOption(
+        name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        size="~220 MB",
+        languages="PT e EN (bom)",
+        cpu="leve",
+        use_when="Recomendado em máquina fraca com notas em português.",
+    ),
+    EmbeddingModelOption(
+        name="sentence-transformers/all-MiniLM-L6-v2",
+        size="~90 MB",
+        languages="inglês",
+        cpu="mais leve",
+        use_when="Vault só em inglês; o sync mais rápido.",
+    ),
+    EmbeddingModelOption(
+        name="BAAI/bge-small-en-v1.5",
+        size="~67 MB",
+        languages="inglês",
+        cpu="mais leve",
+        use_when="Inglês; alternativa pequena ao MiniLM-L6.",
+    ),
 )
+SUPPORTED_EMBEDDING_MODELS: tuple[str, ...] = tuple(opt.name for opt in EMBEDDING_MODEL_OPTIONS)
 
 SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
     "Xenova/ms-marco-MiniLM-L-6-v2",

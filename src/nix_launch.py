@@ -125,10 +125,14 @@ def main() -> None:
     unshadow()
     try:
         from nix.cli.app import main as cli_main
-    except ImportError:
+    except ImportError as exc:
         sys.stderr.write(
-            "Pacote Nix não importável. Rode setup.bat ou ./setup.sh "
-            "na pasta do Nix (cria o .venv e instala o pacote).\n"
+            f"Não foi possível importar o Nix: {exc}\n"
+            "Se o pacote não estiver instalado, rode install.bat ou ./install.sh "
+            "na pasta do Nix (cria o .venv e instala o pacote). "
+            "No Windows, o Controle de Aplicativo pode bloquear DLLs de "
+            "tiktoken/mmh3 (comum no Python 3.14); permita o .pyd em "
+            "Segurança do Windows ou rode `nix doctor`.\n"
         )
         raise SystemExit(1) from None
     cli_main()

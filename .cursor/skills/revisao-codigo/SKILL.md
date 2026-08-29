@@ -64,7 +64,7 @@ Analise sempre estes eixos:
      derivadas dos trechos realmente recuperados.
    - **MCP:** nada em `stdout` (sem `print`), logs em arquivo. Transporte somente stdio.
      Ferramentas destrutivas anotadas e com `confirm=true`.
-   - Instalador (`setup.bat` / `setup.sh` / `scripts/bootstrap.py`) só cria venv, instala
+   - Instalador (`install.bat` / `install.sh` / `scripts/bootstrap.py`) só cria venv, instala
      pacotes e chama `nix init` — sem regra de negócio, vault ou índice. Desinstalador
      (`uninstall.*` / `scripts/uninstall.py`) só desfaz PATH e apaga artefatos locais.
 

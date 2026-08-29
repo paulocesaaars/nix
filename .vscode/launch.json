@@ -1,0 +1,132 @@
+{
+  "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "vaultPath",
+      "type": "promptString",
+      "description": "Caminho do vault do Obsidian (use barras /)",
+      "default": "C:/Obsidian/MeuVault"
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Nix: init",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "args": ["init"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "Nix: init (--vault)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "args": ["init", "--vault", "${input:vaultPath}"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "Nix: doctor",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "args": ["doctor"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "Nix: sync",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "args": ["sync"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "Nix: status",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "args": ["status"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "Nix: servidor MCP (stdio)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "nix",
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
+    }
+  ]
+}

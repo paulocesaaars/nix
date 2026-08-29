@@ -4,7 +4,7 @@
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `setup.bat` / `setup.sh` (venv + `NIX_HOME` + `nix` no PATH); desinstalador `uninstall.bat` / `uninstall.sh` |
+| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `install.bat` / `install.sh` (venv + `NIX_HOME` + `nix` no PATH); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v0.1 |
 | Autor | Paulo |
 | Data | 2026-08-21 |
@@ -62,7 +62,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
 | RF-01 | O sistema deve ler um arquivo de configuração único onde o usuário define o caminho do vault e demais parâmetros | Must |
-| RF-02 | O sistema deve oferecer um comando de inicialização que cria `nix.toml` na pasta do aplicativo, pergunta o caminho do vault (ou recebe `--vault`) e, se o arquivo já existir, só atualiza `vault.path` salvo `--force` | Must |
+| RF-02 | O sistema deve oferecer um comando de inicialização que cria `nix.toml` na pasta do aplicativo, pergunta o caminho do vault (ou recebe `--vault`) e o modelo de embedding (ou recebe `--embedding-model`) e, se o arquivo já existir, só atualiza `vault.path` salvo `--force` ou `--embedding-model` | Must |
 | RF-03 | O sistema deve permitir sobrescrever qualquer configuração por variável de ambiente | Must |
 | RF-04 | O sistema deve validar a configuração e apresentar mensagens de erro acionáveis (vault inexistente, modelo inválido) | Must |
 | RF-05 | O sistema deve permitir configurar padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas) | Should |
@@ -114,12 +114,12 @@ Esta é a regra de negócio central do produto:
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-40 | A CLI deve criar o arquivo de configuração comentado (`nix init [--vault PATH] [--force]`) | Must |
+| RF-40 | A CLI deve criar o arquivo de configuração comentado (`nix init [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
 | RF-41 | A CLI deve oferecer sincronização e status do índice (`nix sync`, `nix status`) | Must |
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
-| RF-45 | Um instalador (`setup.bat` no Windows, `setup.sh` no Unix) deve criar `.venv`, instalar os pacotes do projeto, registrar `NIX_HOME` e o comando `nix` no PATH do usuário, e iniciar `nix init` | Must |
+| RF-45 | Um instalador (`install.bat` no Windows, `install.sh` no Unix) deve criar `.venv`, instalar os pacotes do projeto, registrar `NIX_HOME` e o comando `nix` no PATH do usuário, e iniciar `nix init` | Must |
 | RF-46 | Um desinstalador (`uninstall.bat` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário, apagar `.venv`, `.nix/` e `nix.toml`, e não tocar no vault | Must |
 
 ### 5.6 Interface MCP
@@ -138,9 +138,9 @@ Esta é a regra de negócio central do produto:
 **HU-01 — Primeira configuração**
 > Como usuário, quero apontar o caminho do meu vault e indexá-lo, para o editor passar a consultá-lo.
 
-- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault, então `nix.toml` é criado na pasta do Nix com `vault.path` preenchido (barras `/` no Windows).
-- Dado `--vault CAMINHO`, quando executo `nix init`, então não há prompt e o caminho é gravado.
-- Dado que o arquivo de configuração já existe e não passei `--force`, quando executo `nix init`, então só `vault.path` é atualizado e o restante do TOML permanece.
+- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `nix.toml` é criado na pasta do Nix com `vault.path` e `index.embedding_model` preenchidos (barras `/` no Windows).
+- Dado `--vault CAMINHO` e `--embedding-model NOME`, quando executo `nix init`, então não há prompt e os valores são gravados.
+- Dado que o arquivo de configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só `vault.path` é atualizado e o restante do TOML permanece.
 - Dado que o caminho informado no prompt ainda não existe, quando confirmo a criação, então o diretório é criado e gravado em `vault.path`.
 - Dado que o caminho do vault não existe, quando valido com `nix doctor`, então recebo um erro apontando o caminho inválido.
 
@@ -161,7 +161,7 @@ Esta é a regra de negócio central do produto:
 **HU-04 — Instalar o ambiente**
 > Como usuário, quero um único executável que prepare o Python e inicie a configuração.
 
-- Dado um clone do repositório (ou o zip da release) com Python 3.11+ no PATH, quando executo `setup.bat`, `.\setup.ps1` ou `./setup.sh`, então `.venv` é criado, os pacotes de `requirements.txt` e o Nix em modo editável são instalados, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault, e a mensagem de **configuração concluída** é exibida.
+- Dado um clone do repositório (ou o zip da release) com Python 3.11+ no PATH, quando executo `install.bat`, `.\install.ps1` ou `./install.sh`, então `.venv` é criado, os pacotes de `requirements.txt` e o Nix em modo editável são instalados, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault, e a mensagem de **configuração concluída** é exibida.
 - Dado que a instalação concluiu, quando abro um **novo** terminal em qualquer diretório, então `nix sync` (e os demais subcomandos) são encontrados no PATH.
 - Dado que já existe outro `nix` no PATH (gerenciador NixOS/Nixpkgs), quando o instalador registra o comando, então um aviso é emitido e este projeto passa a ter prioridade no PATH.
 - Dado `--vault CAMINHO` no instalador, quando ele chega no `init`, então o argumento é repassado e o prompt do vault é pulado.
@@ -200,7 +200,7 @@ Esta é a regra de negócio central do produto:
 | RNF-02 | Privacidade | O conteúdo do vault não sai da máquina por iniciativa do Nix. O cliente MCP é quem decide o que enviar ao LLM. |
 | RNF-03 | Desempenho | Recuperação (busca híbrida) em menos de 500ms em vault de até 5.000 notas. |
 | RNF-04 | Desempenho | Sincronização inicial de 1.000 notas em até ~5 minutos em hardware de desenvolvedor típico, sem GPU. |
-| RNF-05 | Portabilidade | Deve funcionar em Windows, macOS e Linux, com Python 3.11+. |
+| RNF-05 | Portabilidade | Deve funcionar em Windows, macOS e Linux, com Python 3.11+ (incluindo 3.14). |
 | RNF-06 | Segurança | Todas as operações de arquivo devem ser confinadas ao vault. |
 | RNF-07 | Confiabilidade | Interrupção durante a sincronização não deve corromper o índice; a operação seguinte deve retomar de onde parou. |
 | RNF-08 | Observabilidade | Logs estruturados em arquivo, com nível configurável. No stdio, nada em stdout além do protocolo. |
@@ -233,7 +233,7 @@ Esta é a regra de negócio central do produto:
 - Configuração TOML + env (`nix.toml` na pasta do aplicativo; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
 - Servidor MCP stdio com 12 ferramentas, recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
 - CLI de bootstrap: `init [--vault] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
-- Instalador `setup.bat` / `setup.sh` (venv + pacotes + `NIX_HOME`/`nix` no PATH + `nix init`).
+- Instalador `install.bat` / `install.sh` (venv + pacotes + `NIX_HOME`/`nix` no PATH + `nix init`).
 - Desinstalador `uninstall.bat` / `uninstall.sh` (remove PATH/`NIX_HOME`, `.venv`, `.nix/` e `nix.toml`; não toca no vault).
 - Registro MCP: `command` aponta para o wrapper em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.cmd` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Wrappers chamam o Python do venv com `-P`. Exemplos em `.cursor/mcp.json`.
 - Escrita com write-through, confirmação e backup.
@@ -271,5 +271,5 @@ Interface gráfica ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consu
 - **MCP** — Model Context Protocol. O Nix expõe ferramentas exclusivamente via stdio.
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
-- **Instalador** — `setup.bat` / `setup.sh`: cria `.venv`, instala o pacote e dispara `nix init`.
+- **Instalador** — `install.bat` / `install.sh`: cria `.venv`, instala o pacote e dispara `nix init`.
 - **Desinstalador** — `uninstall.bat` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `.venv`, `.nix/` e `nix.toml`; não altera o vault.

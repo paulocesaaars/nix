@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 
 import typer
-from rich.progress import Progress
 
 from nix.cli.deps import get_runtime, with_errors
-from nix.cli.render import apply_sync_progress, console, print_status
+from nix.cli.render import apply_sync_progress, console, print_status, sync_progress
 from nix.core.index.sync import json_safe
 from nix.core.models import IndexStatus
 from nix.core.models import SyncProgress as SyncProgressEvent
@@ -47,15 +46,38 @@ def cmd_sync(
         events.append(event)
         apply_sync_progress(progress, event)
 
-    with Progress(console=console) as progress:
+    if not dry_run:
+        console.print(
+            "[dim]Sem GPU o embedding roda na CPU. O modelo padrão BAAI/bge-m3 "
+            "pesa ~2,3 GB na primeira vez e cada nota pode levar minutos. "
+            "A barra só avança quando o arquivo termina — não está travado.[/dim]"
+        )
+        console.print(
+            "[dim]Em máquina fraca com notas em português, use no nix.toml "
+            "index.embedding_model = "
+            "\"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\" "
+            "e depois `nix sync --full`. Só inglês: all-MiniLM-L6-v2.[/dim]"
+        )
+
+    with sync_progress() as progress:
         progress.add_task("Sincronizando", total=1)
         report = runtime.indexer.sync(full=full, dry_run=dry_run, progress=on_progress)
+    vault_root = runtime.config.vault.root
+    excludes = list(runtime.config.vault.exclude)
     runtime.close()
     if as_json:
         console.print_json(json.dumps(json_safe(report), ensure_ascii=False))
         return
     prefix = "Pré-visualização: " if dry_run else ""
     console.print(prefix + report.summary_pt())
+    console.print(f"Vault: {vault_root}")
+    processed = [e for e in events if e.action != "load_model"]
+    if processed:
+        console.print("Arquivos:")
+        for event in processed:
+            console.print(f"  {event.action} {event.rel_path}")
+    if excludes:
+        console.print(f"[dim]Pastas ignoradas (vault.exclude): {', '.join(excludes)}[/dim]")
     for err in report.errors:
         console.print(f"[red]{err}[/red]")
 

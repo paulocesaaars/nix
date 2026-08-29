@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/paulocesaaars/nix/releases/latest"><img src="https://img.shields.io/github/v/release/paulocesaaars/nix?label=download&style=for-the-badge" alt="Baixar a última versão"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue?style=for-the-badge" alt="Python 3.11+"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B%20%2F%203.14-blue?style=for-the-badge" alt="Python 3.11+ / 3.14"></a>
 </p>
 
 Servidor [MCP](https://modelcontextprotocol.io/) que expõe um vault do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
@@ -22,7 +22,7 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
 ## Requisitos
 
-- Python 3.11+ no `PATH`
+- Python 3.11+ no `PATH` (incluindo 3.14; o CI e o `mypy` usam 3.14)
 - Um vault do Obsidian (notas `.md`)
 
 ## Instalação
@@ -37,21 +37,21 @@ Há dois caminhos. Os dois criam `.venv`, instalam o pacote e disparam `nix init
 
 ```bat
 cd nix
-setup.bat
+install.bat
 :: ou, se já souber o vault:
-setup.bat --vault "C:/Obsidian/MeuVault"
+install.bat --vault "C:/Obsidian/MeuVault"
 ```
 
 ```powershell
 cd nix
-.\setup.ps1
-# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
+.\install.ps1
+# ou: .\install.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
 cd nix
-bash setup.sh
-# ou: bash setup.sh --vault "$HOME/Vault"
+bash install.sh
+# ou: bash install.sh --vault "$HOME/Vault"
 ```
 
 No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
@@ -67,18 +67,18 @@ Depois registre o servidor no editor — veja [Registro no cliente MCP](#registr
 Clone o repositório e rode o mesmo instalador na raiz:
 
 ```bat
-setup.bat
-:: ou: setup.bat --vault "C:/Obsidian/MeuVault"
+install.bat
+:: ou: install.bat --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
-bash setup.sh
-# ou: bash setup.sh --vault "$HOME/Vault"
+bash install.sh
+# ou: bash install.sh --vault "$HOME/Vault"
 ```
 
 ```powershell
-.\setup.ps1
-# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
+.\install.ps1
+# ou: .\install.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 
@@ -155,7 +155,7 @@ Se `nix` não for encontrado, o terminal ainda tem o PATH antigo: feche-o e abra
 
 Se o instalador não gravar as variáveis, o passo a passo está só no [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão) (o zip da release inclui esse arquivo). Grave o que faltou e abra um **terminal novo**.
 
-O primeiro `sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face. Nas seguintes, só o que mudou é reprocessado.
+O primeiro `sync` (ou qualquer operação que embede) baixa o modelo configurado. O padrão `BAAI/bge-m3` pesa ~2,3 GB. **Não precisa de GPU**, mas na CPU a primeira carga e cada nota podem levar muitos minutos — a barra só avança ao terminar o arquivo. Em máquina fraca com português, use `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (~220 MB) e rode `nix sync --full`. O `nix init` lista a comparação.
 
 Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
 
@@ -172,7 +172,7 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | Comando | Função |
 | --- | --- |
 | `nix` | Inicia o servidor MCP stdio |
-| `nix init [--vault PATH] [--force]` | Cria a configuração e grava o caminho do vault |
+| `nix init [--vault PATH] [--embedding-model NOME] [--force]` | Cria a configuração; pergunta vault e modelo de embedding |
 | `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
 | `nix status [--json]` | Notas, chunks, último sync e defasagem |
 | `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |

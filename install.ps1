@@ -4,7 +4,7 @@ $Root = $PSScriptRoot
 $Bootstrap = Join-Path $Root "scripts\bootstrap.py"
 
 if (-not (Test-Path -LiteralPath $Bootstrap)) {
-    Write-Error "Não achei scripts/bootstrap.py. Rode setup.ps1 na raiz do repositório Nix."
+    Write-Error "Não achei scripts/bootstrap.py. Rode install.ps1 na raiz do repositório Nix."
     if ($NixSourced) { return }
     exit 1
 }

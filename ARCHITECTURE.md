@@ -19,7 +19,7 @@ Documento de produto e requisitos: [PRD.md](./PRD.md).
 
 | Camada | Tecnologia | Justificativa |
 | --- | --- | --- |
-| Linguagem | Python 3.11+ | Ecossistema de IA e requisito do projeto |
+| Linguagem | Python 3.11+ (CI e tipos em 3.14) | Ecossistema de IA e requisito do projeto |
 | Embeddings | FastEmbed com `BAAI/bge-m3` (ONNX, CPU) | Local, gratuito, multilíngue (PT/EN), sem GPU, sem dependência de PyTorch |
 | Banco vetorial | ChromaDB em modo persistente | Local, gratuito, embutido, com filtro por metadados |
 | Busca léxica | SQLite FTS5 | Já disponível na stdlib; complementa a busca vetorial em termos exatos |
@@ -81,7 +81,7 @@ graph TB
 
 ```
 nix/
-├── setup.bat / setup.sh / setup.ps1  # cria .venv, instala pacotes, registra PATH e inicia `nix init`
+├── install.bat / install.sh / install.ps1  # cria .venv, instala pacotes, registra PATH e inicia `nix init`
 ├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, .venv, .nix e nix.toml
 ├── bin/nix / bin/nix.cmd   # wrappers da CLI: acham o .venv da instalação, preservam o CWD
 ├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH (terminal antigo)
@@ -157,7 +157,7 @@ nix/
             └── stdio.py            # isola stdout de bibliotecas
 ```
 
-O ambiente é gerenciado com `venv` e `pip`. O instalador (`setup.bat` / `setup.sh` → `scripts/bootstrap.py`) cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`) e dispara `nix init`. O desinstalador (`uninstall.bat` / `uninstall.sh` → `scripts/uninstall.py`) desfaz o PATH e apaga `.venv`, `.nix/` e `nix.toml`. Quem preferir o fluxo manual usa os mesmos passos. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`.
+O ambiente é gerenciado com `venv` e `pip`. O instalador (`install.bat` / `install.sh` → `scripts/bootstrap.py`) cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`) e dispara `nix init`. O desinstalador (`uninstall.bat` / `uninstall.sh` → `scripts/uninstall.py`) desfaz o PATH e apaga `.venv`, `.nix/` e `nix.toml`. Quem preferir o fluxo manual usa os mesmos passos. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`.
 
 ## 5. Modelo de dados
 
@@ -371,7 +371,7 @@ Todas as ferramentas recebem `rel_path` relativo ao vault. `core/vault/paths.py`
 O instalador na raiz do repositório não entra no núcleo: só orquestra o ambiente.
 
 ```
-setup.bat / setup.sh / setup.ps1  # acha Python 3.11+, chama scripts/bootstrap.py
+install.bat / install.sh / install.ps1  # acha Python 3.11+, chama scripts/bootstrap.py
 scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → register_path → python -P -m nix init
 scripts/register_path.py      # NIX_HOME + `{NIX_HOME}/bin` no PATH (registro Windows / rc Unix)
 bin/nix / bin/nix.cmd         # shims no PATH do usuário
@@ -386,7 +386,7 @@ O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e
 
 ```
 nix                           # inicia o servidor MCP stdio
-nix init [--vault PATH] [--force]
+nix init [--vault PATH] [--embedding-model NOME] [--force]
                               # pergunta (ou recebe) o vault; cria nix.toml na pasta do Nix
                               # sem --force, arquivo existente só atualiza vault.path
 nix sync [--full] [--dry-run] [--json]
@@ -528,7 +528,7 @@ O carregamento do modelo de embedding é preguiçoso. O FastEmbed 0.8 não lista
 | AD-07 | Busca híbrida desde a fundação | Somente densa | Notas pessoais são cheias de nomes próprios e siglas que o embedding dilui |
 | AD-08 | Artefatos de índice na pasta do aplicativo (`.nix/`), fora do vault | `.nix/` dentro do vault | Evita poluir a sincronização do Obsidian; o estado acompanha o aplicativo |
 | AD-09 | MCP somente stdio | HTTP loopback | O cliente inicia o processo; não há porta, autenticação nem processo órfão |
-| AD-10 | Instalador e desinstalador em script (`setup.*` / `uninstall.*` + `scripts/bootstrap.py` / `scripts/uninstall.py`) | Pacote PyInstaller, Makefile | Não empacota Python; usa o 3.11+ do sistema, funciona em Windows e Unix, e reutiliza `nix init` / o inverso do PATH |
+| AD-10 | Instalador e desinstalador em script (`install.*` / `uninstall.*` + `scripts/bootstrap.py` / `scripts/uninstall.py`) | Pacote PyInstaller, Makefile | Não empacota Python; usa o 3.11+ do sistema, funciona em Windows e Unix, e reutiliza `nix init` / o inverso do PATH |
 
 ## 14. Evolução prevista
 

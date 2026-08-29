@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import re
 
-import tiktoken
-
 from nix.config.schema import IndexSettings
+from nix.core.index.tokenize import TokenCounter
 from nix.core.models import Chunk, ParsedNote
 
 _CODE_FENCE = re.compile(r"^(`{3,}|~{3,})")
@@ -18,12 +17,12 @@ class Chunker:
         self._size = settings.chunk_size_tokens
         self._overlap = settings.chunk_overlap_tokens
         self._min = settings.min_chunk_tokens
-        self._enc = tiktoken.get_encoding("cl100k_base")
+        self._tokens = TokenCounter()
 
     def count(self, text: str) -> int:
         if not text:
             return 0
-        return len(self._enc.encode(text))
+        return self._tokens.count(text)
 
     def chunk_note(self, note: ParsedNote, file_id: str, *, mtime: float = 0.0) -> list[Chunk]:
         folder = note.rel_path.rsplit("/", 1)[0] if "/" in note.rel_path else ""
@@ -148,10 +147,7 @@ class Chunker:
     def _tail(self, text: str) -> str:
         if self._overlap <= 0:
             return ""
-        tokens = self._enc.encode(text)
-        if len(tokens) <= self._overlap:
-            return text
-        return self._enc.decode(tokens[-self._overlap :]).strip()
+        return self._tokens.tail(text, self._overlap)
 
     def _split_preserving_code(self, text: str) -> list[str]:
         lines = text.splitlines()

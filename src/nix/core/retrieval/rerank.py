@@ -16,6 +16,9 @@ class Reranker:
 
     def _ensure(self) -> object:
         if self._model is None:
+            from nix.core.index.native_compat import allow_blocked_mmh3
+
+            allow_blocked_mmh3()
             from fastembed.rerank.cross_encoder import TextCrossEncoder
 
             logger.info("Carregando cross-encoder %s", self.model_name)

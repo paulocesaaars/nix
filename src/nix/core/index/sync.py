@@ -130,6 +130,19 @@ class Indexer:
             known = {}
             to_remove = []
 
+        if candidates:
+            if progress:
+                progress(
+                    SyncProgress(0, total or 1, self.config.index.embedding_model, "load_model")
+                )
+            logger.info(
+                "Preparando embedding %s para %d arquivo(s). "
+                "Em CPU, cada nota pode levar minutos; o progresso só avança ao terminar o arquivo.",
+                self.config.index.embedding_model,
+                len(candidates),
+            )
+            self.embedder.ensure_loaded()
+
         for meta in candidates:
             current += 1
             action = "add" if meta.rel_path not in known else "update"
@@ -198,6 +211,7 @@ class Indexer:
     def _commit_index(self, meta: FileMeta, note: ParsedNote, content_hash: str) -> int:
         fid = file_id_for(meta.rel_path)
         chunks = self.chunker.chunk_note(note, fid, mtime=meta.mtime)
+        logger.info("Vetorizando %s (%d chunk(s)) em CPU.", meta.rel_path, len(chunks))
         embeddings = self.embedder.embed([c.embed_text for c in chunks])
         self.vectors.delete_file(fid)
         self.vectors.upsert(chunks, embeddings)

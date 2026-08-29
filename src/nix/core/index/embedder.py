@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+import time
 from collections.abc import Sequence
+from contextlib import nullcontext
 
 from nix.core.errors import ConfigError
+from nix.core.index.native_compat import allow_blocked_mmh3
 from nix.observability.logging import get_logger
 from nix.observability.stdio import capture_library_stdout
 
@@ -18,8 +22,9 @@ def _register_missing_fastembed_models() -> None:
     global _CUSTOM_REGISTERED
     if _CUSTOM_REGISTERED:
         return
-    from fastembed import TextEmbedding
+    allow_blocked_mmh3()
     from fastembed.common.model_description import ModelSource, PoolingType
+    from fastembed.text.text_embedding import TextEmbedding
 
     with capture_library_stdout():
         known = {
@@ -42,6 +47,20 @@ def _register_missing_fastembed_models() -> None:
                 size_in_gb=2.27,
                 additional_files=["onnx/model.onnx_data"],
             )
+        mini_multi = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        if mini_multi not in known:
+            logger.info("Registrando %s no FastEmbed (~220 MB).", mini_multi)
+            TextEmbedding.add_custom_model(
+                model=mini_multi,
+                pooling=PoolingType.MEAN,
+                normalization=True,
+                sources=ModelSource(hf=mini_multi),
+                dim=384,
+                model_file="onnx/model.onnx",
+                description="Multilíngue leve, 384 dimensões. Registrado pelo Nix.",
+                license="apache-2.0",
+                size_in_gb=0.22,
+            )
     _CUSTOM_REGISTERED = True
 
 
@@ -52,15 +71,34 @@ class Embedder:
         self._model: object | None = None
         self._dim: int | None = None
 
+    def ensure_loaded(self) -> None:
+        """Carrega o modelo (e baixa o ONNX na primeira vez)."""
+        self._ensure()
+
     def _ensure(self) -> object:
         if self._model is None:
-            from fastembed import TextEmbedding
-
-            logger.info("Carregando modelo de embedding %s", self.model_name)
+            logger.info(
+                "Carregando modelo de embedding %s. "
+                "Na primeira vez o FastEmbed baixa o ONNX; em CPU isso pode levar muitos minutos.",
+                self.model_name,
+            )
+            started = time.perf_counter()
+            # MCP (stdin não-TTY): isola stdout. CLI interativa: deixa o download visível.
+            ctx = capture_library_stdout() if not sys.stdin.isatty() else nullcontext()
             try:
-                with capture_library_stdout():
+                allow_blocked_mmh3()
+                from fastembed.text.text_embedding import TextEmbedding
+
+                with ctx:
                     _register_missing_fastembed_models()
                     self._model = TextEmbedding(model_name=self.model_name)
+            except ImportError as exc:
+                raise ConfigError(
+                    f"Não foi possível importar o FastEmbed: {exc}. "
+                    "No Windows, o Controle de Aplicativo pode bloquear a DLL "
+                    "do mmh3 no Python 3.14. Permita o arquivo .pyd em "
+                    ".venv/Lib/site-packages ou recrie o ambiente."
+                ) from exc
             except ValueError as exc:
                 raise ConfigError(
                     f"Não foi possível carregar o embedding {self.model_name!r}: {exc}. "
@@ -68,6 +106,11 @@ class Embedder:
                     "O padrão BAAI/bge-m3 baixa ~2,3 GB na primeira execução "
                     "(precisa de rede até o Hugging Face)."
                 ) from exc
+            logger.info(
+                "Modelo %s pronto em %.1fs.",
+                self.model_name,
+                time.perf_counter() - started,
+            )
         return self._model
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:

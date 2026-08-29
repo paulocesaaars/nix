@@ -15,9 +15,12 @@ from nix.cli.deps import with_errors
 from nix.cli.render import console, print_banner
 from nix.config.loader import config_write_path, load_config, public_dict, resolve_config_path
 from nix.config.paths import app_root, env_home
+from nix.config.schema import EMBEDDING_MODEL_OPTIONS, SUPPORTED_EMBEDDING_MODELS
 from nix.core.errors import ConfigError
 
 _PATH_LINE = re.compile(r"(?m)^path\s*=\s*.*$")
+_EMBED_LINE = re.compile(r"(?m)^embedding_model\s*=\s*.*$")
+_DEFAULT_EMBEDDING = SUPPORTED_EMBEDDING_MODELS[0]
 
 
 def _toml_path(path: Path) -> str:
@@ -30,6 +33,28 @@ def _apply_vault_path(text: str, vault: Path) -> str:
     if count:
         return updated
     return text.replace("[vault]", f"[vault]\n{line}", 1)
+
+
+def _apply_embedding_model(text: str, model: str) -> str:
+    line = f"embedding_model = {json.dumps(model, ensure_ascii=False)}"
+    updated, count = _EMBED_LINE.subn(line, text, count=1)
+    if count:
+        return updated
+    return text.replace("[index]", f"[index]\n{line}", 1)
+
+
+def _validate_embedding(raw: str) -> str:
+    value = raw.strip().strip('"').strip("'")
+    if value in SUPPORTED_EMBEDDING_MODELS:
+        return value
+    if value.isdigit():
+        index = int(value)
+        if 1 <= index <= len(SUPPORTED_EMBEDDING_MODELS):
+            return SUPPORTED_EMBEDDING_MODELS[index - 1]
+    allowed = ", ".join(SUPPORTED_EMBEDDING_MODELS)
+    raise ConfigError(
+        f"Modelo {value!r} não é suportado. Use um de: {allowed}."
+    )
 
 
 def _validate_vault(raw: str) -> Path:
@@ -78,6 +103,20 @@ def _ask_vault() -> Path:
         return path.resolve()
 
 
+def _import_fix_hint(mod: str, exc: BaseException) -> str:
+    text = str(exc)
+    blocked = "DLL" in text or "Controle de Aplicativo" in text or "Application Control" in text
+    if blocked:
+        extra = (
+            "O Windows bloqueou a extensão nativa. Em Segurança do Windows, "
+            "permita o arquivo .pyd da pasta .venv ou recrie o ambiente."
+        )
+        if mod == "tiktoken":
+            extra += " O chunking segue com contagem aproximada."
+        return extra
+    return "Rode `pip install -r requirements.txt`."
+
+
 def _print_next_steps() -> None:
     console.print("[bold]Configuração concluída.[/bold]")
 
@@ -100,6 +139,46 @@ def _resolve_vault(explicit: str | None) -> Path:
     return _ask_vault()
 
 
+def _ask_embedding() -> str:
+    from rich.table import Table
+
+    console.print("Escolha o modelo de embedding (local, sem GPU). Comparação:")
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column("Modelo")
+    table.add_column("Disco")
+    table.add_column("Idiomas")
+    table.add_column("CPU")
+    table.add_column("Quando usar")
+    for index, opt in enumerate(EMBEDDING_MODEL_OPTIONS, start=1):
+        label = opt.name
+        if index == 1:
+            label = f"{opt.name} (padrão)"
+        table.add_row(str(index), label, opt.size, opt.languages, opt.cpu, opt.use_when)
+    console.print(table)
+    console.print(
+        "[dim]Máquina fraca + português: opção 2. "
+        "Só inglês e sync rápido: 3 ou 4. "
+        "Melhor qualidade e disco/RAM sobrando: 1.[/dim]"
+    )
+    while True:
+        raw = typer.prompt("Modelo", default="1")
+        try:
+            return _validate_embedding(raw)
+        except ConfigError as exc:
+            console.print(f"[red]{exc.message}[/red]")
+
+
+def _resolve_embedding(explicit: str | None, *, ask: bool) -> str:
+    if explicit is not None and explicit.strip():
+        return _validate_embedding(explicit)
+    if not ask:
+        return _DEFAULT_EMBEDDING
+    if not sys.stdin.isatty():
+        return _DEFAULT_EMBEDDING
+    return _ask_embedding()
+
+
 @with_errors
 def cmd_init(
     force: bool = typer.Option(False, "--force", help="Sobrescreve o arquivo existente"),
@@ -107,6 +186,11 @@ def cmd_init(
         None,
         "--vault",
         help="Caminho do vault; se omitido, pergunta no terminal",
+    ),
+    embedding_model: str | None = typer.Option(
+        None,
+        "--embedding-model",
+        help="Modelo de embedding (nome ou número da lista do init)",
     ),
 ) -> None:
     dest = config_write_path()
@@ -116,19 +200,32 @@ def cmd_init(
         "[dim]Vamos apontar o vault e indexar as notas.[/dim]"
     )
     vault_path = _resolve_vault(vault)
+    creating = force or not dest.exists()
+    model = _resolve_embedding(embedding_model, ask=creating)
     if dest.exists() and not force:
         current = dest.read_text(encoding="utf-8")
-        dest.write_text(_apply_vault_path(current, vault_path), encoding="utf-8")
+        current = _apply_vault_path(current, vault_path)
+        if embedding_model is not None and embedding_model.strip():
+            current = _apply_embedding_model(current, model)
+        dest.write_text(current, encoding="utf-8")
         console.print(
             f"Configuração em [bold]{dest}[/bold]. "
             f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}"
         )
+        if embedding_model is not None and embedding_model.strip():
+            console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(model)}")
+            console.print(
+                "[dim]Se o índice já existia com outro modelo, rode `nix sync --full`.[/dim]"
+            )
         _print_next_steps()
         return
     template = files("nix.config").joinpath("template.toml").read_text(encoding="utf-8")
-    dest.write_text(_apply_vault_path(template, vault_path), encoding="utf-8")
+    text = _apply_vault_path(template, vault_path)
+    text = _apply_embedding_model(text, model)
+    dest.write_text(text, encoding="utf-8")
     console.print(f"Arquivo criado em [bold]{dest}[/bold].")
     console.print(f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}")
+    console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(model)}")
     _print_next_steps()
 
 
@@ -183,15 +280,22 @@ def cmd_doctor(
         console.print(f"Vault: {root} ok")
     except ConfigError as exc:
         console.print(f"[yellow]Vault: {exc.message}[/yellow]")
-    for mod in ("chromadb", "fastembed", "mcp", "tiktoken"):
+    from nix.core.index.native_compat import allow_blocked_mmh3
+
+    allow_blocked_mmh3()
+    imports: tuple[tuple[str, str], ...] = (
+        ("chromadb", "chromadb"),
+        ("fastembed", "fastembed.text.text_embedding"),
+        ("mcp", "mcp"),
+        ("tiktoken", "tiktoken"),
+    )
+    for label, module in imports:
         try:
-            __import__(mod)
-            console.print(f"Import {mod}: ok")
+            __import__(module)
+            console.print(f"Import {label}: ok")
         except Exception as exc:  # noqa: BLE001
-            console.print(
-                f"[red]Import {mod} falhou: {exc}. "
-                "Rode `pip install -r requirements.txt`.[/red]"
-            )
+            hint = _import_fix_hint(label, exc)
+            console.print(f"[red]Import {label} falhou: {exc}. {hint}[/red]")
     data = config.index.data_path
     try:
         data.mkdir(parents=True, exist_ok=True)

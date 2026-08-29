@@ -8,7 +8,7 @@
 # Windows: use / (C:/Obsidian/MeuVault). Barra invertida quebra o TOML (\U é escape).
 path = ""
 include = ["**/*.md"]
-exclude = [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
+exclude = [".obsidian/**", ".trash/**"]
 follow_symlinks = false
 default_new_note_folder = "Inbox"
 # created = "auto" preenche a data ISO no momento da criação
@@ -20,7 +20,11 @@ longterm_folder = "Nix/Memória"
 # Artefatos derivados (SQLite + Chroma). Na pasta do app, fora do vault (AD-08).
 data_dir = ".nix/data"
 embedding_model = "BAAI/bge-m3"
-# Primeiro uso baixa o ONNX (~2,3 GB) do Hugging Face.
+# Local, CPU, sem GPU. Troca de modelo exige `nix sync --full`.
+#   BAAI/bge-m3                                              ~2,3 GB  PT/EN melhor   lento
+#   sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  ~220 MB  PT/EN bom  leve (máquina fraca + PT)
+#   sentence-transformers/all-MiniLM-L6-v2                   ~90 MB   inglês         mais leve
+#   BAAI/bge-small-en-v1.5                                   ~67 MB   inglês         mais leve
 embedding_batch_size = 32
 chunk_size_tokens = 800
 chunk_overlap_tokens = 120

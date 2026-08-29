@@ -6,7 +6,7 @@ Estas instruções são para **usar** o Nix no seu projeto. Se você vai desenvo
 
 ## Requisitos
 
-- Python 3.11+ no `PATH`
+- Python 3.11+ no `PATH` (incluindo 3.14)
 - Um vault do Obsidian (notas `.md`)
 - ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
 
@@ -20,21 +20,21 @@ O instalador cria `.venv`, instala o pacote e dispara `nix init` (pergunta o cam
 
 ```bat
 cd nix
-setup.bat
+install.bat
 :: ou, se já souber o vault:
-setup.bat --vault "C:/Obsidian/MeuVault"
+install.bat --vault "C:/Obsidian/MeuVault"
 ```
 
 ```powershell
 cd nix
-.\setup.ps1
-# ou: .\setup.ps1 --vault "C:/Obsidian/MeuVault"
+.\install.ps1
+# ou: .\install.ps1 --vault "C:/Obsidian/MeuVault"
 ```
 
 ```bash
 cd nix
-bash setup.sh
-# ou: bash setup.sh --vault "$HOME/Vault"
+bash install.sh
+# ou: bash install.sh --vault "$HOME/Vault"
 ```
 
 Depois de informar o vault, o instalador confirma que a **configuração foi concluída**. Abra um **novo terminal** e rode `nix doctor` / `nix sync` — o PATH já estará registrado (se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão)).
@@ -241,7 +241,7 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | Comando | Função |
 | --- | --- |
 | `nix` | Inicia o servidor MCP stdio |
-| `nix init [--vault PATH] [--force]` | Cria a configuração e grava o caminho do vault |
+| `nix init [--vault PATH] [--embedding-model NOME] [--force]` | Cria a configuração; pergunta vault e modelo de embedding |
 | `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
 | `nix status [--json]` | Notas, chunks, último sync e defasagem |
 | `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |

@@ -40,7 +40,7 @@ def main() -> None:
             "Cria o ambiente virtual .venv, instala os pacotes do Nix, "
             "registra NIX_HOME e o comando nix no PATH, e inicia nix init.\n"
             "Argumentos extras vão para nix init, por exemplo:\n"
-            '  setup.bat --vault "C:/Obsidian/MeuVault"'
+            '  install.bat --vault "C:/Obsidian/MeuVault"'
         )
         return
 

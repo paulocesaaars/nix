@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.resources import files
 
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from nix.core.models import IndexStatus, SyncProgress
@@ -46,13 +46,33 @@ def print_status(status: IndexStatus) -> None:
         console.print(f"[yellow]{status.stale_reason}[/yellow]")
 
 
+def sync_progress() -> Progress:
+    """Barra com spinner: em CPU o arquivo atual pode ficar parado vários minutos."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+        TimeElapsedColumn(),
+        console=console,
+    )
+
+
 def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
     if not progress.tasks:
         return
     task_id = progress.tasks[0].id
+    if event.action == "load_model":
+        description = (
+            f"Carregando {event.rel_path} (1ª vez: download ~2,3 GB; em CPU pode demorar)"
+        )
+        completed = 0
+    else:
+        description = f"{event.action} {event.rel_path}"
+        completed = event.current
     progress.update(
         task_id,
         total=max(event.total, 1),
-        completed=event.current,
-        description=f"{event.action} {event.rel_path}",
+        completed=completed,
+        description=description,
     )

@@ -9,7 +9,7 @@ echo.
 set "BOOTSTRAP=%~dp0scripts\bootstrap.py"
 if not exist "%BOOTSTRAP%" (
     echo [erro] Nao achei scripts\bootstrap.py.
-    echo Rode setup.bat na raiz do repositorio Nix.
+    echo Rode install.bat na raiz do repositorio Nix.
     goto :fail
 )
 
