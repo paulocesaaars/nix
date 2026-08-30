@@ -6,6 +6,8 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
+from nix.core.errors import ConfigError
+from nix.core.index.native_compat import blocked_native_hint, is_blocked_native_dll
 from nix.core.models import Chunk, RetrievedChunk
 from nix.observability.logging import get_logger
 from nix.observability.stdio import capture_library_stdout
@@ -13,6 +15,7 @@ from nix.observability.stdio import capture_library_stdout
 logger = get_logger("nix.index.vectorstore")
 
 COLLECTION = "nix_notes"
+_COLLECTION_META = {"hnsw:space": "cosine"}
 
 
 def _meta(chunk: Chunk) -> dict[str, Any]:
@@ -30,6 +33,11 @@ def _meta(chunk: Chunk) -> dict[str, Any]:
     }
 
 
+def _reraise_chroma(exc: BaseException) -> None:
+    if is_blocked_native_dll(exc):
+        raise ConfigError(blocked_native_hint()) from exc
+
+
 class VectorStore:
     def __init__(self, persist_dir: Path) -> None:
         self.persist_dir = persist_dir
@@ -37,20 +45,48 @@ class VectorStore:
         self._client: object | None = None
         self._collection: object | None = None
 
+    def _client_or_open(self) -> Any:
+        if self._client is None:
+            try:
+                import chromadb
+                from chromadb.config import Settings
+            except ImportError as exc:
+                _reraise_chroma(exc)
+                raise ConfigError(
+                    f"Não foi possível importar o ChromaDB: {exc}. "
+                    "Rode `pip install -r requirements.txt` no ambiente do Nix "
+                    "(chromadb 1.5.x)."
+                ) from exc
+            try:
+                with capture_library_stdout():
+                    self._client = chromadb.PersistentClient(
+                        path=str(self.persist_dir),
+                        settings=Settings(anonymized_telemetry=False),
+                    )
+            except ConfigError:
+                raise
+            except Exception as exc:
+                _reraise_chroma(exc)
+                raise
+        return self._client
+
+    def _ensure_collection(self, client: Any) -> Any:
+        try:
+            with capture_library_stdout():
+                return client.get_or_create_collection(
+                    name=COLLECTION,
+                    metadata=_COLLECTION_META,
+                )
+        except ConfigError:
+            raise
+        except Exception as exc:
+            _reraise_chroma(exc)
+            raise
+
     def _col(self) -> Any:
         if self._collection is None:
-            import chromadb
-            from chromadb.config import Settings
-
-            with capture_library_stdout():
-                self._client = chromadb.PersistentClient(
-                    path=str(self.persist_dir),
-                    settings=Settings(anonymized_telemetry=False),
-                )
-                self._collection = self._client.get_or_create_collection(  # type: ignore[union-attr]
-                    name=COLLECTION,
-                    metadata={"hnsw:space": "cosine"},
-                )
+            client = self._client_or_open()
+            self._collection = self._ensure_collection(client)
         return self._collection
 
     def upsert(self, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
@@ -114,18 +150,7 @@ class VectorStore:
         return results
 
     def reset(self) -> None:
-        import chromadb
-        from chromadb.config import Settings
-
-        with capture_library_stdout():
-            client = chromadb.PersistentClient(
-                path=str(self.persist_dir),
-                settings=Settings(anonymized_telemetry=False),
-            )
-            with contextlib.suppress(Exception):
-                client.delete_collection(COLLECTION)
-            self._client = client
-            self._collection = client.get_or_create_collection(
-                name=COLLECTION,
-                metadata={"hnsw:space": "cosine"},
-            )
+        client = self._client_or_open()
+        with capture_library_stdout(), contextlib.suppress(Exception):
+            client.delete_collection(COLLECTION)
+        self._collection = self._ensure_collection(client)

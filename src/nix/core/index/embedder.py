@@ -1,14 +1,18 @@
-"""Embeddings locais via FastEmbed, com carregamento preguiçoso."""
+"""Embeddings locais via FastEmbed, com carregamento preguiçoso.
+
+Stdout fica capturado por padrão (MCP stdio). A CLI de `sync` interativa
+pede `capture_embedder_stdout=False` em `Runtime.from_config`.
+"""
 
 from __future__ import annotations
 
-import sys
 import time
+import warnings
 from collections.abc import Sequence
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 
+from nix.config.embedding_models import EMBEDDING_MODELS, spec_for
 from nix.core.errors import ConfigError
-from nix.core.index.native_compat import allow_blocked_mmh3
 from nix.observability.logging import get_logger
 from nix.observability.stdio import capture_library_stdout
 
@@ -18,62 +22,63 @@ _CUSTOM_REGISTERED = False
 
 
 def _register_missing_fastembed_models() -> None:
-    """O FastEmbed 0.8 não lista BAAI/bge-m3; o ONNX oficial é registrado na hora."""
+    """Registra no FastEmbed os modelos do catálogo que a lib não lista."""
     global _CUSTOM_REGISTERED
     if _CUSTOM_REGISTERED:
         return
-    allow_blocked_mmh3()
     from fastembed.common.model_description import ModelSource, PoolingType
     from fastembed.text.text_embedding import TextEmbedding
 
+    pooling_map = {"cls": PoolingType.CLS, "mean": PoolingType.MEAN}
     with capture_library_stdout():
         known = {
-            str(item.get("model") or item.get("model_name") or "")
-            for item in TextEmbedding.list_supported_models()
+            str(item.get("model") or item.get("model_name") or "") for item in TextEmbedding.list_supported_models()
         }
-        if "BAAI/bge-m3" not in known:
+        for spec in EMBEDDING_MODELS:
+            if not spec.needs_fastembed_register or spec.name in known:
+                continue
             logger.info(
-                "Registrando BAAI/bge-m3 no FastEmbed (ONNX oficial, ~2,3 GB no primeiro download)."
+                "Registrando %s no FastEmbed (%s no primeiro download).",
+                spec.name,
+                spec.size_label,
             )
             TextEmbedding.add_custom_model(
-                model="BAAI/bge-m3",
-                pooling=PoolingType.CLS,
+                model=spec.name,
+                pooling=pooling_map[spec.pooling],
                 normalization=True,
-                sources=ModelSource(hf="BAAI/bge-m3"),
-                dim=1024,
-                model_file="onnx/model.onnx",
-                description="Multilíngue, 1024 dimensões. Registrado pelo Nix.",
-                license="mit",
-                size_in_gb=2.27,
-                additional_files=["onnx/model.onnx_data"],
-            )
-        mini_multi = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-        if mini_multi not in known:
-            logger.info("Registrando %s no FastEmbed (~220 MB).", mini_multi)
-            TextEmbedding.add_custom_model(
-                model=mini_multi,
-                pooling=PoolingType.MEAN,
-                normalization=True,
-                sources=ModelSource(hf=mini_multi),
-                dim=384,
-                model_file="onnx/model.onnx",
-                description="Multilíngue leve, 384 dimensões. Registrado pelo Nix.",
-                license="apache-2.0",
-                size_in_gb=0.22,
+                sources=ModelSource(hf=spec.name),
+                dim=spec.dim,
+                model_file=spec.model_file,
+                description="Registrado pelo Nix a partir do catálogo de embeddings.",
+                license=spec.license,
+                size_in_gb=spec.size_in_gb,
+                additional_files=list(spec.additional_files),
             )
     _CUSTOM_REGISTERED = True
 
 
 class Embedder:
-    def __init__(self, model_name: str, batch_size: int = 32) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        batch_size: int = 32,
+        *,
+        capture_stdout: bool = True,
+    ) -> None:
         self.model_name = model_name
         self.batch_size = batch_size
+        self.capture_stdout = capture_stdout
         self._model: object | None = None
         self._dim: int | None = None
 
     def ensure_loaded(self) -> None:
         """Carrega o modelo (e baixa o ONNX na primeira vez)."""
         self._ensure()
+
+    def _load_context(self) -> AbstractContextManager[None]:
+        if self.capture_stdout:
+            return capture_library_stdout()
+        return nullcontext()
 
     def _ensure(self) -> object:
         if self._model is None:
@@ -83,15 +88,18 @@ class Embedder:
                 self.model_name,
             )
             started = time.perf_counter()
-            # MCP (stdin não-TTY): isola stdout. CLI interativa: deixa o download visível.
-            ctx = capture_library_stdout() if not sys.stdin.isatty() else nullcontext()
             try:
-                allow_blocked_mmh3()
                 from fastembed.text.text_embedding import TextEmbedding
 
-                with ctx:
+                with self._load_context():
                     _register_missing_fastembed_models()
-                    self._model = TextEmbedding(model_name=self.model_name)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message=r"The model .* now uses mean pooling instead of CLS embedding",
+                            category=UserWarning,
+                        )
+                        self._model = TextEmbedding(model_name=self.model_name)
             except ImportError as exc:
                 raise ConfigError(
                     f"Não foi possível importar o FastEmbed: {exc}. "
@@ -100,10 +108,12 @@ class Embedder:
                     ".venv/Lib/site-packages ou recrie o ambiente."
                 ) from exc
             except ValueError as exc:
+                spec = spec_for(self.model_name)
+                size = spec.size_label if spec is not None else "o ONNX"
                 raise ConfigError(
                     f"Não foi possível carregar o embedding {self.model_name!r}: {exc}. "
                     "Confira index.embedding_model na configuração. "
-                    "O padrão BAAI/bge-m3 baixa ~2,3 GB na primeira execução "
+                    f"Este modelo baixa {size} na primeira execução "
                     "(precisa de rede até o Hugging Face)."
                 ) from exc
             logger.info(
@@ -118,7 +128,7 @@ class Embedder:
             return []
         model = self._ensure()
         vectors: list[list[float]] = []
-        with capture_library_stdout():
+        with self._load_context():
             for vec in model.embed(list(texts), batch_size=self.batch_size):  # type: ignore[attr-defined]
                 vectors.append([float(x) for x in vec])
         if vectors and self._dim is None:

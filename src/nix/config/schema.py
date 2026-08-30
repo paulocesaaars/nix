@@ -3,53 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, NamedTuple
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
 from nix.config.paths import app_root, resolve_app_path
 from nix.core.errors import ConfigError
-
-
-class EmbeddingModelOption(NamedTuple):
-    name: str
-    size: str
-    languages: str
-    cpu: str
-    use_when: str
-
-
-EMBEDDING_MODEL_OPTIONS: tuple[EmbeddingModelOption, ...] = (
-    EmbeddingModelOption(
-        name="BAAI/bge-m3",
-        size="~2,3 GB",
-        languages="PT e EN (melhor)",
-        cpu="lento",
-        use_when="Padrão. Máxima qualidade; máquina com folga.",
-    ),
-    EmbeddingModelOption(
-        name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        size="~220 MB",
-        languages="PT e EN (bom)",
-        cpu="leve",
-        use_when="Recomendado em máquina fraca com notas em português.",
-    ),
-    EmbeddingModelOption(
-        name="sentence-transformers/all-MiniLM-L6-v2",
-        size="~90 MB",
-        languages="inglês",
-        cpu="mais leve",
-        use_when="Vault só em inglês; o sync mais rápido.",
-    ),
-    EmbeddingModelOption(
-        name="BAAI/bge-small-en-v1.5",
-        size="~67 MB",
-        languages="inglês",
-        cpu="mais leve",
-        use_when="Inglês; alternativa pequena ao MiniLM-L6.",
-    ),
-)
-SUPPORTED_EMBEDDING_MODELS: tuple[str, ...] = tuple(opt.name for opt in EMBEDDING_MODEL_OPTIONS)
 
 SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
     "Xenova/ms-marco-MiniLM-L-6-v2",
@@ -71,14 +31,10 @@ class AnchoredSettings(BaseModel):
 class VaultSettings(AnchoredSettings):
     path: str = ""
     include: list[str] = Field(default_factory=lambda: ["**/*.md"])
-    exclude: list[str] = Field(
-        default_factory=lambda: [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
-    )
+    exclude: list[str] = Field(default_factory=lambda: [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"])
     follow_symlinks: bool = False
     default_new_note_folder: str = "Inbox"
-    default_frontmatter: dict[str, Any] = Field(
-        default_factory=lambda: {"created": "auto", "source": "nix"}
-    )
+    default_frontmatter: dict[str, Any] = Field(default_factory=lambda: {"created": "auto", "source": "nix"})
     longterm_folder: str = "Nix/Memória"
 
     @property
@@ -88,7 +44,7 @@ class VaultSettings(AnchoredSettings):
 
 class IndexSettings(AnchoredSettings):
     data_dir: str = ".nix/data"
-    embedding_model: str = "BAAI/bge-m3"
+    embedding_model: str = default_embedding_model()
     embedding_batch_size: int = Field(default=32, ge=1, le=256)
     chunk_size_tokens: int = Field(default=800, ge=100, le=4000)
     chunk_overlap_tokens: int = Field(default=120, ge=0, le=1000)
@@ -105,8 +61,7 @@ class IndexSettings(AnchoredSettings):
         if value not in SUPPORTED_EMBEDDING_MODELS:
             allowed = ", ".join(SUPPORTED_EMBEDDING_MODELS)
             raise ConfigError(
-                f"index.embedding_model={value!r} não é suportado. "
-                f"Use um de: {allowed}. Depois rode `nix sync --full`."
+                f"index.embedding_model={value!r} não é suportado. Use um de: {allowed}. Depois rode `nix sync --full`."
             )
         return value
 
@@ -213,11 +168,8 @@ class NixConfig(AnchoredSettings):
         root = self.vault.root
         if not root.exists():
             raise ConfigError(
-                f"O vault {root} não existe. Crie o diretório ou corrija vault.path "
-                "no arquivo de configuração."
+                f"O vault {root} não existe. Crie o diretório ou corrija vault.path no arquivo de configuração."
             )
         if not root.is_dir():
-            raise ConfigError(
-                f"vault.path={root} não é um diretório. Aponte para a pasta do vault do Obsidian."
-            )
+            raise ConfigError(f"vault.path={root} não é um diretório. Aponte para a pasta do vault do Obsidian.")
         return root

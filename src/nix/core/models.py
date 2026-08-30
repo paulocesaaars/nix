@@ -119,6 +119,7 @@ class SyncReport:
     errors: list[str] = field(default_factory=list)
     dry_run: bool = False
     trigger: SyncTrigger = "manual"
+    tokenizer_approximate: bool = False
 
     def summary_pt(self) -> str:
         verb = "seriam processados" if self.dry_run else "processados"
@@ -167,6 +168,7 @@ class SyncProgress:
     total: int
     rel_path: str
     action: str
+    detail: str = ""
 
 
 @dataclass(frozen=True)

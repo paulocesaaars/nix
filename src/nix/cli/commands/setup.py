@@ -12,15 +12,20 @@ from pathlib import Path
 import typer
 
 from nix.cli.deps import with_errors
-from nix.cli.render import console, print_banner
+from nix.cli.render import (
+    console,
+    print_banner,
+    print_embedding_choice_table,
+    print_tokenizer_warning,
+)
+from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
 from nix.config.loader import config_write_path, load_config, public_dict, resolve_config_path
 from nix.config.paths import app_root, env_home
-from nix.config.schema import EMBEDDING_MODEL_OPTIONS, SUPPORTED_EMBEDDING_MODELS
 from nix.core.errors import ConfigError
 
 _PATH_LINE = re.compile(r"(?m)^path\s*=\s*.*$")
 _EMBED_LINE = re.compile(r"(?m)^embedding_model\s*=\s*.*$")
-_DEFAULT_EMBEDDING = SUPPORTED_EMBEDDING_MODELS[0]
+_DEFAULT_EMBEDDING = default_embedding_model()
 
 
 def _toml_path(path: Path) -> str:
@@ -52,34 +57,26 @@ def _validate_embedding(raw: str) -> str:
         if 1 <= index <= len(SUPPORTED_EMBEDDING_MODELS):
             return SUPPORTED_EMBEDDING_MODELS[index - 1]
     allowed = ", ".join(SUPPORTED_EMBEDDING_MODELS)
-    raise ConfigError(
-        f"Modelo {value!r} não é suportado. Use um de: {allowed}."
-    )
+    raise ConfigError(f"Modelo {value!r} não é suportado. Use um de: {allowed}.")
 
 
 def _validate_vault(raw: str) -> Path:
     text = raw.strip().strip('"').strip("'")
     if not text:
         raise ConfigError(
-            "O caminho do vault está vazio. Informe a pasta do Obsidian, "
-            "por exemplo C:/Obsidian/MeuVault."
+            "O caminho do vault está vazio. Informe a pasta do Obsidian, por exemplo C:/Obsidian/MeuVault."
         )
     path = Path(text)
     if not path.exists():
-        raise ConfigError(
-            f"O caminho {path} não existe. Crie a pasta do vault ou informe outro caminho."
-        )
+        raise ConfigError(f"O caminho {path} não existe. Crie a pasta do vault ou informe outro caminho.")
     if not path.is_dir():
-        raise ConfigError(
-            f"{path} não é um diretório. Aponte para a pasta raiz do vault do Obsidian."
-        )
+        raise ConfigError(f"{path} não é um diretório. Aponte para a pasta raiz do vault do Obsidian.")
     return path.resolve()
 
 
 def _ask_vault() -> Path:
     console.print(
-        "Informe a pasta do vault do Obsidian. "
-        "No Windows use [cyan]/[/cyan] ([dim]C:/Obsidian/MeuVault[/dim])."
+        "Informe a pasta do vault do Obsidian. No Windows use [cyan]/[/cyan] ([dim]C:/Obsidian/MeuVault[/dim])."
     )
     while True:
         raw = typer.prompt("Caminho do vault")
@@ -113,6 +110,12 @@ def _import_fix_hint(mod: str, exc: BaseException) -> str:
         )
         if mod == "tiktoken":
             extra += " O chunking segue com contagem aproximada."
+        if mod == "chromadb":
+            extra += (
+                " O Chroma 1.x puxa cygrpc só por causa do OpenTelemetry; "
+                "o Nix tenta contornar isso no load. Se o doctor ainda falhar, "
+                "recree o ambiente com Python 3.12."
+            )
         return extra
     return "Rode `pip install -r requirements.txt`."
 
@@ -133,29 +136,13 @@ def _resolve_vault(explicit: str | None) -> Path:
     if explicit is not None and explicit.strip():
         return _validate_vault(explicit)
     if not sys.stdin.isatty():
-        raise ConfigError(
-            "Sem terminal interativo. Passe o vault com `nix init --vault CAMINHO`."
-        )
+        raise ConfigError("Sem terminal interativo. Passe o vault com `nix init --vault CAMINHO`.")
     return _ask_vault()
 
 
 def _ask_embedding() -> str:
-    from rich.table import Table
-
     console.print("Escolha o modelo de embedding (local, sem GPU). Comparação:")
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("#", style="cyan", justify="right")
-    table.add_column("Modelo")
-    table.add_column("Disco")
-    table.add_column("Idiomas")
-    table.add_column("CPU")
-    table.add_column("Quando usar")
-    for index, opt in enumerate(EMBEDDING_MODEL_OPTIONS, start=1):
-        label = opt.name
-        if index == 1:
-            label = f"{opt.name} (padrão)"
-        table.add_row(str(index), label, opt.size, opt.languages, opt.cpu, opt.use_when)
-    console.print(table)
+    print_embedding_choice_table()
     console.print(
         "[dim]Máquina fraca + português: opção 2. "
         "Só inglês e sync rápido: 3 ou 4. "
@@ -208,15 +195,10 @@ def cmd_init(
         if embedding_model is not None and embedding_model.strip():
             current = _apply_embedding_model(current, model)
         dest.write_text(current, encoding="utf-8")
-        console.print(
-            f"Configuração em [bold]{dest}[/bold]. "
-            f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}"
-        )
+        console.print(f"Configuração em [bold]{dest}[/bold]. [cyan]vault.path[/cyan] = {_toml_path(vault_path)}")
         if embedding_model is not None and embedding_model.strip():
             console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(model)}")
-            console.print(
-                "[dim]Se o índice já existia com outro modelo, rode `nix sync --full`.[/dim]"
-            )
+            console.print("[dim]Se o índice já existia com outro modelo, rode `nix sync --full`.[/dim]")
         _print_next_steps()
         return
     template = files("nix.config").joinpath("template.toml").read_text(encoding="utf-8")
@@ -250,8 +232,7 @@ def cmd_doctor(
         )
     else:
         console.print(
-            f"[yellow]comando `nix` não está no PATH desta sessão. "
-            f"Rode `{_session_activate_hint()}`.[/yellow]"
+            f"[yellow]comando `nix` não está no PATH desta sessão. Rode `{_session_activate_hint()}`.[/yellow]"
         )
     path = resolve_config_path()
     if path:
@@ -280,9 +261,20 @@ def cmd_doctor(
         console.print(f"Vault: {root} ok")
     except ConfigError as exc:
         console.print(f"[yellow]Vault: {exc.message}[/yellow]")
-    from nix.core.index.native_compat import allow_blocked_mmh3
+    from nix.core.index.native_compat import mmh3_is_stub, otel_grpc_is_stub, prepare_native_imports
+    from nix.core.index.tokenize import TokenCounter
 
-    allow_blocked_mmh3()
+    prepare_native_imports()
+    if mmh3_is_stub():
+        console.print(
+            "[yellow]mmh3: stub (só para o FastEmbed importar). "
+            "Se o ChromaDB precisar do hash nativo, permita o .pyd em "
+            ".venv/Lib/site-packages ou recrie o ambiente.[/yellow]"
+        )
+    if otel_grpc_is_stub():
+        console.print(
+            "[yellow]cygrpc: stub (o Chroma importa OpenTelemetry/gRPC no load; o índice local não usa gRPC).[/yellow]"
+        )
     imports: tuple[tuple[str, str], ...] = (
         ("chromadb", "chromadb"),
         ("fastembed", "fastembed.text.text_embedding"),
@@ -296,6 +288,7 @@ def cmd_doctor(
         except Exception as exc:  # noqa: BLE001
             hint = _import_fix_hint(label, exc)
             console.print(f"[red]Import {label} falhou: {exc}. {hint}[/red]")
+    print_tokenizer_warning(approximate=TokenCounter().approximate)
     data = config.index.data_path
     try:
         data.mkdir(parents=True, exist_ok=True)
@@ -304,19 +297,13 @@ def cmd_doctor(
         probe.unlink()
         console.print(f"data_dir gravável: {data}")
     except OSError as exc:
-        console.print(
-            f"[red]Não foi possível escrever em {data}: {exc}. "
-            "Ajuste index.data_dir.[/red]"
-        )
+        console.print(f"[red]Não foi possível escrever em {data}: {exc}. Ajuste index.data_dir.[/red]")
     try:
         from nix.cli.deps import get_runtime
 
         runtime = get_runtime()
         status = runtime.status()
-        console.print(
-            f"Índice: {status.files} notas, {status.chunks} chunks, "
-            f"stale={status.stale}"
-        )
+        console.print(f"Índice: {status.files} notas, {status.chunks} chunks, stale={status.stale}")
         runtime.close()
     except Exception as exc:  # noqa: BLE001
         console.print(f"[yellow]Índice ainda não utilizável: {exc}[/yellow]")

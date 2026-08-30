@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
+from nix.config.embedding_models import spec_for
+from nix.core.index.tokenize import APPROXIMATE_TOKENIZER_HINT
 from nix.core.models import IndexStatus, SyncProgress
 
 console = Console()
@@ -63,9 +65,10 @@ def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
         return
     task_id = progress.tasks[0].id
     if event.action == "load_model":
-        description = (
-            f"Carregando {event.rel_path} (1ª vez: download ~2,3 GB; em CPU pode demorar)"
-        )
+        model = event.detail
+        spec = spec_for(model)
+        size_bit = f"; 1ª vez: download {spec.size_label}" if spec is not None else ""
+        description = f"Carregando {model}{size_bit}; em CPU pode demorar"
         completed = 0
     else:
         description = f"{event.action} {event.rel_path}"
@@ -76,3 +79,31 @@ def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
         completed=completed,
         description=description,
     )
+
+
+def print_tokenizer_warning(*, approximate: bool) -> None:
+    if approximate:
+        console.print(f"[yellow]{APPROXIMATE_TOKENIZER_HINT}[/yellow]")
+
+
+def print_embedding_choice_table() -> None:
+    from nix.cli.embedding_copy import labeled_model_rows
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column("Modelo")
+    table.add_column("Disco")
+    table.add_column("Idiomas")
+    table.add_column("CPU")
+    table.add_column("Quando usar")
+    for index, (spec, copy) in enumerate(labeled_model_rows(), start=1):
+        short = f"{spec.short_name} (padrão)" if index == 1 else spec.short_name
+        table.add_row(
+            str(index),
+            f"{short}\n[dim]{spec.name}[/dim]",
+            spec.size_label,
+            copy.languages,
+            copy.cpu,
+            copy.use_when,
+        )
+    console.print(table)

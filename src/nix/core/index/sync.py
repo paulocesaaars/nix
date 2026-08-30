@@ -10,11 +10,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from nix.config.schema import NixConfig
-from nix.core.errors import IndexIncompatibleError, PathEscapeError, VaultError
+from nix.core.errors import ConfigError, IndexIncompatibleError, PathEscapeError, VaultError
 from nix.core.index.attachments import is_pdf_path, parse_pdf, referenced_pdfs
 from nix.core.index.chunker import Chunker
 from nix.core.index.embedder import Embedder
 from nix.core.index.store import IndexStore
+from nix.core.index.tokenize import APPROXIMATE_TOKENIZER_HINT
 from nix.core.index.vectorstore import VectorStore
 from nix.core.models import Chunk, FileMeta, ParsedNote, SyncProgress, SyncReport, utc_now_iso
 from nix.core.vault.markdown import parse_markdown
@@ -84,6 +85,9 @@ class Indexer:
         t0 = time.perf_counter()
         self._check_model(full=full)
         report = SyncReport(dry_run=dry_run, trigger=trigger if trigger in ("manual", "writeback") else "manual")  # type: ignore[arg-type]
+        report.tokenizer_approximate = self.chunker.tokenizer_approximate
+        if report.tokenizer_approximate:
+            logger.warning("%s", APPROXIMATE_TOKENIZER_HINT)
 
         known = {str(row["rel_path"]): row for row in self.store.list_files()}
         extras = ["**/*.pdf"] if self.config.index.index_attachments else None
@@ -133,7 +137,13 @@ class Indexer:
         if candidates:
             if progress:
                 progress(
-                    SyncProgress(0, total or 1, self.config.index.embedding_model, "load_model")
+                    SyncProgress(
+                        0,
+                        total or 1,
+                        "",
+                        "load_model",
+                        self.config.index.embedding_model,
+                    )
                 )
             logger.info(
                 "Preparando embedding %s para %d arquivo(s). "
@@ -156,19 +166,17 @@ class Indexer:
                     and str(row["content_hash"] or "") == content_hash
                     and str(row["status"]) == "indexed"
                 ):
-                    self.store.update_stat(
-                        file_id_for(meta.rel_path), meta.mtime, meta.size_bytes
-                    )
+                    self.store.update_stat(file_id_for(meta.rel_path), meta.mtime, meta.size_bytes)
                     report.skipped += 1
                     continue
                 n_chunks = self._commit_index(meta, note, content_hash)
+            except ConfigError:
+                raise
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Falha ao indexar %s", meta.rel_path)
                 report.failed += 1
                 report.errors.append(f"{meta.rel_path}: {exc}")
-                self.store.mark_error(
-                    file_id_for(meta.rel_path), meta.rel_path, meta.mtime, meta.size_bytes
-                )
+                self.store.mark_error(file_id_for(meta.rel_path), meta.rel_path, meta.mtime, meta.size_bytes)
                 continue
             report.chunks_created += n_chunks
             if action == "add":
@@ -260,6 +268,8 @@ class Indexer:
                 continue
             try:
                 self.index_file(pdf_meta)
+            except ConfigError:
+                raise
             except (VaultError, Exception) as exc:  # noqa: BLE001
                 logger.warning("PDF referenciado não indexado (%s): %s", rel, exc)
 
@@ -288,5 +298,6 @@ def json_safe(report: SyncReport) -> dict[str, Any]:
         "elapsed_seconds": report.elapsed_seconds,
         "errors": report.errors,
         "dry_run": report.dry_run,
+        "tokenizer_approximate": report.tokenizer_approximate,
         "summary": report.summary_pt(),
     }

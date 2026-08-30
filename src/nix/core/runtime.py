@@ -8,6 +8,7 @@ from pathlib import Path
 from nix.config.schema import NixConfig
 from nix.core.index.embedder import Embedder
 from nix.core.index.graph import WikiGraph
+from nix.core.index.native_compat import prepare_native_imports
 from nix.core.index.staleness import compute_status
 from nix.core.index.store import IndexStore
 from nix.core.index.sync import Indexer
@@ -34,17 +35,27 @@ class Runtime:
     graph: WikiGraph
 
     @classmethod
-    def from_config(cls, config: NixConfig) -> Runtime:
+    def from_config(
+        cls,
+        config: NixConfig,
+        *,
+        capture_embedder_stdout: bool = True,
+    ) -> Runtime:
         configure_logging(config)
         log = get_logger("nix.config")
         for warning in config.legacy_warnings:
             log.warning("%s", warning)
         config.require_vault()
+        prepare_native_imports()
         data_dir: Path = config.index.data_path
         data_dir.mkdir(parents=True, exist_ok=True)
         store = IndexStore(data_dir / "index.db")
         vectors = VectorStore(data_dir / "chroma")
-        embedder = Embedder(config.index.embedding_model, config.index.embedding_batch_size)
+        embedder = Embedder(
+            config.index.embedding_model,
+            config.index.embedding_batch_size,
+            capture_stdout=capture_embedder_stdout,
+        )
         reader = VaultReader(config)
         writer = VaultWriter(config, reader)
         graph = WikiGraph(store)

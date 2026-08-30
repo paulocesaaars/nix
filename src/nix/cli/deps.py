@@ -15,9 +15,9 @@ from nix.core.runtime import Runtime
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def get_runtime() -> Runtime:
+def get_runtime(*, capture_embedder_stdout: bool = True) -> Runtime:
     config = load_config()
-    return Runtime.from_config(config)
+    return Runtime.from_config(config, capture_embedder_stdout=capture_embedder_stdout)
 
 
 def with_errors(fn: F) -> F:

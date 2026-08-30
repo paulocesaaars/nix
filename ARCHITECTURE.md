@@ -21,7 +21,7 @@ Documento de produto e requisitos: [PRD.md](./PRD.md).
 | --- | --- | --- |
 | Linguagem | Python 3.11+ (CI e tipos em 3.14) | Ecossistema de IA e requisito do projeto |
 | Embeddings | FastEmbed com `BAAI/bge-m3` (ONNX, CPU) | Local, gratuito, multilíngue (PT/EN), sem GPU, sem dependência de PyTorch |
-| Banco vetorial | ChromaDB em modo persistente | Local, gratuito, embutido, com filtro por metadados |
+| Banco vetorial | ChromaDB 1.5.x em modo persistente | Local, gratuito, embutido; faixa pinada pelo grafo de import (OTEL/gRPC) |
 | Busca léxica | SQLite FTS5 | Já disponível na stdlib; complementa a busca vetorial em termos exatos |
 | Estado do índice | SQLite | Controle de arquivos, hashes e chunks; transacional |
 | CLI de bootstrap | Typer + Rich | Comandos tipados, ajuda automática, saída formatada e progresso |
@@ -109,6 +109,7 @@ nix/
         ├── __main__.py             # python -m nix (pacote instalado)
         ├── config/
         │   ├── schema.py           # modelos Pydantic da configuração
+        │   ├── embedding_models.py # catálogo técnico dos embeddings (validação + FastEmbed)
         │   ├── paths.py            # app_root, nix.toml, resolução de caminhos relativos
         │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
         │   └── template.toml       # config comentado gerado por `nix init`
@@ -122,7 +123,9 @@ nix/
         │   ├── index/
         │   │   ├── store.py        # SQLite: arquivos, chunks, metadados
         │   │   ├── chunker.py      # divisão consciente da estrutura
-        │   │   ├── embedder.py     # FastEmbed em lote (ONNX bge-m3); stdout capturado
+        │   │   ├── embedder.py     # FastEmbed em lote; stdout capturado por padrão
+        │   │   ├── native_compat.py # mmh3 nativo ou stub (só import FastEmbed)
+        │   │   ├── tokenize.py     # tiktoken, com aproximação se a DLL falhar
         │   │   ├── vectorstore.py  # adaptador Chroma
         │   │   ├── sync.py         # diff e sincronização incremental
         │   │   ├── writeback.py    # reindexação write-through
@@ -147,6 +150,7 @@ nix/
         │   ├── commands/
         │   │   ├── setup.py        # init, doctor
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
+        │   ├── embedding_copy.py   # textos de apresentação dos modelos
         │   └── render.py           # banner, tabelas de sync/status, erros em stderr
         ├── mcp/
         │   ├── server.py           # FastMCP/MCPServer stdio
@@ -500,7 +504,7 @@ Toda a configuração é validada por Pydantic no carregamento: caminho do vault
 | Escrita fora do vault | Resolução canônica de caminho e verificação de prefixo; rejeição de `..`, caminhos absolutos e symlinks que escapem |
 | Perda de conteúdo | Escrita atômica (arquivo temporário + rename), backup versionado antes de sobrescrever, confirmação obrigatória |
 | Exposição de notas privadas | Filtros `exclude` aplicados na indexação **e** na leitura, para que uma nota excluída não seja acessível nem por `read_note` |
-| Corrupção do protocolo MCP | stdout reservado ao stdio; logs só em arquivo; `silence_progress_env` na inicialização; FastEmbed sob `capture_library_stdout`; `NixError` só no stderr |
+| Corrupção do protocolo MCP | stdout reservado ao stdio; logs só em arquivo; `silence_progress_env` na inicialização; FastEmbed com `capture_stdout=True` por padrão (a CLI de `sync` desliga só para mostrar o download); `NixError` só no stderr |
 | Injeção via conteúdo de nota | Trechos recuperados são dados estruturados (caminho + conteúdo); ferramentas destrutivas sempre exigem confirmação humana |
 | Corrupção do índice | Transação por arquivo, verificação de compatibilidade de modelo, reconstrução completa sempre disponível |
 
@@ -513,7 +517,7 @@ Toda a configuração é validada por Pydantic no carregamento: caminho do vault
 | Reindexação write-through de 1 nota | < 100ms | Escopo de um único arquivo |
 | Busca híbrida | < 500ms | HNSW do Chroma + FTS5, ambos locais |
 
-O carregamento do modelo de embedding é preguiçoso. O FastEmbed 0.8 não lista `BAAI/bge-m3`; o Nix registra o ONNX oficial na hora (`embedder.py`) e o primeiro uso baixa ~2,3 GB do Hugging Face. `nix status` não carrega o modelo.
+O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.8 não lista (ex.: `BAAI/bge-m3`) são registrados a partir do catálogo em `config/embedding_models.py`. O primeiro uso baixa o ONNX do Hugging Face. `nix status` não carrega o modelo. `prepare_native_imports` roda na subida do `Runtime`, antes do Chroma e do FastEmbed: no Windows 3.14 o Controle de Aplicativo costuma bloquear `mmh3` e `cygrpc`; o Nix desbloqueia o import (o Chroma local usa `RustBindingsAPI` e não precisa de gRPC). A dependência é `chromadb>=1.5,<1.6` porque o stub OTEL cobre o grafo de import da série 1.5.
 
 ## 13. Decisões arquiteturais
 

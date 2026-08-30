@@ -15,6 +15,14 @@ logger = get_logger("nix.index.tokenize")
 
 _CHARS_PER_TOKEN = 4
 
+APPROXIMATE_TOKENIZER_HINT = (
+    "Contagem de tokens aproximada (~4 caracteres por token): o tiktoken não "
+    "carregou. No Windows, o Controle de Aplicativo pode bloquear o .pyd no "
+    "Python 3.14 — permita o arquivo em .venv/Lib/site-packages na Segurança "
+    "do Windows ou recrie o ambiente. O tamanho dos chunks pode divergir de "
+    "uma máquina com tiktoken."
+)
+
 
 class TokenCounter:
     """Conta e recorta tokens com tiktoken, ou por aproximação."""
@@ -26,12 +34,11 @@ class TokenCounter:
 
             self._encoding = tiktoken.get_encoding("cl100k_base")
         except ImportError as exc:
-            logger.warning(
-                "tiktoken indisponível (%s). Usando contagem aproximada "
-                "(~4 caracteres por token). No Windows, o Controle de Aplicativo "
-                "pode bloquear a DLL do tiktoken no Python 3.14.",
-                exc,
-            )
+            logger.warning("%s (%s)", APPROXIMATE_TOKENIZER_HINT, exc)
+
+    @property
+    def approximate(self) -> bool:
+        return self._encoding is None
 
     def count(self, text: str) -> int:
         if not text:
@@ -47,7 +54,7 @@ class TokenCounter:
             tokens = self._encoding.encode(text)
             if len(tokens) <= overlap_tokens:
                 return text
-            return str(self._encoding.decode(tokens[-overlap_tokens :])).strip()
+            return str(self._encoding.decode(tokens[-overlap_tokens:])).strip()
         chars = overlap_tokens * _CHARS_PER_TOKEN
         if chars >= len(text):
             return text

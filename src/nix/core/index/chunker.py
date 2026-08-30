@@ -19,6 +19,10 @@ class Chunker:
         self._min = settings.min_chunk_tokens
         self._tokens = TokenCounter()
 
+    @property
+    def tokenizer_approximate(self) -> bool:
+        return self._tokens.approximate
+
     def count(self, text: str) -> int:
         if not text:
             return 0
@@ -100,9 +104,7 @@ class Chunker:
                 sections.append((heading.path, block, start, end))
         return sections
 
-    def _merge_small(
-        self, sections: list[tuple[str, str, int, int]]
-    ) -> list[tuple[str, str, int, int]]:
+    def _merge_small(self, sections: list[tuple[str, str, int, int]]) -> list[tuple[str, str, int, int]]:
         if not sections:
             return []
         merged: list[tuple[str, str, int, int]] = []

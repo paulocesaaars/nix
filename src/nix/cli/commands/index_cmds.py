@@ -7,7 +7,14 @@ import json
 import typer
 
 from nix.cli.deps import get_runtime, with_errors
-from nix.cli.render import apply_sync_progress, console, print_status, sync_progress
+from nix.cli.embedding_copy import sync_model_hint
+from nix.cli.render import (
+    apply_sync_progress,
+    console,
+    print_status,
+    print_tokenizer_warning,
+    sync_progress,
+)
 from nix.core.index.sync import json_safe
 from nix.core.models import IndexStatus
 from nix.core.models import SyncProgress as SyncProgressEvent
@@ -21,14 +28,10 @@ def _status_from_payload(payload: object) -> IndexStatus:
         chunks=int(data.get("chunks") or 0),
         errors=int(data.get("errors") or 0),
         last_sync_at=data.get("last_sync_at") if isinstance(data.get("last_sync_at"), str) else None,
-        embedding_model=(
-            data.get("embedding_model") if isinstance(data.get("embedding_model"), str) else None
-        ),
+        embedding_model=(data.get("embedding_model") if isinstance(data.get("embedding_model"), str) else None),
         vault_path=data.get("vault_path") if isinstance(data.get("vault_path"), str) else None,
         stale=bool(data.get("stale")),
-        stale_reason=(
-            data.get("stale_reason") if isinstance(data.get("stale_reason"), str) else None
-        ),
+        stale_reason=(data.get("stale_reason") if isinstance(data.get("stale_reason"), str) else None),
         data_dir=str(data.get("data_dir") or ""),
     )
 
@@ -39,25 +42,15 @@ def cmd_sync(
     dry_run: bool = typer.Option(False, "--dry-run", help="Só mostra o que mudaria"),
     as_json: bool = typer.Option(False, "--json", help="Saída JSON"),
 ) -> None:
-    runtime = get_runtime()
+    runtime = get_runtime(capture_embedder_stdout=as_json)
     events: list[SyncProgressEvent] = []
 
     def on_progress(event: SyncProgressEvent) -> None:
         events.append(event)
         apply_sync_progress(progress, event)
 
-    if not dry_run:
-        console.print(
-            "[dim]Sem GPU o embedding roda na CPU. O modelo padrão BAAI/bge-m3 "
-            "pesa ~2,3 GB na primeira vez e cada nota pode levar minutos. "
-            "A barra só avança quando o arquivo termina — não está travado.[/dim]"
-        )
-        console.print(
-            "[dim]Em máquina fraca com notas em português, use no nix.toml "
-            "index.embedding_model = "
-            "\"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\" "
-            "e depois `nix sync --full`. Só inglês: all-MiniLM-L6-v2.[/dim]"
-        )
+    if not dry_run and not as_json:
+        console.print(f"[dim]{sync_model_hint(runtime.config.index.embedding_model)}[/dim]")
 
     with sync_progress() as progress:
         progress.add_task("Sincronizando", total=1)
@@ -70,6 +63,7 @@ def cmd_sync(
         return
     prefix = "Pré-visualização: " if dry_run else ""
     console.print(prefix + report.summary_pt())
+    print_tokenizer_warning(approximate=report.tokenizer_approximate)
     console.print(f"Vault: {vault_root}")
     processed = [e for e in events if e.action != "load_model"]
     if processed:

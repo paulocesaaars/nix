@@ -1,4 +1,5 @@
 {
+  // Selecione o interpretador do .venv (Python: Select Interpreter) se o debug não achar o Python.
   "version": "0.2.0",
   "inputs": [
     {
@@ -13,120 +14,72 @@
       "name": "Nix: init",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "args": ["init"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     },
     {
       "name": "Nix: init (--vault)",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "args": ["init", "--vault", "${input:vaultPath}"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     },
     {
       "name": "Nix: doctor",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "args": ["doctor"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     },
     {
       "name": "Nix: sync",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "args": ["sync"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     },
     {
       "name": "Nix: status",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "args": ["status"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     },
     {
       "name": "Nix: servidor MCP (stdio)",
       "type": "debugpy",
       "request": "launch",
+      "python": "${command:python.interpreterPath}",
       "module": "nix",
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true,
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "justMyCode": true
     }
   ]
 }
