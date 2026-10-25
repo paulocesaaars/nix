@@ -5,7 +5,7 @@ para o metadata de versão entrar no executável. O Nuitka não cruza sistema
 operacional: cada release compila no runner da própria plataforma.
 
 Uso:
-  pip install "nuitka>=4.3.1,<5"
+  pip install "nuitka[onefile]>=4.3.1,<5"
   python scripts/build_frozen.py
 """
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -36,7 +37,7 @@ _PACKAGES = (
     "grpc",
 )
 # 4.3 inclui as tabelas unicode do Rich e o tratamento da dylib do onnxruntime no macOS.
-_NUITKA_REQUIREMENT = "nuitka>=4.3.1,<5"
+_NUITKA_REQUIREMENT = "nuitka[onefile]>=4.3.1,<5"
 _NUITKA_MIN = (4, 3, 1)
 
 _METADATA = (
@@ -159,20 +160,17 @@ def _append_flags(env: dict[str, str], name: str, flags: str) -> None:
 
 
 def _linux_arm64_compiler_env() -> dict[str, str] | None:
-    """Evita o estouro de R_AARCH64_CALL26 no ld do Ubuntu 24.04.
+    """Liga o binário ARM64 com o lld.
 
-    O binutils anterior a 2.46 liga `--fix-cortex-a53-843419` por padrão e
-    insere stubs de 4 KiB antes de posicionar os veneers. No texto gerado
-    pelo Nuitka, esse deslocamento empurra o destino para fora do salto
-    de ±128 MiB. Neste alvo o contorno do Cortex-A53 fica desligado.
+    O ld do Ubuntu 24.04 estoura R_AARCH64_CALL26 neste programa e não aceita
+    desligar o contorno do Cortex-A53. O lld cria os veneers de salto longo.
     """
     if sys.platform != "linux" or platform.machine() not in {"aarch64", "arm64"}:
         return None
+    if shutil.which("ld.lld") is None:
+        _fail("O link no Linux ARM64 usa o lld. Instale o pacote lld e rode de novo.")
     env = os.environ.copy()
-    cflags = "-mno-fix-cortex-a53-835769 -mno-fix-cortex-a53-843419"
-    _append_flags(env, "CFLAGS", cflags)
-    _append_flags(env, "CCFLAGS", cflags)
-    _append_flags(env, "LDFLAGS", "-Wl,--no-fix-cortex-a53-843419")
+    _append_flags(env, "LDFLAGS", "-fuse-ld=lld")
     return env
 
 
@@ -198,6 +196,10 @@ def nuitka_command(product: str, filename: str) -> list[str]:
     for name in _PACKAGES:
         command.append(f"--include-package={name}")
         command.append(f"--include-package-data={name}")
+    # O plugin de DLL já copia estas bibliotecas. Incluí-las de novo como
+    # dado do pacote faz o Nuitka abortar com conflito de caminho.
+    command.append("--noinclude-data-files=onnxruntime/capi/libonnxruntime*")
+    command.append("--noinclude-data-files=onnxruntime/capi/*.dll")
     for name in _METADATA:
         command.append(f"--include-distribution-metadata={name}")
     if sys.platform == "win32":

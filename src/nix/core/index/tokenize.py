@@ -34,8 +34,11 @@ class TokenCounter:
         self._encoding: Any | None = None
         try:
             import tiktoken
+            from tiktoken_ext.openai_public import cl100k_base  # type: ignore[import-untyped]
 
-            self._encoding = tiktoken.get_encoding("cl100k_base")
+            # get_encoding varre tiktoken_ext com pkgutil. No binário Nuitka
+            # esse namespace não lista módulos, e o cl100k_base some.
+            self._encoding = tiktoken.Encoding(**cl100k_base())
         except ImportError as exc:
             logger.warning("%s (%s)", approximate_tokenizer_hint(), exc)
 

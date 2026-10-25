@@ -97,7 +97,13 @@ jobs:
 
       - name: Dependências de linkagem
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y patchelf ccache gcc
+        run: |
+          packages="patchelf ccache gcc"
+          if [ "$(uname -m)" = "aarch64" ]; then
+            packages="$packages lld"
+          fi
+          sudo apt-get update
+          sudo apt-get install -y $packages
 
       - name: Compilador MSVC
         if: runner.os == 'Windows'
@@ -109,7 +115,7 @@ jobs:
           pip install -r requirements.txt
           pip install .
           # 4.3 trata a dylib do onnxruntime no macOS e inclui as tabelas unicode do Rich.
-          pip install "nuitka>=4.3.1,<5"
+          pip install "nuitka[onefile]>=4.3.1,<5"
 
       - name: Compilar binário
         run: python scripts/build_frozen.py
