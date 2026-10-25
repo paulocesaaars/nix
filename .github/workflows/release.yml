@@ -108,7 +108,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install .
-          pip install "nuitka>=2.6,<3"
+          # 4.3 trata a dylib do onnxruntime no macOS e inclui as tabelas unicode do Rich.
+          pip install "nuitka>=4.3.2,<5"
 
       - name: Compilar binário
         run: python scripts/build_frozen.py

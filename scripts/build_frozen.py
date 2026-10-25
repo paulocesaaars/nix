@@ -5,13 +5,14 @@ para o metadata de versão entrar no executável. O Nuitka não cruza sistema
 operacional: cada release compila no runner da própria plataforma.
 
 Uso:
-  pip install "nuitka>=2.6,<3"
+  pip install "nuitka>=4.3.2,<5"
   python scripts/build_frozen.py
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import platform
 import subprocess
 import sys
@@ -34,6 +35,10 @@ _PACKAGES = (
     "huggingface_hub",
     "grpc",
 )
+# 4.3 inclui as tabelas unicode do Rich e o tratamento da dylib do onnxruntime no macOS.
+_NUITKA_REQUIREMENT = "nuitka>=4.3.2,<5"
+_NUITKA_MIN = (4, 3, 2)
+
 _METADATA = (
     "nix",
     "chromadb",
@@ -101,12 +106,22 @@ def asset_filename(product: str, system: str, arch: str) -> str:
     return f"nix-{product}-{system}-{arch}{suffix}"
 
 
+def _version_tuple(text: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for piece in text.split("."):
+        digits = "".join(character for character in piece if character.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts)
+
+
 def _require_toolchain(product: str) -> None:
     if sys.version_info[:2] != (3, 12):
         found = sys.version.split()[0]
         _fail(
             f"O binário é compilado com Python 3.12 (encontrado {found}). "
-            "Crie um ambiente 3.12, rode `pip install .` e `pip install \"nuitka>=2.6,<3\"`, "
+            f"Crie um ambiente 3.12, rode `pip install .` e `pip install \"{_NUITKA_REQUIREMENT}\"`, "
             "e execute este script de novo."
         )
     try:
@@ -119,7 +134,46 @@ def _require_toolchain(product: str) -> None:
             "Rode `pip install .` neste ambiente e tente de novo."
         )
     if importlib.util.find_spec("nuitka") is None:
-        _fail('Nuitka não está instalado. Rode `pip install "nuitka>=2.6,<3"` e tente de novo.')
+        _fail(
+            "Nuitka não está instalado. "
+            f'Rode `pip install "{_NUITKA_REQUIREMENT}"` e tente de novo.'
+        )
+    try:
+        installed_nuitka = version("Nuitka")
+    except PackageNotFoundError:
+        _fail(
+            "Nuitka não está instalado neste ambiente. "
+            f'Rode `pip install "{_NUITKA_REQUIREMENT}"` e tente de novo.'
+        )
+    if _version_tuple(installed_nuitka) < _NUITKA_MIN:
+        _fail(
+            f"O Nuitka instalado é {installed_nuitka}. "
+            f'Este build precisa de `{_NUITKA_REQUIREMENT}`. '
+            f'Rode `pip install "{_NUITKA_REQUIREMENT}"` e tente de novo.'
+        )
+
+
+def _append_flags(env: dict[str, str], name: str, flags: str) -> None:
+    current = env.get(name, "").strip()
+    env[name] = f"{current} {flags}".strip()
+
+
+def _linux_arm64_compiler_env() -> dict[str, str] | None:
+    """Evita o estouro de R_AARCH64_CALL26 no ld do Ubuntu 24.04.
+
+    O binutils anterior a 2.46 liga `--fix-cortex-a53-843419` por padrão e
+    insere stubs de 4 KiB antes de posicionar os veneers. No texto gerado
+    pelo Nuitka, esse deslocamento empurra o destino para fora do salto
+    de ±128 MiB. Neste alvo o contorno do Cortex-A53 fica desligado.
+    """
+    if sys.platform != "linux" or platform.machine() not in {"aarch64", "arm64"}:
+        return None
+    env = os.environ.copy()
+    cflags = "-mno-fix-cortex-a53-835769 -mno-fix-cortex-a53-843419"
+    _append_flags(env, "CFLAGS", cflags)
+    _append_flags(env, "CCFLAGS", cflags)
+    _append_flags(env, "LDFLAGS", "-Wl,--no-fix-cortex-a53-843419")
+    return env
 
 
 def nuitka_command(product: str, filename: str) -> list[str]:
@@ -172,7 +226,7 @@ def main() -> None:
             old.unlink()
     command = nuitka_command(product, filename)
     print("> " + " ".join(command))
-    result = subprocess.run(command, cwd=ROOT)
+    result = subprocess.run(command, cwd=ROOT, env=_linux_arm64_compiler_env())
     if result.returncode != 0:
         _fail(
             f"Nuitka falhou (código {result.returncode}). "
