@@ -205,7 +205,7 @@ git tag v1.1.3
 git push origin v1.1.3
 ```
 
-4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release `Nix v1.0.2` aparece com o zip e o checksum `.sha256`.
+4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz um binário por plataforma e o `checksums.txt`.
 
 Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.0.2`).
 
