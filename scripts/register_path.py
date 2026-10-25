@@ -462,7 +462,7 @@ def register_user_command(root: Path) -> bool:
     if not (bin_dir / "nix").is_file() and not (bin_dir / "nix.cmd").is_file():
         _fail(
             f"Não achei os wrappers em {bin_dir}. "
-            "Rode o instalador na raiz do repositório Nix."
+            "Rode `python scripts/bootstrap.py` na raiz do repositório Nix."
         )
     _warn_existing_nix(root)
     os.environ["NIX_HOME"] = str(root)

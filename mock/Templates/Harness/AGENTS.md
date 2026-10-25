@@ -7,14 +7,14 @@ Você atua como **Engenheiro de Software Sênior**. Gere código **robusto, perf
 Consulte o documento certo para cada necessidade — **não duplique** regras que
 já estão nos outros arquivos.
 
-| Necessidade                                                                           | Documento                            |
-| ------------------------------------------------------------------------------------- | ------------------------------------ |
-| Escopo, funcionalidades, regras de negócio, roadmap                                   | [`PRD.md`](PRD.md)                   |
-| Arquitetura (componentes, indexação, recuperação, MCP stdio, configuração, segurança) | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Necessidade | Documento |
+| --- | --- |
+| Escopo, funcionalidades, regras de negócio, roadmap | [`PRD.md`](PRD.md) |
+| Especificações técnicas (componentes, indexação, recuperação, MCP stdio, configuração, segurança) | [`TDD.md`](TDD.md) |
 
 Instruções Nix
 ---
-Sempre que não encontrar informações no PRD.md ou no ARCHITECTURE.md tente procurar nas bases de conhecimento utilizando o mcp nix.
+Sempre que não encontrar informações no PRD.md ou no TDD.md tente procurar nas bases de conhecimento utilizando o mcp nix.
 Sempre que for criar ou atualizar uma nota utilize o path: Projetos/[NOME DO PROJETO]
 
 ---
@@ -25,7 +25,7 @@ Sempre que for criar ou atualizar uma nota utilize o path: Projetos/[NOME DO PRO
 
 1. Leia **`PRD.md`** quando a tarefa envolver comportamento do produto, comandos,
    fluxos do usuário ou regras de negócio.
-2. Leia **`ARCHITECTURE.md`** quando a tarefa envolver estrutura de pastas, camadas,
+2. Leia **`TDD.md`** quando a tarefa envolver estrutura de pastas, camadas,
    dependências, pipeline de indexação, recuperação, servidor MCP ou configuração.
 3. Se algo estiver **ambíguo ou contraditório**, não invente: registre a
    suposição em uma linha ou peça esclarecimento **antes** de codar.

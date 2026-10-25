@@ -16,14 +16,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from register_path import unregister_user_command  # noqa: E402
 
 _HELP = """\
-Remove NIX_HOME e o comando nix do PATH, apaga .venv e, salvo --keep-data,
+Remove o Nix de um checkout de desenvolvimento: tira NIX_HOME e o comando nix
+do PATH se apontarem para esta pasta, apaga .venv e, salvo --keep-data,
 apaga também .nix (índice, backups, logs) e nix.toml.
-O vault do Obsidian e o código-fonte desta pasta não são alterados.
+O vault do Obsidian e o código-fonte não são alterados.
+O binário instalado na máquina usa uninstall.ps1, uninstall.sh ou uninstall.bat.
 
 Uso:
-  uninstall.bat
-  uninstall.bat --yes
-  uninstall.bat --keep-data --yes
+  python scripts/uninstall.py
+  python scripts/uninstall.py --yes
+  python scripts/uninstall.py --keep-data --yes
 """
 
 

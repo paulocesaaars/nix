@@ -16,26 +16,43 @@ _PREPARED = False
 _MMH3_IS_STUB = False
 _OTEL_GRPC_STUB = False
 
-_CHROMA_MMH3_HINT = (
-    "O ChromaDB precisou de mmh3.hash, mas a extensão nativa não carregou "
-    "(comum no Windows com Python 3.14 e Controle de Aplicativo). "
-    "Permita o arquivo .pyd em .venv/Lib/site-packages na Segurança do Windows "
-    "ou recrie o ambiente com um Python em que o mmh3 carregue (ex.: 3.12)."
-)
 
-_CYGRPC_HINT = (
-    "O Windows bloqueou uma extensão nativa (.pyd) do Chroma (Controle de "
-    "Aplicativo, comum no Python 3.14). O cliente local usa RustBindingsAPI e "
-    "não precisa de gRPC. Permita os .pyd em .venv/Lib/site-packages "
-    "(grpc/_cython e chromadb*) na Segurança do Windows ou recrie o ambiente "
-    "com Python 3.12."
-)
+def native_extension_remedy() -> str:
+    """Ação corretiva quando o Windows bloqueia uma extensão nativa."""
+    from nix.config.paths import is_packaged, onefile_cache_dir
 
-_OTEL_STUB_FAILED_HINT = (
-    "O Nix não liga telemetria do Chroma. O contorno do exporter OTLP falhou. "
-    "Permita o .pyd cygrpc em .venv/Lib/site-packages/grpc/_cython ou recrie o "
-    "ambiente com Python 3.12."
-)
+    if is_packaged():
+        from nix import __version__
+
+        cache = onefile_cache_dir(__version__)
+        return f"Permita as DLLs em {cache} na Segurança do Windows."
+    return (
+        "Permita o arquivo .pyd em .venv/Lib/site-packages na Segurança do Windows "
+        "ou recrie o ambiente com Python 3.12."
+    )
+
+
+def _chroma_mmh3_hint() -> str:
+    return (
+        "O ChromaDB precisou de mmh3.hash, mas a extensão nativa não carregou "
+        "(comum no Windows com Controle de Aplicativo). "
+        + native_extension_remedy()
+    )
+
+
+def _cygrpc_hint() -> str:
+    return (
+        "O Windows bloqueou uma extensão nativa do Chroma (Controle de Aplicativo). "
+        "O cliente local usa RustBindingsAPI e não precisa de gRPC. "
+        + native_extension_remedy()
+    )
+
+
+def _otel_stub_failed_hint() -> str:
+    return (
+        "O Nix não liga telemetria do Chroma. O contorno do exporter OTLP falhou. "
+        + native_extension_remedy()
+    )
 
 
 def mmh3_is_stub() -> bool:
@@ -57,7 +74,7 @@ def is_blocked_native_dll(exc: BaseException) -> bool:
 
 
 def blocked_native_hint() -> str:
-    return _CYGRPC_HINT
+    return _cygrpc_hint()
 
 
 def prepare_native_imports() -> None:
@@ -94,7 +111,7 @@ def _prepare_mmh3() -> None:
         while frame is not None and depth < 24:
             name = str(frame.f_globals.get("__name__", ""))
             if name == "chromadb" or name.startswith("chromadb."):
-                raise ConfigError(_CHROMA_MMH3_HINT)
+                raise ConfigError(_chroma_mmh3_hint())
             frame = frame.f_back
             depth += 1
         data = key.encode("utf-8") if isinstance(key, str) else key
@@ -150,7 +167,7 @@ def _prepare_chroma_otel_without_cygrpc() -> None:
 
     class OTLPSpanExporter:
         def __init__(self, *args: object, **kwargs: object) -> None:
-            raise ConfigError(_OTEL_STUB_FAILED_HINT)
+            raise ConfigError(_otel_stub_failed_hint())
 
         def export(self, *args: object, **kwargs: object) -> None:
             return None

@@ -15,7 +15,7 @@ from nix.core.index.attachments import is_pdf_path, parse_pdf, referenced_pdfs
 from nix.core.index.chunker import Chunker
 from nix.core.index.embedder import Embedder
 from nix.core.index.store import IndexStore
-from nix.core.index.tokenize import APPROXIMATE_TOKENIZER_HINT
+from nix.core.index.tokenize import approximate_tokenizer_hint
 from nix.core.index.vectorstore import VectorStore
 from nix.core.models import Chunk, FileMeta, ParsedNote, SyncProgress, SyncReport, utc_now_iso
 from nix.core.vault.markdown import parse_markdown
@@ -87,7 +87,7 @@ class Indexer:
         report = SyncReport(dry_run=dry_run, trigger=trigger if trigger in ("manual", "writeback") else "manual")  # type: ignore[arg-type]
         report.tokenizer_approximate = self.chunker.tokenizer_approximate
         if report.tokenizer_approximate:
-            logger.warning("%s", APPROXIMATE_TOKENIZER_HINT)
+            logger.warning("%s", approximate_tokenizer_hint())
 
         known = {str(row["rel_path"]): row for row in self.store.list_files()}
         extras = ["**/*.pdf"] if self.config.index.index_attachments else None

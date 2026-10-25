@@ -4,10 +4,12 @@
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `install.bat` / `install.sh` (venv + `NIX_HOME` + `nix` no PATH); desinstalador `uninstall.bat` / `uninstall.sh` |
+| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v0.1 |
 | Autor | Paulo |
 | Data | 2026-08-21 |
+
+Especificações técnicas: [TDD.md](./TDD.md).
 
 ---
 
@@ -119,8 +121,8 @@ Esta é a regra de negócio central do produto:
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
-| RF-45 | Um instalador (`install.bat` no Windows, `install.sh` no Unix) deve criar `.venv`, instalar os pacotes do projeto, registrar `NIX_HOME` e o comando `nix` no PATH do usuário, e iniciar `nix init` | Must |
-| RF-46 | Um desinstalador (`uninstall.bat` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário, apagar `.venv`, `.nix/` e `nix.toml`, e não tocar no vault | Must |
+| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar o binário da plataforma, conferir o SHA-256, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `nix.toml`. Não exige Python na máquina | Must |
+| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar o binário, `.nix/` e `nix.toml`, e não tocar no vault | Must |
 
 ### 5.6 Interface MCP
 
@@ -130,7 +132,7 @@ Esta é a regra de negócio central do produto:
 | RF-51 | O servidor MCP deve expor as 12 ferramentas de busca, leitura, escrita, insights e sincronização do vault (`search_notes`, `read_note`, `list_notes`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
-| RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o wrapper na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.cmd` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
+| RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o binário na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.exe` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
 | RF-55 | stdout pertence ao protocolo: logs só em arquivo; bibliotecas não podem escrever no canal | Must |
 
 ## 6. Histórias de usuário e critérios de aceite
@@ -159,19 +161,20 @@ Esta é a regra de negócio central do produto:
 - Dado que o vault mudou e eu não sincronizei, quando chamo `index_status`, então recebo aviso de índice desatualizado — e nenhuma vetorização automática acontece.
 
 **HU-04 — Instalar o ambiente**
-> Como usuário, quero um único executável que prepare o Python e inicie a configuração.
+> Como usuário, quero um único arquivo para copiar, sem instalar Python, e que a configuração do vault comece em seguida.
 
-- Dado um clone do repositório (ou o zip da release) com Python 3.11+ no PATH, quando executo `install.bat`, `.\install.ps1` ou `./install.sh`, então `.venv` é criado, os pacotes de `requirements.txt` e o Nix em modo editável são instalados, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault, e a mensagem de **configuração concluída** é exibida.
+- Dado um Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon, sem Python no PATH, quando executo `install.bat`, `.\install.ps1` ou `sh install.sh`, então o binário da plataforma é baixado, o SHA-256 confere, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault se ainda não houver `nix.toml`, e a mensagem de **configuração concluída** é exibida.
 - Dado que a instalação concluiu, quando abro um **novo** terminal em qualquer diretório, então `nix sync` (e os demais subcomandos) são encontrados no PATH.
 - Dado que já existe outro `nix` no PATH (gerenciador NixOS/Nixpkgs), quando o instalador registra o comando, então um aviso é emitido e este projeto passa a ter prioridade no PATH.
 - Dado `--vault CAMINHO` no instalador, quando ele chega no `init`, então o argumento é repassado e o prompt do vault é pulado.
-- Dado que `.venv` já existe, quando rodei o instalador de novo, então o ambiente é reutilizado, os pacotes são reinstalados por cima e o registro de `NIX_HOME`/PATH é idempotente.
+- Dado que `NIX_HOME` já aponta para uma pasta com `nix.toml`, quando rodei o instalador de novo, então essa pasta é preservada, o binário em `{NIX_HOME}/bin` é substituído e o `init` não é repetido.
+- Dado Windows arm64 ou macOS Intel, quando executo o instalador, então ele recusa a arquitetura e diz qual binário existe.
 
 **HU-07 — Desinstalar o ambiente**
 > Como usuário, quero um único executável que desfaça a instalação sem apagar o vault.
 
-- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `./uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, `.venv`, `.nix/` e `nix.toml` são apagados, e o vault permanece intacto.
-- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o `.venv` some, mas `nix.toml` e `.nix/` permanecem.
+- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, o binário, `.nix/` e `nix.toml` são apagados, e o vault permanece intacto.
+- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o binário some, mas `nix.toml` e `.nix/` permanecem.
 - Dado `--yes` (ou `-y`), quando não há terminal interativo, então a confirmação é dispensada e a desinstalação segue.
 - Dado que `NIX_HOME` aponta para outra pasta, quando desinstalo esta cópia, então a variável e o bloco de shell da outra instalação não são removidos.
 - Dado que a desinstalação concluiu, quando abro um **novo** terminal, então o comando `nix` deste projeto não é encontrado no PATH.
@@ -186,9 +189,9 @@ Esta é a regra de negócio central do produto:
 **HU-06 — Usar o Nix dentro do Cursor (ou equivalente)**
 > Como usuário, quero acessar meu vault de dentro do editor.
 
-- Dado o Nix registrado no cliente MCP com `command` apontando para o wrapper na pasta da instalação (Windows: `${env:NIX_HOME}/bin/nix.cmd` ou o caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto), quando peço ao agente do editor algo sobre minhas notas, então ele usa as ferramentas do Nix e recebe trechos com caminho e citação.
+- Dado o Nix registrado no cliente MCP com `command` apontando para o binário na pasta da instalação (Windows: `${env:NIX_HOME}/bin/nix.exe` ou o caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto), quando peço ao agente do editor algo sobre minhas notas, então ele usa as ferramentas do Nix e recebe trechos com caminho e citação.
 - Dado `"command": "nix"` (só o nome no PATH) na IDE aberta pelo Dock/menu, quando o cliente tenta iniciar o processo, então a conexão falha com `spawn nix ENOENT`.
-- Dado `bin/nix.cmd` no macOS/Linux, quando a IDE inicia o processo, então a conexão falha com `EACCES` — o registro correto nesse sistema é o caminho absoluto de `bin/nix` na pasta da instalação.
+- Dado macOS ou Linux, quando o `command` do MCP é o caminho absoluto da linha `comando nix:` do `nix doctor` (`{NIX_HOME}/bin/nix`), então o servidor sobe.
 - Dado que peço uma alteração de nota via MCP, quando ela é aplicada, então o índice é atualizado automaticamente.
 - Dado `update_note` em modo replace ou `delete_note`, quando o cliente chama a ferramenta, então a escrita só ocorre com `confirm=true` após aprovação (anotação `destructiveHint`).
 
@@ -200,7 +203,7 @@ Esta é a regra de negócio central do produto:
 | RNF-02 | Privacidade | O conteúdo do vault não sai da máquina por iniciativa do Nix. O cliente MCP é quem decide o que enviar ao LLM. |
 | RNF-03 | Desempenho | Recuperação (busca híbrida) em menos de 500ms em vault de até 5.000 notas. |
 | RNF-04 | Desempenho | Sincronização inicial de 1.000 notas em até ~5 minutos em hardware de desenvolvedor típico, sem GPU. |
-| RNF-05 | Portabilidade | Deve funcionar em Windows, macOS e Linux, com Python 3.11+ (incluindo 3.14). |
+| RNF-05 | Portabilidade | O binário publicado funciona em Windows amd64, Linux amd64/arm64 e macOS Apple Silicon, sem Python instalado. O desenvolvimento do código usa Python 3.11+ (incluindo 3.14). |
 | RNF-06 | Segurança | Todas as operações de arquivo devem ser confinadas ao vault. |
 | RNF-07 | Confiabilidade | Interrupção durante a sincronização não deve corromper o índice; a operação seguinte deve retomar de onde parou. |
 | RNF-08 | Observabilidade | Logs estruturados em arquivo, com nível configurável. No stdio, nada em stdout além do protocolo. |
@@ -233,9 +236,9 @@ Esta é a regra de negócio central do produto:
 - Configuração TOML + env (`nix.toml` na pasta do aplicativo; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
 - Servidor MCP stdio com 12 ferramentas, recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
 - CLI de bootstrap: `init [--vault] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
-- Instalador `install.bat` / `install.sh` (venv + pacotes + `NIX_HOME`/`nix` no PATH + `nix init`).
-- Desinstalador `uninstall.bat` / `uninstall.sh` (remove PATH/`NIX_HOME`, `.venv`, `.nix/` e `nix.toml`; não toca no vault).
-- Registro MCP: `command` aponta para o wrapper em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.cmd` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Wrappers chamam o Python do venv com `-P`. Exemplos em `.cursor/mcp.json`.
+- Instalador `install.bat` / `install.ps1` / `install.sh` (binário único da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
+- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `nix.toml`; não toca no vault).
+- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Exemplos em `.cursor/mcp.json`.
 - Escrita com write-through, confirmação e backup.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
@@ -271,5 +274,5 @@ Interface gráfica ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consu
 - **MCP** — Model Context Protocol. O Nix expõe ferramentas exclusivamente via stdio.
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
-- **Instalador** — `install.bat` / `install.sh`: cria `.venv`, instala o pacote e dispara `nix init`.
-- **Desinstalador** — `uninstall.bat` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `.venv`, `.nix/` e `nix.toml`; não altera o vault.
+- **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa o binário único, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
+- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga o binário, `.nix/` e `nix.toml`; não altera o vault.

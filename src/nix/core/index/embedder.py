@@ -101,11 +101,12 @@ class Embedder:
                         )
                         self._model = TextEmbedding(model_name=self.model_name)
             except ImportError as exc:
+                from nix.core.index.native_compat import native_extension_remedy
+
                 raise ConfigError(
                     f"Não foi possível importar o FastEmbed: {exc}. "
-                    "No Windows, o Controle de Aplicativo pode bloquear a DLL "
-                    "do mmh3 no Python 3.14. Permita o arquivo .pyd em "
-                    ".venv/Lib/site-packages ou recrie o ambiente."
+                    "No Windows, o Controle de Aplicativo pode bloquear a extensão nativa. "
+                    + native_extension_remedy()
                 ) from exc
             except ValueError as exc:
                 spec = spec_for(self.model_name)

@@ -4,6 +4,11 @@ Caminhos relativos no TOML resolvem contra o diretório do arquivo (ou
 `app_root` se ainda não houver config), nunca contra o CWD — o MCP iniciado
 pelo editor costuma ter CWD do workspace, não da pasta do Nix.
 
+No checkout editável, `app_root` é a pasta do repositório, senão `$NIX_HOME`,
+senão o CWD. No binário Nuitka, `__file__` aponta para a extração temporária:
+a busca de checkout é ignorada e, sem `$NIX_HOME`, vale a pasta de dados da
+plataforma. O CWD não entra nessa conta.
+
 `find_checkout_root` vive em `nix_launch` para o launcher achar o checkout
 antes de importar o pacote `nix` (evita sombreamento da pasta do repositório).
 `$NIX_HOME` (gravada pelo instalador) é o fallback quando o pacote não está
@@ -14,13 +19,56 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sys
 from pathlib import Path
 
 from nix_launch import find_checkout_root
 
 
+def is_packaged() -> bool:
+    """True no binário Nuitka. `__compiled__` só existe no módulo compilado."""
+    return "__compiled__" in globals()
+
+
+def _resolve(path: Path) -> Path:
+    with contextlib.suppress(OSError):
+        return path.resolve()
+    return path
+
+
+def platform_data_dir() -> Path:
+    """Pasta de dados quando o binário roda sem `$NIX_HOME`."""
+    if sys.platform == "win32":
+        raw = os.environ.get("LOCALAPPDATA", "").strip()
+        base = Path(raw) if raw else Path.home() / "AppData" / "Local"
+        return base / "nix"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "nix"
+    raw = os.environ.get("XDG_DATA_HOME", "").strip()
+    base = Path(raw).expanduser() if raw else Path.home() / ".local" / "share"
+    return base / "nix"
+
+
+def platform_cache_dir() -> Path:
+    """Base de `{CACHE_DIR}` do Nuitka (cache do usuário, não o diretório temporário)."""
+    if sys.platform == "win32":
+        raw = os.environ.get("LOCALAPPDATA", "").strip()
+        return Path(raw) if raw else Path.home() / "AppData" / "Local"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches"
+    raw = os.environ.get("XDG_CACHE_HOME", "").strip()
+    return Path(raw).expanduser() if raw else Path.home() / ".cache"
+
+
+def onefile_cache_dir(version: str) -> Path:
+    """Cache da extração. Espelha `--onefile-tempdir-spec={CACHE_DIR}/nix/onefile-{VERSION}`."""
+    return platform_cache_dir() / "nix" / f"onefile-{version}"
+
+
 def checkout_root() -> Path | None:
     """Raiz do checkout do Nix (instalação editável), ou None."""
+    if is_packaged():
+        return None
     return find_checkout_root(Path(__file__).resolve())
 
 
@@ -29,24 +77,27 @@ def env_home() -> Path | None:
     raw = os.environ.get("NIX_HOME", "").strip()
     if not raw:
         return None
-    path = Path(raw).expanduser()
-    with contextlib.suppress(OSError):
-        path = path.resolve()
-    return path
+    return _resolve(Path(raw).expanduser())
 
 
 def app_root() -> Path:
-    """Pasta do aplicativo: checkout editável, senão `$NIX_HOME`, senão o CWD."""
+    """Pasta do aplicativo.
+
+    Checkout editável, senão `$NIX_HOME`, senão o CWD. No binário: `$NIX_HOME`
+    ou a pasta de dados da plataforma.
+    """
+    if is_packaged():
+        home = env_home()
+        if home is not None:
+            return home
+        return _resolve(platform_data_dir())
     checkout = checkout_root()
     if checkout is not None:
         return checkout
     home = env_home()
     if home is not None:
         return home
-    here = Path.cwd()
-    with contextlib.suppress(OSError):
-        here = here.resolve()
-    return here
+    return _resolve(Path.cwd())
 
 
 def default_state_dir() -> Path:

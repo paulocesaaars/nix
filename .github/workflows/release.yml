@@ -18,8 +18,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
     steps:
       - name: Resolver tag
         id: tag
@@ -61,27 +64,104 @@ jobs:
           ruff check src scripts
           mypy src
 
-      - name: Montar pacote zip
-        id: package
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-          VERSION: ${{ steps.tag.outputs.version }}
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # windows-arm64 e darwin-amd64 não são publicados; o instalador recusa essas arquiteturas.
+          - os: windows-latest
+            platform: windows
+            arch: amd64
+          - os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Dependências de linkagem
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y patchelf ccache gcc
+
+      - name: Compilador MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Instalar o Nix e o Nuitka
         run: |
-          ZIP="nix-${VERSION}.zip"
-          git archive --format=zip --prefix="nix-${VERSION}/" -o "$ZIP" HEAD
-          sha256sum "$ZIP" > "${ZIP}.sha256"
-          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install .
+          pip install "nuitka>=2.6,<3"
+
+      - name: Compilar binário
+        run: python scripts/build_frozen.py
+
+      - name: Assinar ad-hoc no macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          name="$(tr -d '\r' < dist/asset-name.txt)"
+          codesign --sign - --force "dist/${name}"
+
+      - name: Smoke
+        shell: bash
+        run: |
+          name="$(tr -d '\r' < dist/asset-name.txt)"
+          python scripts/smoke_frozen.py "dist/${name}" "${{ needs.check.outputs.version }}"
+
+      - name: Nome do artefato
+        id: binary
+        shell: bash
+        run: |
+          name="$(tr -d '\r' < dist/asset-name.txt)"
+          echo "path=dist/${name}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nix-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ steps.binary.outputs.path }}
+          if-no-files-found: error
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: nix-*
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum nix-* | tee checksums.txt
 
       - name: Publicar release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-          ZIP: ${{ steps.package.outputs.zip }}
+          TAG: ${{ needs.check.outputs.tag }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$ZIP" "${ZIP}.sha256" --clobber
+            gh release upload "$TAG" artifacts/* --clobber
           else
-            gh release create "$TAG" "$ZIP" "${ZIP}.sha256" \
+            gh release create "$TAG" artifacts/* \
               --title "Nix $TAG" \
               --generate-notes
           fi

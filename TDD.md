@@ -1,8 +1,8 @@
-# Arquitetura — Nix
+# TDD — Nix
 
-Documento técnico do Nix, servidor MCP que expõe vaults do Obsidian a agentes de desenvolvimento.
+Especificações técnicas do Nix, servidor MCP que expõe vaults do Obsidian a agentes de desenvolvimento.
 
-Documento de produto e requisitos: [PRD.md](./PRD.md).
+Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 
 ---
 
@@ -81,14 +81,16 @@ graph TB
 
 ```
 nix/
-├── install.bat / install.sh / install.ps1  # cria .venv, instala pacotes, registra PATH e inicia `nix init`
-├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, .venv, .nix e nix.toml
-├── bin/nix / bin/nix.cmd   # wrappers da CLI: acham o .venv da instalação, preservam o CWD
-├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH (terminal antigo)
+├── install.bat / install.sh / install.ps1  # baixa o binário, confere SHA-256, registra PATH e inicia `nix init`
+├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix e nix.toml
+├── bin/nix / bin/nix.cmd   # shims só do checkout de desenvolvimento (acham o .venv)
+├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH no checkout
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
-├── scripts/bootstrap.py    # venv + pip + init
-├── scripts/register_path.py # NIX_HOME e PATH do usuário (registro e remoção)
-├── scripts/uninstall.py    # desfaz PATH e apaga artefatos locais
+├── scripts/bootstrap.py    # venv + pip + init (desenvolvimento)
+├── scripts/build_frozen.py # Nuitka onefile, Python 3.12, na plataforma local
+├── scripts/smoke_frozen.py # gate de --version e doctor do binário
+├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
+├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
 ├── nix.jpeg                # foto da Nix (mascote no README)
 ├── nix.toml                # config local (não versionado; gerado por `nix init`)
 ├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs
@@ -97,20 +99,21 @@ nix/
 ├── requirements-dev.txt    # dependências de desenvolvimento
 ├── README.md
 ├── PRD.md
-├── ARCHITECTURE.md
+├── TDD.md
 ├── AGENTS.md
 ├── .cursor/
-│   ├── mcp.json            # command = wrapper em NIX_HOME (caminho absoluto no Unix)
+│   ├── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 │   └── skills/revisao-codigo/
 └── src/
     ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/
+    ├── nix_frozen.py           # entrada do binário; não relança o .venv
     └── nix/
         ├── __init__.py
         ├── __main__.py             # python -m nix (pacote instalado)
         ├── config/
         │   ├── schema.py           # modelos Pydantic da configuração
         │   ├── embedding_models.py # catálogo técnico dos embeddings (validação + FastEmbed)
-        │   ├── paths.py            # app_root, nix.toml, resolução de caminhos relativos
+        │   ├── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
         │   └── template.toml       # config comentado gerado por `nix init`
         ├── core/
@@ -161,7 +164,9 @@ nix/
             └── stdio.py            # isola stdout de bibliotecas
 ```
 
-O ambiente é gerenciado com `venv` e `pip`. O instalador (`install.bat` / `install.sh` → `scripts/bootstrap.py`) cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`) e dispara `nix init`. O desinstalador (`uninstall.bat` / `uninstall.sh` → `scripts/uninstall.py`) desfaz o PATH e apaga `.venv`, `.nix/` e `nix.toml`. Quem preferir o fluxo manual usa os mesmos passos. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`.
+Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `nix.toml`.
+
+O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/bootstrap.py` cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`). `scripts/uninstall.py` desfaz esse checkout. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`. O binário é compilado por `scripts/build_frozen.py` com Python 3.12.
 
 ## 5. Modelo de dados
 
@@ -372,21 +377,25 @@ Todas as ferramentas recebem `rel_path` relativo ao vault. `core/vault/paths.py`
 
 ### 9.1 Instalador e CLI de bootstrap
 
-O instalador na raiz do repositório não entra no núcleo: só orquestra o ambiente.
+O instalador na raiz do repositório não entra no núcleo: só baixa o binário e registra o PATH. Não exige Python.
 
 ```
-install.bat / install.sh / install.ps1  # acha Python 3.11+, chama scripts/bootstrap.py
-scripts/bootstrap.py          # .venv → pip (requirements.txt + -e .) → register_path → python -P -m nix init
-scripts/register_path.py      # NIX_HOME + `{NIX_HOME}/bin` no PATH (registro Windows / rc Unix)
-bin/nix / bin/nix.cmd         # shims no PATH do usuário
-bin/env.sh / env.cmd / env.ps1  # ativação manual se um terminal antigo não herdou o PATH
-uninstall.bat / uninstall.sh / uninstall.ps1  # acha Python 3.11+, chama scripts/uninstall.py
-scripts/uninstall.py          # unregister_path → apaga .venv, .nix/, nix.toml (não o vault)
+install.ps1 / install.sh          # release estável (ou NIX_VERSION) → SHA-256 → {NIX_HOME}/bin/nix
+install.bat                       # delega a install.ps1
+uninstall.ps1 / uninstall.sh      # PATH, binário, nix.toml e .nix (não o vault)
+uninstall.bat                     # delega a uninstall.ps1
+scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path → nix init
+scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12
+scripts/smoke_frozen.py           # stdout de --version e imports do doctor
 ```
 
-Argumentos extras (`--vault PATH`, `--force`) vão para `nix init`. Se `.venv` já existir, é reutilizado. O instalador grava `NIX_HOME` e coloca `{NIX_HOME}/bin` no PATH (registro do usuário no Windows; bloco POSIX nos rcs existentes, criando `~/.bashrc` só se nenhum rc existir; no Git Bash com `MSYSTEM`, cria `~/.bashrc` se preciso). Windows e shell são registrados à parte: a falha de um não desfaz o outro. Se algum registro falhar, a instalação **não aborta**: aponta para o INSTALL.md e segue o `init`. Depois do vault, informa que a configuração foi concluída; o comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
+O binário publicado cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
 
-O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta pasta; `--keep-data` preserva `nix.toml` e `.nix/`. O vault e o código-fonte não são alterados. Windows e shell são desfeitos à parte: a falha de um não impede a remoção dos arquivos locais.
+`NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. Argumentos extras (`--vault PATH`, `--force`) vão para `nix init` só quando `nix.toml` ainda não existe. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`). O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
+
+O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação; `--keep-data` preserva `nix.toml` e `.nix/`. O vault não é alterado.
+
+No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `nix.toml` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
 
 ```
 nix                           # inicia o servidor MCP stdio
@@ -404,11 +413,11 @@ Se `nix` roda sem subcomando num terminal interativo, um aviso vai para stderr e
 
 ### 9.2 Servidor MCP
 
-Transporte **somente stdio**. O cliente inicia o processo (`python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP (`nix://note/{+rel_path}` — barras no caminho; `|` também é aceito), permitindo que o cliente anexe uma nota inteira ao contexto sem consumir uma chamada de ferramenta.
+Transporte **somente stdio**. O cliente inicia o processo (o binário em `{NIX_HOME}/bin`; no checkout de desenvolvimento, `python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP (`nix://note/{+rel_path}` — barras no caminho; `|` também é aceito), permitindo que o cliente anexe uma nota inteira ao contexto sem consumir uma chamada de ferramenta.
 
 O servidor tenta `FastMCP` e, se o SDK recente expuser só `MCPServer`, usa essa classe — ambas precisam de `.tool()`, `.run()` e `transport="stdio"`. Falha de instância ou de transporte vira `ConfigError` com ação corretiva (`pip install 'mcp>=1.9.0'`). `NixError` na subida vai para stderr e encerra com código 1, sem vazar traceback no stdout.
 
-Registro no Cursor (`.cursor/mcp.json`). `command` aponta para o wrapper **na pasta da instalação** (`NIX_HOME`), não para `nix` no PATH: a IDE aberta pelo Dock/menu não herda o PATH do shell (`spawn nix ENOENT`). Os wrappers `bin/nix` e `bin/nix.cmd` já chamam o Python do `.venv` com `-P -m nix` (o `-P` impede que a pasta `nix/` do workspace sombreie o pacote).
+Registro no Cursor (`.cursor/mcp.json`). `command` aponta para o binário **na pasta da instalação** (`NIX_HOME`), não para `nix` no PATH: a IDE aberta pelo Dock/menu não herda o PATH do shell (`spawn nix ENOENT`). A linha `comando nix:` do `nix doctor` é esse caminho. No checkout de desenvolvimento, os shims `bin/nix` e `bin/nix.cmd` chamam o Python do `.venv` com `-P -m nix`.
 
 **Windows**
 
@@ -416,13 +425,13 @@ Registro no Cursor (`.cursor/mcp.json`). `command` aponta para o wrapper **na pa
 {
   "mcpServers": {
     "nix": {
-      "command": "${env:NIX_HOME}/bin/nix.cmd"
+      "command": "${env:NIX_HOME}/bin/nix.exe"
     }
   }
 }
 ```
 
-No Windows a variável de usuário `NIX_HOME` está visível na IDE. O caminho absoluto (`C:/Users/voce/nix/bin/nix.cmd`) também vale.
+No Windows a variável de usuário `NIX_HOME` está visível na IDE. O caminho absoluto (`C:/Users/voce/AppData/Local/nix/bin/nix.exe`) também vale.
 
 **macOS / Linux**
 
@@ -430,19 +439,19 @@ No Windows a variável de usuário `NIX_HOME` está visível na IDE. O caminho a
 {
   "mcpServers": {
     "nix": {
-      "command": "/Users/voce/nix/bin/nix"
+      "command": "/Users/voce/Library/Application Support/nix/bin/nix"
     }
   }
 }
 ```
 
-Troque `/Users/voce/nix` por `NIX_HOME` (linha `comando nix:` do `nix doctor`). `"command": "nix"` falha na IDE. `bin/nix.cmd` fecha a conexão com `EACCES`. `${env:NIX_HOME}` em geral não expande: o processo da IDE não lê os rcs do shell.
+Troque pelo caminho da linha `comando nix:` do `nix doctor`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral não expande: o processo da IDE não lê os rcs do shell. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`.
 
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug.
 
 ## 10. Configuração
 
-Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` (se definido, é o único candidato) → `{app_root}/nix.toml` → `nix.toml` no CWD e nos diretórios pais (último recurso). `app_root` é o checkout editável, senão `$NIX_HOME`, senão o CWD. Caminhos relativos resolvem contra o diretório do arquivo, não o CWD. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no mesmo caminho (`config_write_path`). Estado (SQLite, Chroma, backups, logs) fica em `{app_root}/.nix/`.
+Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` (se definido, é o único candidato) → `{app_root}/nix.toml` → `nix.toml` no CWD e nos diretórios pais (último recurso, só no checkout). No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma — o CWD do editor não entra. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos resolvem contra o diretório do arquivo, não o CWD. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no mesmo caminho (`config_write_path`). Estado (SQLite, Chroma, backups, logs) fica em `{app_root}/.nix/`.
 
 Seções fora de `vault` / `index` / `retrieval` / `safety` / `logging` são ignoradas e geram aviso. As chaves legadas `[openai]`, `[agent]`, `[mcp]` e `[limits]` têm mensagem específica; `agent.longterm_folder` é copiado para `vault.longterm_folder` **só nesta sessão** até o TOML ser editado.
 
@@ -517,7 +526,7 @@ Toda a configuração é validada por Pydantic no carregamento: caminho do vault
 | Reindexação write-through de 1 nota | < 100ms | Escopo de um único arquivo |
 | Busca híbrida | < 500ms | HNSW do Chroma + FTS5, ambos locais |
 
-O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.8 não lista (ex.: `BAAI/bge-m3`) são registrados a partir do catálogo em `config/embedding_models.py`. O primeiro uso baixa o ONNX do Hugging Face. `nix status` não carrega o modelo. `prepare_native_imports` roda na subida do `Runtime`, antes do Chroma e do FastEmbed: no Windows 3.14 o Controle de Aplicativo costuma bloquear `mmh3` e `cygrpc`; o Nix desbloqueia o import (o Chroma local usa `RustBindingsAPI` e não precisa de gRPC). A dependência é `chromadb>=1.5,<1.6` porque o stub OTEL cobre o grafo de import da série 1.5.
+O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.8 não lista (ex.: `BAAI/bge-m3`) são registrados a partir do catálogo em `config/embedding_models.py`. O primeiro uso baixa o ONNX do Hugging Face. `nix status` não carrega o modelo. `prepare_native_imports` roda na subida do `Runtime`, antes do Chroma e do FastEmbed: no Windows o Controle de Aplicativo pode bloquear `mmh3` e `cygrpc` (comum no Python 3.14 do checkout; o binário publicado é 3.12 e, se ainda bloquear, o `doctor` aponta o cache `onefile-<versão>`). O Nix desbloqueia o import (o Chroma local usa `RustBindingsAPI` e não precisa de gRPC). A dependência é `chromadb>=1.5,<1.6` porque o stub OTEL cobre o grafo de import da série 1.5.
 
 ## 13. Decisões arquiteturais
 
@@ -532,7 +541,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-07 | Busca híbrida desde a fundação | Somente densa | Notas pessoais são cheias de nomes próprios e siglas que o embedding dilui |
 | AD-08 | Artefatos de índice na pasta do aplicativo (`.nix/`), fora do vault | `.nix/` dentro do vault | Evita poluir a sincronização do Obsidian; o estado acompanha o aplicativo |
 | AD-09 | MCP somente stdio | HTTP loopback | O cliente inicia o processo; não há porta, autenticação nem processo órfão |
-| AD-10 | Instalador e desinstalador em script (`install.*` / `uninstall.*` + `scripts/bootstrap.py` / `scripts/uninstall.py`) | Pacote PyInstaller, Makefile | Não empacota Python; usa o 3.11+ do sistema, funciona em Windows e Unix, e reutiliza `nix init` / o inverso do PATH |
+| AD-10 | Binário único Nuitka (`install.*` baixa o artefato da release; checkout de desenvolvimento segue com `scripts/bootstrap.py`) | PyInstaller onefile, venv com o Python do sistema | Um arquivo por plataforma, sem runtime na máquina do usuário. A partida seguinte reusa o cache `{CACHE_DIR}/nix/onefile-{VERSION}`. O modo arquivo único do PyInstaller descompacta a cada processo e atrasa o stdio do MCP |
 
 ## 14. Evolução prevista
 

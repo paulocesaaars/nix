@@ -15,7 +15,7 @@ uninstall.ps1 text eol=lf
 .vscode/                 export-ignore
 mock/                    export-ignore
 AGENTS.md                export-ignore
-ARCHITECTURE.md          export-ignore
+TDD.md                   export-ignore
 PRD.md                   export-ignore
 README.md                export-ignore
 nix.jpeg                 export-ignore

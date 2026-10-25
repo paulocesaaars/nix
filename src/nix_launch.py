@@ -128,7 +128,7 @@ def main() -> None:
     except ImportError as exc:
         sys.stderr.write(
             f"Não foi possível importar o Nix: {exc}\n"
-            "Se o pacote não estiver instalado, rode install.bat ou ./install.sh "
+            "Se o pacote não estiver instalado, rode `python scripts/bootstrap.py` "
             "na pasta do Nix (cria o .venv e instala o pacote). "
             "No Windows, o Controle de Aplicativo pode bloquear DLLs de "
             "tiktoken/mmh3 (comum no Python 3.14); permita o .pyd em "

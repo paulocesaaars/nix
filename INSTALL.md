@@ -6,42 +6,49 @@ Estas instruções são para **usar** o Nix no seu projeto. Se você vai desenvo
 
 ## Requisitos
 
-- Python 3.11+ no `PATH` (incluindo 3.14)
+- Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon
 - Um vault do Obsidian (notas `.md`)
 - ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
 
+Não é preciso instalar Python.
+
 ## Instalação
 
-O instalador cria `.venv`, instala o pacote e dispara `nix init` (pergunta o caminho do vault, ou aceite `--vault`).
+O instalador baixa o binário da [última release](https://github.com/paulocesaaars/nix/releases/latest), confere o SHA-256 e dispara `nix init` se ainda não houver `nix.toml` (pergunta o caminho do vault, ou aceite `--vault`).
 
-1. Baixe a [última release](https://github.com/paulocesaaars/nix/releases/latest) (`nix-x.y.z.zip`).
-2. Extraia **na raiz do workspace** e renomeie a pasta para `nix` (o zip vem como `nix-1.0.0/`).
-3. Rode o instalador **dentro dessa pasta**:
-
-```bat
-cd nix
-install.bat
-:: ou, se já souber o vault:
-install.bat --vault "C:/Obsidian/MeuVault"
-```
+**Windows (PowerShell):**
 
 ```powershell
-cd nix
-.\install.ps1
-# ou: .\install.ps1 --vault "C:/Obsidian/MeuVault"
+irm https://raw.githubusercontent.com/paulocesaaars/nix/main/install.ps1 | iex
 ```
 
+Com o vault já conhecido, salve o script e rode `.\install.ps1 --vault "C:/Obsidian/MeuVault"`. `install.bat` faz o mesmo.
+
+**Linux e macOS:**
+
 ```bash
-cd nix
-bash install.sh
-# ou: bash install.sh --vault "$HOME/Vault"
+curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/install.sh | sh
 ```
+
+Com o vault já conhecido: `sh install.sh --vault "$HOME/Vault"`.
+
+A pasta da instalação:
+
+| Sistema | `NIX_HOME` |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\nix` (ex.: `C:\Users\voce\AppData\Local\nix`) |
+| macOS | `~/Library/Application Support/nix` |
+| Linux | `~/.local/share/nix` (ou `$XDG_DATA_HOME/nix`) |
+
+Se `NIX_HOME` já existir, o instalador usa essa pasta e só troca o binário em `{NIX_HOME}/bin`. Windows arm64 e macOS Intel não têm binário publicado: o instalador explica e para. `NIX_VERSION=1.2.3` (com ou sem `v`) escolhe a release.
 
 Depois de informar o vault, o instalador confirma que a **configuração foi concluída**. Abra um **novo terminal** e rode `nix doctor` / `nix sync` — o PATH já estará registrado (se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão)).
 
 Quem já usa o gerenciador **Nix** (NixOS/Nixpkgs) vai ver um aviso: o comando `nix` deste projeto entra na frente do PATH. Use o caminho absoluto do outro `nix` se ainda precisar dele.
 
 No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
+
+A primeira execução descompacta o binário num cache (`%LOCALAPPDATA%\nix\onefile-<versão>` no Windows, `~/Library/Caches/nix/onefile-<versão>` no macOS, `~/.cache/nix/onefile-<versão>` no Linux). O instalador já faz essa partida. As seguintes reutilizam o cache.
 
 ## Comandos depois da instalação
 
@@ -57,16 +64,15 @@ nix doctor
 nix sync
 ```
 
-Se `nix` não for encontrado, o terminal ainda está com o PATH antigo: feche-o e abra outro. O `nix doctor` também imprime o comando de ativação manual (`bin/env.sh` / `env.cmd` / `env.ps1`).
+Se `nix` não for encontrado, o terminal ainda está com o PATH antigo: feche-o e abra outro.
 
 ## Desinstalação
 
-O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `.venv` e, por padrão, também `.nix/` (índice, backups, logs) e `nix.toml`. **O vault do Obsidian e o código-fonte desta pasta não são alterados.**
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga o binário e, por padrão, também `.nix/` (índice, backups, logs) e `nix.toml`. **O vault do Obsidian não é alterado.** Não precisa da pasta do repositório.
 
-Rode **dentro da pasta do Nix** e confirme com `s`. Em script, passe `--yes`.
+Confirme com `s`. Em script, passe `--yes`.
 
 ```bat
-cd nix
 uninstall.bat
 :: ou, sem pergunta:
 uninstall.bat --yes
@@ -75,80 +81,88 @@ uninstall.bat --keep-data --yes
 ```
 
 ```powershell
-cd nix
 .\uninstall.ps1
 # ou: .\uninstall.ps1 --yes
 # ou: .\uninstall.ps1 --keep-data --yes
 ```
 
 ```bash
-cd nix
-bash uninstall.sh
-# ou: bash uninstall.sh --yes
-# ou: bash uninstall.sh --keep-data --yes
+sh uninstall.sh
+# ou: sh uninstall.sh --yes
+# ou: sh uninstall.sh --keep-data --yes
+```
+
+Pelo raw, o mesmo script da release:
+
+```powershell
+irm https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.sh | sh
 ```
 
 Abra um **novo terminal** depois: o `nix` deste projeto deixa de valer. Se o registro permanente falhar, veja [Remover NIX_HOME e o PATH à mão](#remover-nix_home-e-o-path-à-mão). Remova também o servidor `nix` do `mcp.json` do editor.
 
-O modelo `BAAI/bge-m3` (~2,3 GB) pode permanecer no cache do Hugging Face; o desinstalador não apaga esse cache (pode ser compartilhado com outros programas).
+O modelo `BAAI/bge-m3` (~2,3 GB) pode permanecer no cache do Hugging Face; o desinstalador não apaga esse cache (pode ser compartilhado com outros programas). O cache de extração do binário (`onefile-<versão>`) também fica; apague essa pasta se quiser o espaço de volta.
 
 ## Registrar NIX_HOME e o PATH à mão
 
 O instalador tenta gravar `NIX_HOME` (pasta do Nix) e `{NIX_HOME}/bin` no PATH do usuário. Se isso falhar (permissão, política, registro bloqueado), a configuração do vault **continua**; registre as variáveis você mesmo e **abra um terminal novo**.
 
-Use a pasta real da instalação no lugar de `C:\Git\nix` / `/c/Git/nix`.
+Use a pasta real da instalação no lugar dos exemplos.
 
 ### Windows (interface)
 
 1. `Win+R`, rode `sysdm.cpl` → **Avançado** → **Variáveis de Ambiente**.
 2. Em **Variáveis do usuário**, **Novo**:
    - Nome: `NIX_HOME`
-   - Valor: pasta do Nix, por exemplo `C:\Git\nix`
+   - Valor: pasta do Nix, por exemplo `C:\Users\voce\AppData\Local\nix`
 3. Selecione **Path** (usuário) → **Editar** → **Novo** → `%NIX_HOME%\bin`
 4. Confirme com **OK** em todas as janelas.
 
 ### Windows (PowerShell, permanente)
 
 ```powershell
-$nixHome = "C:\Git\nix"   # pasta do Nix
+$nixHome = "$env:LOCALAPPDATA\nix"
 [Environment]::SetEnvironmentVariable("NIX_HOME", $nixHome, "User")
-$bin = Join-Path $nixHome "bin"
+$expand = "%NIX_HOME%\bin"
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($p -notlike "*$bin*") {
-  [Environment]::SetEnvironmentVariable("Path", "$p;$bin", "User")
+if ($p -notlike "*$expand*") {
+  [Environment]::SetEnvironmentVariable("Path", "$p;$expand", "User")
 }
 ```
 
 ### Linux, macOS e Git Bash
 
-Acrescente ao `~/.bashrc` (e ao `~/.profile` se o terminal for de login):
+Acrescente ao `~/.bashrc` (e ao `~/.profile` se o terminal for de login). No macOS o caminho é `$HOME/Library/Application Support/nix`; no Linux, `$HOME/.local/share/nix`.
 
 ```bash
-export NIX_HOME="/c/Git/nix"   # Linux/macOS: $HOME/nix ou o caminho da extração
-export PATH="$NIX_HOME/bin:$PATH"
+# >>> nix >>>
+export NIX_HOME="$HOME/.local/share/nix"
+case ":$PATH:" in *":$NIX_HOME/bin:"*) ;; *) export PATH="$NIX_HOME/bin:$PATH" ;; esac
+# <<< nix <<<
 ```
 
 Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 ### Só nesta sessão (não grava)
 
-```bat
-call C:\Git\nix\bin\env.cmd
+```powershell
+$env:NIX_HOME = "$env:LOCALAPPDATA\nix"
+$env:Path = "$env:NIX_HOME\bin;$env:Path"
 ```
 
 ```bash
-source /c/Git/nix/bin/env.sh
-```
-
-```powershell
-. C:\Git\nix\bin\env.ps1
+export NIX_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/nix"
+export PATH="$NIX_HOME/bin:$PATH"
 ```
 
 ## Remover NIX_HOME e o PATH à mão
 
 Se o desinstalador não desfizer as variáveis, apague o que o instalador gravou e **abra um terminal novo**. O vault continua intacto.
 
-Use a pasta real da instalação no lugar de `C:\Git\nix` / `/c/Git/nix`.
+Use a pasta real da instalação no lugar de `%LOCALAPPDATA%\nix`.
 
 ### Windows (interface)
 
@@ -160,7 +174,7 @@ Use a pasta real da instalação no lugar de `C:\Git\nix` / `/c/Git/nix`.
 ### Windows (PowerShell, permanente)
 
 ```powershell
-$nixHome = "C:\Git\nix"   # pasta do Nix
+$nixHome = "$env:LOCALAPPDATA\nix"
 $stored = [Environment]::GetEnvironmentVariable("NIX_HOME", "User")
 if ($stored -and ($stored -ieq $nixHome)) {
   [Environment]::SetEnvironmentVariable("NIX_HOME", $null, "User")
@@ -186,7 +200,7 @@ Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 
-`command` deve apontar para o wrapper **dentro da pasta da instalação** (`NIX_HOME`), não para o nome `nix` no PATH. O editor aberto pelo Dock ou pelo menu **não** herda o PATH do terminal (`spawn nix ENOENT`). O caminho aparece em `nix doctor`, na linha `comando nix:`.
+`command` deve apontar para o binário **dentro da pasta da instalação** (`NIX_HOME`), não para o nome `nix` no PATH. O editor aberto pelo Dock ou pelo menu **não** herda o PATH do terminal (`spawn nix ENOENT`). O caminho aparece em `nix doctor`, na linha `comando nix:`.
 
 **Cursor** — `.cursor/mcp.json` no workspace:
 
@@ -196,13 +210,13 @@ O cliente inicia o processo. Recarregue os servidores MCP depois de salvar.
 {
   "mcpServers": {
     "nix": {
-      "command": "${env:NIX_HOME}/bin/nix.cmd"
+      "command": "${env:NIX_HOME}/bin/nix.exe"
     }
   }
 }
 ```
 
-No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho absoluto, por exemplo `C:/Users/voce/nix/bin/nix.cmd`.
+No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho absoluto, por exemplo `C:/Users/voce/AppData/Local/nix/bin/nix.exe`.
 
 **macOS / Linux**
 
@@ -210,13 +224,13 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 {
   "mcpServers": {
     "nix": {
-      "command": "/Users/voce/nix/bin/nix"
+      "command": "/Users/voce/Library/Application Support/nix/bin/nix"
     }
   }
 }
 ```
 
-Troque `/Users/voce/nix` pela pasta da instalação. `"command": "nix"` falha na IDE. `bin/nix.cmd` fecha a conexão com `EACCES`. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
+Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
 O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
@@ -267,7 +281,7 @@ Doze ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
 
 ## Configuração
 
-Arquivo (primeiro encontrado): `$NIX_CONFIG` (se definido, só ele) → `nix.toml` na pasta do Nix (`$NIX_HOME` ou o checkout) → `nix.toml` no diretório atual e nos pais (último recurso). Caminhos relativos resolvem contra o diretório do TOML. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`). `nix init` grava nesse mesmo caminho.
+Arquivo (primeiro encontrado): `$NIX_CONFIG` (se definido, só ele) → `nix.toml` em `NIX_HOME`. No binário, se a variável não existir, a pasta é a de dados da plataforma (`%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `~/.local/share/nix`). No checkout de desenvolvimento, o `nix.toml` do repositório vem antes. Caminhos relativos resolvem contra o diretório do TOML. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`). `nix init` grava nesse mesmo caminho.
 
 Pontos úteis do TOML gerado pelo `init`:
 

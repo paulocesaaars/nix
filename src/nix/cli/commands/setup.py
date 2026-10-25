@@ -20,7 +20,7 @@ from nix.cli.render import (
 )
 from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
 from nix.config.loader import config_write_path, load_config, public_dict, resolve_config_path
-from nix.config.paths import app_root, env_home
+from nix.config.paths import app_root, env_home, is_packaged
 from nix.core.errors import ConfigError
 
 _PATH_LINE = re.compile(r"(?m)^path\s*=\s*.*$")
@@ -101,22 +101,27 @@ def _ask_vault() -> Path:
 
 
 def _import_fix_hint(mod: str, exc: BaseException) -> str:
+    from nix.core.index.native_compat import native_extension_remedy
+
     text = str(exc)
     blocked = "DLL" in text or "Controle de Aplicativo" in text or "Application Control" in text
     if blocked:
-        extra = (
-            "O Windows bloqueou a extensão nativa. Em Segurança do Windows, "
-            "permita o arquivo .pyd da pasta .venv ou recrie o ambiente."
-        )
+        extra = f"O Windows bloqueou a extensão nativa. {native_extension_remedy()}"
         if mod == "tiktoken":
             extra += " O chunking segue com contagem aproximada."
         if mod == "chromadb":
             extra += (
                 " O Chroma 1.x puxa cygrpc só por causa do OpenTelemetry; "
-                "o Nix tenta contornar isso no load. Se o doctor ainda falhar, "
-                "recree o ambiente com Python 3.12."
+                "o Nix tenta contornar isso no load."
             )
+            if not is_packaged():
+                extra += " Se o doctor ainda falhar, recrie o ambiente com Python 3.12."
         return extra
+    if is_packaged():
+        return (
+            "O binário não carregou o módulo. Rode install.ps1 ou install.sh de novo "
+            "para substituir o executável."
+        )
     return "Rode `pip install -r requirements.txt`."
 
 
@@ -220,20 +225,23 @@ def cmd_doctor(
     console.print(f"Nix {__version__} · Python {sys.version.split()[0]}")
     home_path = env_home()
     home = str(home_path) if home_path is not None else ""
-    nix_cmd = shutil.which("nix") or shutil.which("nix.cmd")
     if home:
         console.print(f"NIX_HOME: {home}")
-    if nix_cmd:
-        console.print(f"comando nix: {nix_cmd}")
-    elif not home:
-        console.print(
-            f"[yellow]NIX_HOME ausente e `nix` não está no PATH desta sessão. "
-            f"Rode `{_session_activate_hint()}`.[/yellow]"
-        )
+    if is_packaged():
+        console.print(f"comando nix: {Path(sys.argv[0]).resolve()}")
     else:
-        console.print(
-            f"[yellow]comando `nix` não está no PATH desta sessão. Rode `{_session_activate_hint()}`.[/yellow]"
-        )
+        nix_cmd = shutil.which("nix") or shutil.which("nix.cmd")
+        if nix_cmd:
+            console.print(f"comando nix: {nix_cmd}")
+        elif not home:
+            console.print(
+                f"[yellow]NIX_HOME ausente e `nix` não está no PATH desta sessão. "
+                f"Rode `{_session_activate_hint()}`.[/yellow]"
+            )
+        else:
+            console.print(
+                f"[yellow]comando `nix` não está no PATH desta sessão. Rode `{_session_activate_hint()}`.[/yellow]"
+            )
     path = resolve_config_path()
     if path:
         console.print(f"Config: {path}")
@@ -261,19 +269,14 @@ def cmd_doctor(
         console.print(f"Vault: {root} ok")
     except ConfigError as exc:
         console.print(f"[yellow]Vault: {exc.message}[/yellow]")
-    from nix.core.index.native_compat import mmh3_is_stub, otel_grpc_is_stub, prepare_native_imports
+    from nix.core.index.native_compat import mmh3_is_stub, native_extension_remedy, prepare_native_imports
     from nix.core.index.tokenize import TokenCounter
 
     prepare_native_imports()
     if mmh3_is_stub():
         console.print(
             "[yellow]mmh3: stub (só para o FastEmbed importar). "
-            "Se o ChromaDB precisar do hash nativo, permita o .pyd em "
-            ".venv/Lib/site-packages ou recrie o ambiente.[/yellow]"
-        )
-    if otel_grpc_is_stub():
-        console.print(
-            "[yellow]cygrpc: stub (o Chroma importa OpenTelemetry/gRPC no load; o índice local não usa gRPC).[/yellow]"
+            f"Se o ChromaDB precisar do hash nativo: {native_extension_remedy()}[/yellow]"
         )
     imports: tuple[tuple[str, str], ...] = (
         ("chromadb", "chromadb"),

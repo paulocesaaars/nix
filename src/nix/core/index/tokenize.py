@@ -15,13 +15,16 @@ logger = get_logger("nix.index.tokenize")
 
 _CHARS_PER_TOKEN = 4
 
-APPROXIMATE_TOKENIZER_HINT = (
-    "Contagem de tokens aproximada (~4 caracteres por token): o tiktoken não "
-    "carregou. No Windows, o Controle de Aplicativo pode bloquear o .pyd no "
-    "Python 3.14 — permita o arquivo em .venv/Lib/site-packages na Segurança "
-    "do Windows ou recrie o ambiente. O tamanho dos chunks pode divergir de "
-    "uma máquina com tiktoken."
-)
+def approximate_tokenizer_hint() -> str:
+    """Aviso quando o tiktoken não carrega e a contagem vira aproximação."""
+    from nix.core.index.native_compat import native_extension_remedy
+
+    return (
+        "Contagem de tokens aproximada (~4 caracteres por token): o tiktoken não "
+        "carregou. No Windows, o Controle de Aplicativo pode bloquear a extensão nativa. "
+        f"{native_extension_remedy()} O tamanho dos chunks pode divergir de "
+        "uma máquina com tiktoken."
+    )
 
 
 class TokenCounter:
@@ -34,7 +37,7 @@ class TokenCounter:
 
             self._encoding = tiktoken.get_encoding("cl100k_base")
         except ImportError as exc:
-            logger.warning("%s (%s)", APPROXIMATE_TOKENIZER_HINT, exc)
+            logger.warning("%s (%s)", approximate_tokenizer_hint(), exc)
 
     @property
     def approximate(self) -> bool:

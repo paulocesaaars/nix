@@ -9,7 +9,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeEl
 from rich.table import Table
 
 from nix.config.embedding_models import spec_for
-from nix.core.index.tokenize import APPROXIMATE_TOKENIZER_HINT
+from nix.core.index.tokenize import approximate_tokenizer_hint
 from nix.core.models import IndexStatus, SyncProgress
 
 console = Console()
@@ -83,7 +83,7 @@ def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
 
 def print_tokenizer_warning(*, approximate: bool) -> None:
     if approximate:
-        console.print(f"[yellow]{APPROXIMATE_TOKENIZER_HINT}[/yellow]")
+        console.print(f"[yellow]{approximate_tokenizer_hint()}[/yellow]")
 
 
 def print_embedding_choice_table() -> None:
