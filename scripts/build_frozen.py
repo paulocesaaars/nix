@@ -5,7 +5,7 @@ para o metadata de versão entrar no executável. O Nuitka não cruza sistema
 operacional: cada release compila no runner da própria plataforma.
 
 Uso:
-  pip install "nuitka>=4.3.2,<5"
+  pip install "nuitka>=4.3.1,<5"
   python scripts/build_frozen.py
 """
 
@@ -36,8 +36,8 @@ _PACKAGES = (
     "grpc",
 )
 # 4.3 inclui as tabelas unicode do Rich e o tratamento da dylib do onnxruntime no macOS.
-_NUITKA_REQUIREMENT = "nuitka>=4.3.2,<5"
-_NUITKA_MIN = (4, 3, 2)
+_NUITKA_REQUIREMENT = "nuitka>=4.3.1,<5"
+_NUITKA_MIN = (4, 3, 1)
 
 _METADATA = (
     "nix",
