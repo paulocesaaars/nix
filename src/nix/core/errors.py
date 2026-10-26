@@ -37,5 +37,9 @@ class IndexCorruptError(NixError):
     """Índice inconsistente ou schema desatualizado."""
 
 
+class IndexBusyError(NixError):
+    """Outro processo segura a sincronização do índice."""
+
+
 class AttachmentError(NixError):
     """Falha ao extrair texto de um anexo."""

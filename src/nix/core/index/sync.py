@@ -14,6 +14,7 @@ from nix.core.errors import ConfigError, IndexIncompatibleError, PathEscapeError
 from nix.core.index.attachments import is_pdf_path, parse_pdf, referenced_pdfs
 from nix.core.index.chunker import Chunker
 from nix.core.index.embedder import Embedder
+from nix.core.index.lock import index_lock
 from nix.core.index.store import IndexStore
 from nix.core.index.tokenize import approximate_tokenizer_hint
 from nix.core.index.vectorstore import VectorStore
@@ -74,6 +75,22 @@ class Indexer:
             )
 
     def sync(
+        self,
+        *,
+        full: bool = False,
+        dry_run: bool = False,
+        progress: ProgressCb | None = None,
+        trigger: str = "manual",
+    ) -> SyncReport:
+        with index_lock():
+            return self._sync(
+                full=full,
+                dry_run=dry_run,
+                progress=progress,
+                trigger=trigger,
+            )
+
+    def _sync(
         self,
         *,
         full: bool = False,
