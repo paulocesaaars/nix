@@ -169,11 +169,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.check.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" artifacts/* --clobber
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --repo "$REPO" --clobber
           else
-            gh release create "$TAG" artifacts/* \
+            gh release create "$TAG" artifacts/* --repo "$REPO" \
               --title "Nix $TAG" \
               --generate-notes
           fi
