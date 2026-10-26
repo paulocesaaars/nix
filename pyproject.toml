@@ -22,7 +22,7 @@ py-modules = ["nix_launch"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-nix = ["py.typed", "config/template.toml", "cli/ascii-art.txt"]
+nix = ["py.typed", "cli/ascii-art.txt", "web/templates/*.html", "web/static/*"]
 
 [tool.ruff]
 line-length = 120
@@ -60,6 +60,8 @@ module = [
     "fastembed",
     "fastembed.*",
     "frontmatter",
+    "yaml",
+    "yaml.*",
     "mcp",
     "mcp.*",
     "pypdf",

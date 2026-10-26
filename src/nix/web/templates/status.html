@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Status</h1>
+{% if notice %}
+<p><strong>Aviso:</strong> {{ notice }}</p>
+{% endif %}
+{% if status %}
+<dl>
+  <dt>Notas</dt>
+  <dd>{{ status.files }}</dd>
+  <dt>Trechos</dt>
+  <dd>{{ status.chunks }}</dd>
+  <dt>Erros</dt>
+  <dd>{{ status.errors }}</dd>
+  <dt>Última sincronização</dt>
+  <dd>{{ status.last_sync_at or "—" }}</dd>
+  <dt>Modelo de embedding</dt>
+  <dd>{{ status.embedding_model or "—" }}</dd>
+  <dt>Vault</dt>
+  <dd>{{ status.vault_path or "—" }}</dd>
+  <dt>Desatualizado</dt>
+  <dd>{{ "sim" if status.stale else "não" }}</dd>
+  {% if status.stale_reason %}
+  <dt>Motivo</dt>
+  <dd>{{ status.stale_reason }}</dd>
+  {% endif %}
+  <dt>Pasta de dados</dt>
+  <dd>{{ status.data_dir or "—" }}</dd>
+</dl>
+{% endif %}
+<p>Configuração: {{ settings_path }}</p>
+{% endblock %}

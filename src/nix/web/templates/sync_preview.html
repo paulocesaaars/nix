@@ -1,0 +1,31 @@
+{% if notice %}
+<p><strong>Aviso:</strong> {{ notice }}</p>
+{% endif %}
+{% if error %}
+<p>{{ error }}</p>
+{% else %}
+<p>{{ summary }}</p>
+{% if tokenizer %}
+<p>{{ tokenizer }}</p>
+{% endif %}
+{% if errors %}
+<ul>
+  {% for item in errors %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+<form method="post" action="/sync/start" hx-post="/sync/start" hx-target="#job" hx-swap="innerHTML"
+      hx-on::before-swap="if (event.detail.xhr.status === 409) { event.detail.shouldSwap = true; event.detail.isError = false; }">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>
+    <input type="checkbox" name="full" value="on">
+    Reindexação completa (nix sync --full)
+  </label>
+  <label>
+    <input type="checkbox" name="confirm_full" value="on">
+    Confirmo a reindexação completa
+  </label>
+  <button type="submit">Sincronizar</button>
+</form>
+{% endif %}

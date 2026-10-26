@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Diagnóstico</h1>
+<dl>
+  <dt>Versão</dt>
+  <dd>{{ report.version }}</dd>
+  <dt>Python</dt>
+  <dd>{{ report.python }}</dd>
+  <dt>NIX_HOME</dt>
+  <dd>{{ report.nix_home or "—" }}</dd>
+  <dt>Comando</dt>
+  <dd>
+    {{ report.command or "—" }}
+    {% if report.command_problem %}
+    <br>{{ report.command_problem }}
+    {% endif %}
+  </dd>
+  <dt>Configuração</dt>
+  <dd>{{ report.settings_path }}</dd>
+  <dt>Inicializado</dt>
+  <dd>{{ "sim" if report.initialized else "não" }}</dd>
+</dl>
+<table>
+  <thead>
+    <tr>
+      <th>Verificação</th>
+      <th>Nível</th>
+      <th>Mensagem</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for check in report.checks %}
+    <tr>
+      <td>{{ check.label }}</td>
+      <td>{{ check.level }}</td>
+      <td>{{ check.message }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

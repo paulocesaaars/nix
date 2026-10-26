@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="csrf" content="{{ csrf_token }}">
+  <title>{{ title }} — Nix</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>Nix</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/" {% if active == "status" %}aria-current="page"{% endif %}>Status</a></li>
+        <li><a href="/sync" {% if active == "sync" %}aria-current="page"{% endif %}>Sincronizar</a></li>
+        <li><a href="/doctor" {% if active == "doctor" %}aria-current="page"{% endif %}>Diagnóstico</a></li>
+        <li><a href="/settings" {% if active == "settings" %}aria-current="page"{% endif %}>Configuração</a></li>
+        <li><a href="/history" {% if active == "history" %}aria-current="page"{% endif %}>Histórico</a></li>
+        <li>
+          <form method="post" action="/shutdown">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button type="submit">Encerrar</button>
+          </form>
+        </li>
+      </ul>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/sse.js"></script>
+</body>
+</html>

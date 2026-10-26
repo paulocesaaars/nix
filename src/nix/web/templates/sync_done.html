@@ -1,0 +1,15 @@
+{% if error %}
+<p><strong>Erro:</strong> {{ error }}</p>
+{% else %}
+<p>{{ summary }}</p>
+{% endif %}
+{% if tokenizer %}
+<p>{{ tokenizer }}</p>
+{% endif %}
+{% if errors %}
+<ul>
+  {% for item in errors %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}

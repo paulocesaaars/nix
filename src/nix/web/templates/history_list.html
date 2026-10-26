@@ -1,0 +1,42 @@
+<div id="history">
+  {% if warning %}
+  <p><strong>Aviso:</strong> {{ warning }}</p>
+  {% endif %}
+  {% if not rows %}
+  <p>Nenhuma alteração registrada.</p>
+  {% else %}
+  <div style="overflow-x: auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Quando</th>
+          <th>Origem</th>
+          <th>Campo</th>
+          <th>Anterior</th>
+          <th>Novo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.id }}</td>
+          <td>{{ row.changed_at }}</td>
+          <td>{{ row.source }}</td>
+          <td>{{ row.dotted }}</td>
+          <td>{{ row.old_value }}</td>
+          <td>{{ row.new_value }}</td>
+          <td>
+            <form method="post" action="/history/{{ row.id }}/undo" hx-post="/history/{{ row.id }}/undo" hx-target="#history" hx-swap="outerHTML">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}">
+              <button type="submit">Desfazer</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
