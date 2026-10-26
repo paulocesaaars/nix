@@ -80,7 +80,12 @@ class VaultReader:
             apply_include=apply_include,
         )
 
-    def read_text(self, rel_path: str) -> str:
+    def read_text(self, rel_path: str, *, keep_newlines: bool = False) -> str:
+        """Lê a nota em UTF-8.
+
+        Com `keep_newlines`, `\\r\\n` e `\\n` do arquivo voltam iguais, para a
+        regravação não trocar a quebra. Sem isso, a leitura normaliza para `\\n`.
+        """
         self._assert_accessible(rel_path)
         path = self.resolve(rel_path)
         if not path.is_file():
@@ -89,7 +94,7 @@ class VaultReader:
                 "Confira o caminho com as ferramentas MCP `search_notes` ou `read_note`."
             )
         try:
-            return path.read_text(encoding="utf-8")
+            return path.read_text(encoding="utf-8", newline="" if keep_newlines else None)
         except UnicodeDecodeError as exc:
             raise VaultError(
                 f"Encoding inválido em {rel_path}: {exc}. "

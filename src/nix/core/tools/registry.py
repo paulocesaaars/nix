@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from nix.core.runtime import Runtime
+from nix.core.runtime import Runtime, RuntimeHost
 from nix.core.tools import maintenance, notes, search
 
 
@@ -37,9 +37,36 @@ SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="read_note",
-        description="Lê o conteúdo completo de uma nota pelo caminho relativo no vault.",
+        description=(
+            "Lê o conteúdo completo de uma nota pelo caminho relativo no vault. "
+            "Em notas longas, prefira get_note_outline e read_note_lines."
+        ),
         args_model=search.ReadNoteArgs,
         handler=search.read_note,
+        read_only=True,
+    ),
+    ToolSpec(
+        name="get_note_outline",
+        description=(
+            "Devolve título, chaves do frontmatter, total de linhas e headings "
+            "(level, title, path, start_line, end_line no arquivo, começando em 1). "
+            "Use antes de read_note_lines. Prefira este par a read_note em notas longas."
+        ),
+        args_model=search.GetNoteOutlineArgs,
+        handler=search.get_note_outline,
+        read_only=True,
+    ),
+    ToolSpec(
+        name="read_note_lines",
+        description=(
+            "Lê um intervalo de linhas do arquivo (1 = primeira linha, frontmatter incluído) "
+            'ou um heading ("Seção" ou "Pai > Filho"). Limite de 400 linhas; '
+            "a resposta traz truncated e next_start_line. "
+            "start_line de search_notes e de get_note_outline servem direto aqui. "
+            "Prefira get_note_outline + read_note_lines a read_note em notas longas."
+        ),
+        args_model=search.ReadNoteLinesArgs,
+        handler=search.read_note_lines,
         read_only=True,
     ),
     ToolSpec(
@@ -47,6 +74,16 @@ SPECS: tuple[ToolSpec, ...] = (
         description="Lista notas indexadas, com filtro opcional por pasta ou tag.",
         args_model=search.ListNotesArgs,
         handler=search.list_notes,
+        read_only=True,
+    ),
+    ToolSpec(
+        name="list_all_tags",
+        description=(
+            "Lista as tags indexadas com a contagem de notas, da mais frequente para a menos frequente. "
+            "A saída alimenta o filtro tag de search_notes e list_notes."
+        ),
+        args_model=search.ListAllTagsArgs,
+        handler=search.list_all_tags,
         read_only=True,
     ),
     ToolSpec(
@@ -76,12 +113,65 @@ SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="update_note",
         description=(
-            "Atualiza uma nota. mode=replace é destrutivo e exige confirm=true "
-            "depois que o usuário aprovar. mode=patch anexa conteúdo."
+            "Atualiza uma nota e reindexa. mode=replace substitui o arquivo inteiro, "
+            "é destrutivo e exige confirm=true. mode=patch anexa conteúdo. "
+            "mode=prepend insere o texto depois do frontmatter (o YAML original fica intacto) "
+            "e antes do corpo, sem confirm."
         ),
         args_model=notes.UpdateNoteArgs,
         handler=notes.update_note,
         destructive=True,
+        read_only=False,
+    ),
+    ToolSpec(
+        name="update_frontmatter",
+        description=(
+            "Altera chaves de topo do frontmatter YAML sem reformatar o resto do bloco "
+            "(comentários, ordem e aspas das outras chaves permanecem). "
+            "set grava valores; remove apaga chaves. Se a chave estiver nos dois, set prevalece. "
+            "Reindexa a nota (write-through)."
+        ),
+        args_model=notes.UpdateFrontmatterArgs,
+        handler=notes.update_frontmatter,
+        read_only=False,
+    ),
+    ToolSpec(
+        name="manage_tags",
+        description=(
+            "Adiciona ou remove tags do frontmatter. Aceita lista ou string, ignora #, "
+            "remove duplicatas e preserva a ordem. Não altera tags inline do corpo; "
+            "a resposta lista as que ficaram. Reindexa a nota (write-through)."
+        ),
+        args_model=notes.ManageTagsArgs,
+        handler=notes.manage_tags,
+        read_only=False,
+    ),
+    ToolSpec(
+        name="move_note",
+        description=(
+            "Move ou renomeia uma nota .md dentro do vault. Por padrão (update_links=true) "
+            "reescreve [[alvo]], [[alvo|alias]], [[alvo#heading]], ![[alvo]] e links Markdown "
+            "relativos nas notas que apontam para ela. Cada nota alterada ganha backup. "
+            "Links pelo título do frontmatter não mudam se o título não mudou. "
+            "Notas fora de include/exclude ficam em links_pending e não são alteradas. "
+            "Destino existente exige overwrite=true e confirm=true. Para anexos, use move_file."
+        ),
+        args_model=notes.MoveNoteArgs,
+        handler=notes.move_note,
+        destructive=False,
+        read_only=False,
+    ),
+    ToolSpec(
+        name="move_file",
+        description=(
+            "Move um anexo ou outro arquivo que não é nota (PDF, imagem etc.). "
+            "Recusa .md: use move_note. Atualiza ![[alvo]], [[alvo]] e links Markdown relativos "
+            "pelo caminho ou nome do arquivo. Destino existente exige overwrite=true e confirm=true. "
+            "O anexo só volta ao índice se index.index_attachments estiver ativo (vale para PDF)."
+        ),
+        args_model=notes.MoveFileArgs,
+        handler=notes.move_file,
+        destructive=False,
         read_only=False,
     ),
     ToolSpec(
@@ -147,10 +237,20 @@ def call_tool(runtime: Runtime, name: str, payload: dict[str, Any]) -> Any:
     )
 
 
-def _callable_from_spec(runtime: Runtime, spec: ToolSpec) -> Callable[..., str]:
+def _attach_warning(payload: Any, warning: str) -> Any:
+    if isinstance(payload, dict):
+        return {**payload, "config_warning": warning}
+    return {"result": payload, "config_warning": warning}
+
+
+def _callable_from_spec(host: RuntimeHost, spec: ToolSpec) -> Callable[..., str]:
     def wrapper(**kwargs: Any) -> str:
+        warning = host.before_call()
         args = spec.args_model.model_validate(kwargs)
-        return _json(spec.handler(runtime, args))
+        payload = spec.handler(host.runtime, args)
+        if warning:
+            payload = _attach_warning(payload, warning)
+        return _json(payload)
 
     params: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {"return": str}
@@ -175,7 +275,7 @@ def _callable_from_spec(runtime: Runtime, spec: ToolSpec) -> Callable[..., str]:
     return wrapper
 
 
-def register_tools(server: Any, runtime: Runtime) -> None:
+def register_tools(server: Any, host: RuntimeHost) -> None:
     annotations = None
     try:
         from mcp.types import ToolAnnotations as _ToolAnn
@@ -184,7 +284,7 @@ def register_tools(server: Any, runtime: Runtime) -> None:
     except ImportError:
         annotations = None
     for spec in SPECS:
-        fn = _callable_from_spec(runtime, spec)
+        fn = _callable_from_spec(host, spec)
         kwargs: dict[str, Any] = {"name": spec.name, "description": spec.description}
         if annotations is not None:
             kwargs["annotations"] = annotations(

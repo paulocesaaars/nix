@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -334,6 +334,47 @@ class IndexStore:
                 (query, limit),
             )
         )
+
+    def list_tags(
+        self,
+        *,
+        folder: str | None = None,
+        limit: int = 200,
+        path_ok: Callable[[str], bool] | None = None,
+    ) -> list[tuple[str, int]]:
+        """Tags indexadas com contagem, da mais frequente para a menos frequente.
+
+        `path_ok` descarta caminhos que o include/exclude atual rejeita (o mesmo
+        critério de `list_notes`). O filtro `folder` continua valendo antes disso.
+        """
+        sql = """
+            SELECT rel_path, tags
+            FROM files
+            WHERE status = 'indexed'
+              AND json_valid(tags)
+              AND json_type(tags) = 'array'
+        """
+        params: list[Any] = []
+        if folder and folder.strip():
+            folder_n = folder.strip("/").replace("\\", "/")
+            sql += " AND (rel_path LIKE ? OR rel_path LIKE ?)"
+            params.extend([f"{folder_n}/%", folder_n])
+        counts: dict[str, int] = {}
+        for row in self._conn.execute(sql, params):
+            rel = str(row["rel_path"])
+            if path_ok is not None and not path_ok(rel):
+                continue
+            try:
+                tags = json.loads(row["tags"] or "[]")
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(tags, list):
+                continue
+            for tag in tags:
+                key = str(tag)
+                counts[key] = counts.get(key, 0) + 1
+        ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
+        return ordered[:limit]
 
     def list_notes(
         self,

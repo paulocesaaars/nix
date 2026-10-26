@@ -3,9 +3,41 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
+from typing import TypeVar
 
 from nix.core.index.store import IndexStore
 from nix.core.models import LinkDirection, NoteRef
+from nix.core.vault.paths import to_posix
+
+T = TypeVar("T")
+
+
+def note_stem(rel_path: str) -> str:
+    """Stem do arquivo, sem a extensão `.md`."""
+    name = to_posix(rel_path).rsplit("/", 1)[-1]
+    if name.lower().endswith(".md"):
+        return name[:-3]
+    return name
+
+
+def register_note_alias(aliases: dict[str, T], rel_path: str, title: str, value: T) -> None:
+    """Registra título e stem. A última gravação da chave fica dona.
+
+    A ordem é a do grafo: primeiro o título, depois o stem do arquivo.
+    Entre notas com o mesmo stem, vence a última da iteração.
+    """
+    aliases[title.lower()] = value
+    aliases[note_stem(rel_path).lower()] = value
+
+
+def stem_owner(rows: Iterable[tuple[str, str]], rel_path: str) -> str | None:
+    """Caminho da nota dona do stem de `rel_path`. None se ninguém indexou essa chave."""
+    aliases: dict[str, str] = {}
+    for rel, title in rows:
+        posix = to_posix(rel)
+        register_note_alias(aliases, posix, title, posix)
+    return aliases.get(note_stem(rel_path).lower())
 
 
 class WikiGraph:
@@ -42,11 +74,7 @@ class WikiGraph:
         for rel, title, links, tags in self._store.all_indexed_links():
             ref = NoteRef(rel_path=rel, title=title, tags=tags)
             by_path[rel] = ref
-            by_title[title.lower()] = ref
-            stem = rel.rsplit("/", 1)[-1]
-            if stem.lower().endswith(".md"):
-                stem = stem[:-3]
-            by_title[stem.lower()] = ref
+            register_note_alias(by_title, rel, title, ref)
             for target in links:
                 outgoing[rel].append(target)
         for rel, targets in outgoing.items():

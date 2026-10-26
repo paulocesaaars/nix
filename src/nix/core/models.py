@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 FileStatus = Literal["indexed", "error", "ignored"]
 SyncTrigger = Literal["manual", "writeback"]
-WriteMode = Literal["replace", "patch"]
+WriteMode = Literal["replace", "patch", "prepend"]
 LinkDirection = Literal["outgoing", "incoming", "both"]
 
 
@@ -100,11 +100,16 @@ class RetrievedChunk:
 @dataclass(frozen=True)
 class WriteResult:
     rel_path: str
-    action: Literal["created", "updated", "appended", "deleted"]
+    action: Literal["created", "updated", "appended", "deleted", "moved"]
     chunks_indexed: int
     indexed: bool
     backup_path: str | None = None
     message: str = ""
+    moved_from: str | None = None
+    links_updated: list[str] = field(default_factory=list)
+    links_pending: list[str] = field(default_factory=list)
+    # False quando o arquivo não mudou: o write-through não reindexa.
+    written: bool = True
 
 
 @dataclass
@@ -160,6 +165,31 @@ class NoteContent:
     frontmatter: dict[str, Any]
     tags: list[str]
     links: list[str]
+
+
+@dataclass(frozen=True)
+class NoteLines:
+    """Trecho de uma nota em linhas do arquivo bruto (1 = primeira linha, frontmatter incluído)."""
+
+    rel_path: str
+    start_line: int
+    end_line: int
+    content: str
+    truncated: bool
+    line_count: int
+    next_start_line: int | None = None
+    heading: str | None = None
+
+
+@dataclass(frozen=True)
+class NoteOutline:
+    """Mapa da nota: título, chaves do frontmatter e headings em linhas do arquivo."""
+
+    rel_path: str
+    title: str
+    frontmatter_keys: list[str]
+    line_count: int
+    headings: list[Heading] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -6,18 +6,26 @@ from typing import Any
 from urllib.parse import unquote
 
 from nix.core.errors import PathEscapeError
-from nix.core.runtime import Runtime
+from nix.core.runtime import RuntimeHost
 from nix.core.vault.paths import assert_accessible
 from nix.observability.logging import get_logger
 
 logger = get_logger("nix.mcp.resources")
 
 
-def register_resources(server: Any, runtime: Runtime) -> None:
-    include = runtime.config.vault.include
-    exclude = runtime.config.vault.exclude
+def register_resources(server: Any, host: RuntimeHost) -> None:
+    logged_warning: str | None = None
 
     def _read_note(rel_path: str) -> str:
+        nonlocal logged_warning
+        warning = host.before_call()
+        if warning != logged_warning:
+            logged_warning = warning
+            if warning:
+                logger.warning("%s", warning)
+        runtime = host.runtime
+        include = runtime.config.vault.include
+        exclude = runtime.config.vault.exclude
         posix = unquote(rel_path).replace("|", "/")
         try:
             posix = assert_accessible(posix, include, exclude)

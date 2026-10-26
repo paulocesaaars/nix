@@ -7,9 +7,9 @@ import sys
 from typing import Any
 
 from nix import __version__
-from nix.config.loader import load_config
+from nix.config.loader import load_config, require_initialized
 from nix.core.errors import ConfigError, NixError
-from nix.core.runtime import Runtime
+from nix.core.runtime import Runtime, RuntimeHost
 from nix.core.tools.registry import register_tools
 from nix.mcp.resources import register_resources
 from nix.mcp.traffic import install_traffic_logging
@@ -65,8 +65,9 @@ def run_server() -> None:
 
 
 def _serve() -> None:
+    require_initialized()
     config = load_config()
-    runtime = Runtime.from_config(config)
+    host = RuntimeHost(Runtime.from_config(config))
     log = get_logger("nix.mcp")
     cls = _server_class()
     try:
@@ -79,8 +80,8 @@ def _serve() -> None:
                 "Não foi possível instanciar o servidor MCP. "
                 "Atualize com `pip install 'mcp>=1.9.0'`."
             ) from exc
-    register_tools(server, runtime)
-    register_resources(server, runtime)
+    register_tools(server, host)
+    register_resources(server, host)
     install_traffic_logging(server, log_prompts=config.logging.log_prompts)
     try:
         log.info("Servidor MCP Nix iniciado (stdio)")
@@ -92,5 +93,5 @@ def _serve() -> None:
                 "Atualize com `pip install 'mcp>=1.9.0'`."
             ) from exc
     finally:
-        runtime.close()
+        host.close()
         log.info("Servidor MCP encerrado")
