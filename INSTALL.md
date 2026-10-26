@@ -14,7 +14,7 @@ Não é preciso instalar Python.
 
 ## Instalação
 
-O instalador baixa o binário da [última release](https://github.com/paulocesaaars/nix/releases/latest), confere o SHA-256 e dispara `nix init` se ainda não houver `nix.toml` (pergunta o caminho do vault, ou aceite `--vault`).
+O instalador baixa o binário da [última release](https://github.com/paulocesaaars/nix/releases/latest), confere o SHA-256 e dispara `nix init` se ainda não houver `settings.db` (pergunta o caminho do vault, ou aceite `--vault`).
 
 **Windows (PowerShell):**
 
@@ -46,7 +46,7 @@ Depois de informar o vault, o instalador confirma que a **configuração foi con
 
 Quem já usa o gerenciador **Nix** (NixOS/Nixpkgs) vai ver um aviso: o comando `nix` deste projeto entra na frente do PATH. Use o caminho absoluto do outro `nix` se ainda precisar dele.
 
-No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`). Barra invertida quebra o TOML.
+No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`).
 
 A primeira execução descompacta o binário num cache (`%LOCALAPPDATA%\nix\onefile-<versão>` no Windows, `~/Library/Caches/nix/onefile-<versão>` no macOS, `~/.cache/nix/onefile-<versão>` no Linux). O instalador já faz essa partida. As seguintes reutilizam o cache.
 
@@ -68,7 +68,7 @@ Se `nix` não for encontrado, o terminal ainda está com o PATH antigo: feche-o 
 
 ## Desinstalação
 
-O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga o binário e, por padrão, também `.nix/` (índice, backups, logs) e `nix.toml`. **O vault do Obsidian não é alterado.** Não precisa da pasta do repositório.
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga o binário e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. **O vault do Obsidian não é alterado.** Não precisa da pasta do repositório.
 
 Confirme com `s`. Em script, passe `--yes`.
 
@@ -76,7 +76,7 @@ Confirme com `s`. Em script, passe `--yes`.
 uninstall.bat
 :: ou, sem pergunta:
 uninstall.bat --yes
-:: para manter nix.toml e o índice:
+:: para manter settings.db e o índice:
 uninstall.bat --keep-data --yes
 ```
 
@@ -255,24 +255,33 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | Comando | Função |
 | --- | --- |
 | `nix` | Inicia o servidor MCP stdio |
-| `nix init [--vault PATH] [--embedding-model NOME] [--force]` | Cria a configuração; pergunta vault e modelo de embedding |
+| `nix init [--vault PATH] [--embedding-model NOME] [--force]` | Grava vault e modelo no `settings.db` |
+| `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração |
 | `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
 | `nix status [--json]` | Notas, chunks, último sync e defasagem |
 | `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |
+| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, configuração, histórico) |
 
 ## Ferramentas MCP
 
-Doze ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
+Dezenove ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
 
 | Ferramenta | Uso |
 | --- | --- |
 | `search_notes` | Busca híbrida (semântica + léxica), com filtros de pasta, tags e datas |
-| `read_note` | Lê a nota inteira |
+| `read_note` | Lê a nota inteira. Em notas longas, prefira o outline e a leitura por linhas |
+| `get_note_outline` | Título, chaves do frontmatter, total de linhas e headings |
+| `read_note_lines` | Intervalo de linhas do arquivo ou um heading (até 400 linhas) |
 | `list_notes` | Lista notas indexadas (pasta, tag) |
+| `list_all_tags` | Tags indexadas com contagem; alimenta o filtro `tag` |
 | `get_linked_notes` | Navega wikilinks (`outgoing`, `incoming` ou `both`) |
 | `create_note` | Cria nota e indexa na hora (write-through) |
 | `append_to_note` | Anexa conteúdo e reindexa |
-| `update_note` | `replace` exige `confirm=true`; `patch` anexa |
+| `update_note` | `replace` exige `confirm=true`; `patch` anexa; `prepend` insere após o YAML |
+| `update_frontmatter` | Altera chaves de topo e preserva o restante do YAML |
+| `manage_tags` | Adiciona ou remove tags do frontmatter; não mexe nas tags do corpo |
+| `move_note` | Move uma nota `.md` e reescreve os links que apontam para ela |
+| `move_file` | Move anexo (PDF, imagem etc.); notas `.md` ficam com `move_note` |
 | `delete_note` | Remove nota e índice; exige `confirm=true` |
 | `sync_index` | Sincronização manual (`full`, `dry_run`) |
 | `index_status` | Contagens, último sync e defasagem |
@@ -281,9 +290,7 @@ Doze ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
 
 ## Configuração
 
-Arquivo (primeiro encontrado): `$NIX_CONFIG` (se definido, só ele) → `nix.toml` em `NIX_HOME`. No binário, se a variável não existir, a pasta é a de dados da plataforma (`%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `~/.local/share/nix`). No checkout de desenvolvimento, o `nix.toml` do repositório vem antes. Caminhos relativos resolvem contra o diretório do TOML. Variáveis `NIX_SECAO__CAMPO` sobrescrevem o arquivo (ex.: `NIX_VAULT__PATH`). `nix init` grava nesse mesmo caminho.
-
-Pontos úteis do TOML gerado pelo `init`:
+Fica em `settings.db`, na pasta do Nix. Caminhos relativos resolvem contra essa pasta. Variáveis `NIX_SECAO__CAMPO` ganham do banco (ex.: `NIX_VAULT__PATH`). `nix init` grava o vault e o modelo. O mesmo ajuste pode ser feito com `nix config` ou com `nix ui`.
 
 | Chave | Padrão | Função |
 | --- | --- | --- |
@@ -292,4 +299,4 @@ Pontos úteis do TOML gerado pelo `init`:
 | `vault.default_new_note_folder` | `Inbox` | Destino de notas sem pasta no caminho |
 | `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
 | `index.data_dir` | `.nix/data` | SQLite + Chroma (na pasta do app, fora do vault) |
-| `logging.file` | `.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts = true` |
+| `logging.file` | `.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts` estiver ligado |

@@ -4,10 +4,10 @@
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte); CLI de bootstrap (`init`, `sync`, `status`, `doctor`); instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
-| Status | Implementado — v0.1 |
+| Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
+| Status | Implementado — v2.0.0 |
 | Autor | Paulo |
-| Data | 2026-08-21 |
+| Data | 2026-10-26 |
 
 Especificações técnicas: [TDD.md](./TDD.md).
 
@@ -40,9 +40,9 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 ### Não-objetivos (v1)
 
-- Não é um substituto do Obsidian; não haverá interface gráfica própria.
+- Não é um substituto do Obsidian. A interface local cobre configuração e operação (status, sincronização, diagnóstico e histórico), não a edição das notas.
 - Não haverá LLM, chat, RAG conversacional nem orquestração de agente no Nix.
-- Não haverá servidor HTTP, multiusuário, autenticação ou hospedagem em nuvem.
+- O MCP não tem transporte HTTP. Não haverá servidor multiusuário, autenticação de contas nem hospedagem em nuvem. A interface local escuta só em `127.0.0.1` enquanto `nix ui` está aberto.
 - Não haverá sincronização de vault entre máquinas (isso é responsabilidade do Obsidian Sync/Git/Dropbox).
 - Não haverá edição de anexos binários (PDFs, imagens) na v1 — apenas extração de texto de PDFs referenciados pelas notas, se `index.index_attachments` estiver ativo.
 - Não haverá fine-tuning de modelos.
@@ -63,10 +63,10 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-01 | O sistema deve ler um arquivo de configuração único onde o usuário define o caminho do vault e demais parâmetros | Must |
-| RF-02 | O sistema deve oferecer um comando de inicialização que cria `nix.toml` na pasta do aplicativo, pergunta o caminho do vault (ou recebe `--vault`) e o modelo de embedding (ou recebe `--embedding-model`) e, se o arquivo já existir, só atualiza `vault.path` salvo `--force` ou `--embedding-model` | Must |
-| RF-03 | O sistema deve permitir sobrescrever qualquer configuração por variável de ambiente | Must |
-| RF-04 | O sistema deve validar a configuração e apresentar mensagens de erro acionáveis (vault inexistente, modelo inválido) | Must |
+| RF-01 | O sistema deve guardar a configuração num SQLite na pasta da instalação (`settings.db`), com o caminho do vault e os demais parâmetros | Must |
+| RF-02 | O sistema deve oferecer um comando de inicialização que grava o vault (ou recebe `--vault`) e o modelo de embedding (ou recebe `--embedding-model`) no `settings.db` e, se a configuração já existir, só atualiza `vault.path` salvo `--force` ou `--embedding-model` | Must |
+| RF-03 | O sistema deve permitir sobrescrever qualquer configuração por variável de ambiente, e essa variável deve ganhar do valor gravado | Must |
+| RF-04 | O sistema deve validar a configuração antes de gravar e apresentar mensagens de erro acionáveis (vault inexistente, modelo inválido, campo desconhecido) | Must |
 | RF-05 | O sistema deve permitir configurar padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas) | Should |
 | RF-06 | O sistema deve permitir configurar modelo de embedding, tamanho de chunk e número de resultados recuperados | Should |
 
@@ -116,33 +116,41 @@ Esta é a regra de negócio central do produto:
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-40 | A CLI deve criar o arquivo de configuração comentado (`nix init [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
+| RF-40 | A CLI deve gravar a configuração inicial (`nix init [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
 | RF-41 | A CLI deve oferecer sincronização e status do índice (`nix sync`, `nix status`) | Must |
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
-| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar o binário da plataforma, conferir o SHA-256, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `nix.toml`. Não exige Python na máquina | Must |
-| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar o binário, `.nix/` e `nix.toml`, e não tocar no vault | Must |
+| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar o binário da plataforma, conferir o SHA-256, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `settings.db`. Não exige Python na máquina | Must |
+| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar o binário, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` | Must |
 
 ### 5.6 Interface MCP
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
 | RF-50 | O sistema deve expor um servidor MCP **somente via stdio**, iniciado pelo cliente | Must |
-| RF-51 | O servidor MCP deve expor as 12 ferramentas de busca, leitura, escrita, insights e sincronização do vault (`search_notes`, `read_note`, `list_notes`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`) | Must |
+| RF-51 | O servidor MCP deve expor as 19 ferramentas de busca, leitura, escrita, tags, movimentação, insights e sincronização do vault (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
 | RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o binário na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.exe` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
 | RF-55 | stdout pertence ao protocolo: logs só em arquivo; bibliotecas não podem escrever no canal | Must |
+| RF-56 | `get_note_outline` e `read_note_lines` devem ler a nota por heading ou por intervalo de linhas do arquivo (começando em 1, frontmatter incluído), com limite de 400 linhas e indicação de truncamento. Heading ausente orienta a usar `get_note_outline`. As linhas de `search_notes` usam o mesmo critério | Must |
+| RF-57 | `update_frontmatter` deve alterar só as chaves de topo pedidas e preservar comentários, ordem e aspas do restante do YAML. O bloco resultante é validado antes de gravar; se for inválido, a nota não muda | Must |
+| RF-58 | `manage_tags` deve adicionar e remover tags do frontmatter (lista ou string, sem `#`, sem duplicata, ordem preservada) sem mexer nas tags inline do corpo, e informar quais ficaram. `list_all_tags` lista as tags indexadas com contagem, para alimentar o filtro `tag` de `search_notes` e `list_notes` | Must |
+| RF-59 | `move_note` (só `.md`) e `move_file` (recusa `.md`) devem mover dentro do vault. `move_note` reescreve por padrão os wikilinks e links Markdown que apontam para a nota, com backup de cada nota alterada. Links pelo título do frontmatter não mudam se o título não mudou. Notas fora de include/exclude não são alteradas e voltam como pendentes. Destino existente exige `overwrite=true` e `confirm=true`. `move_file` atualiza `![[alvo]]`, `[[alvo]]` e links Markdown relativos de PDF, imagem e outros anexos. O índice perde o id antigo e ganha o caminho novo; anexo só é reindexado com `index.index_attachments` | Must |
+| RF-60 | `update_note` com `mode=prepend` deve inserir o texto depois do frontmatter, com o YAML original intacto, uma linha em branco e o corpo antigo, sem `confirm`. A ação é atualização. `mode=replace` continua destrutivo | Must |
+| RF-61 | `nix config` deve listar, ler, gravar, remover e desfazer valores. A gravação de um ou mais campos valida o conjunto inteiro; se for inválido, nada daquela gravação entra no banco. Campo definido por variável de ambiente não é gravado por cima. `index.auto_sync_external_changes` não pode ser ligado | Must |
+| RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina | Must |
+| RF-63 | Um servidor MCP já em execução deve passar a usar a configuração nova na chamada seguinte. Modelo de embedding e pasta do índice continuam os anteriores até o cliente reiniciar. Troca de modelo exige `nix sync --full` | Must |
 
 ## 6. Histórias de usuário e critérios de aceite
 
 **HU-01 — Primeira configuração**
 > Como usuário, quero apontar o caminho do meu vault e indexá-lo, para o editor passar a consultá-lo.
 
-- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `nix.toml` é criado na pasta do Nix com `vault.path` e `index.embedding_model` preenchidos (barras `/` no Windows).
+- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `settings.db` é criado na pasta do Nix com `vault.path` e `index.embedding_model` preenchidos (barras `/` no Windows).
 - Dado `--vault CAMINHO` e `--embedding-model NOME`, quando executo `nix init`, então não há prompt e os valores são gravados.
-- Dado que o arquivo de configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só `vault.path` é atualizado e o restante do TOML permanece.
+- Dado que a configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só `vault.path` é atualizado e o restante permanece.
 - Dado que o caminho informado no prompt ainda não existe, quando confirmo a criação, então o diretório é criado e gravado em `vault.path`.
 - Dado que o caminho do vault não existe, quando valido com `nix doctor`, então recebo um erro apontando o caminho inválido.
 
@@ -163,18 +171,18 @@ Esta é a regra de negócio central do produto:
 **HU-04 — Instalar o ambiente**
 > Como usuário, quero um único arquivo para copiar, sem instalar Python, e que a configuração do vault comece em seguida.
 
-- Dado um Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon, sem Python no PATH, quando executo `install.bat`, `.\install.ps1` ou `sh install.sh`, então o binário da plataforma é baixado, o SHA-256 confere, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault se ainda não houver `nix.toml`, e a mensagem de **configuração concluída** é exibida.
+- Dado um Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon, sem Python no PATH, quando executo `install.bat`, `.\install.ps1` ou `sh install.sh`, então o binário da plataforma é baixado, o SHA-256 confere, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault se ainda não houver `settings.db`, e a mensagem de **configuração concluída** é exibida.
 - Dado que a instalação concluiu, quando abro um **novo** terminal em qualquer diretório, então `nix sync` (e os demais subcomandos) são encontrados no PATH.
 - Dado que já existe outro `nix` no PATH (gerenciador NixOS/Nixpkgs), quando o instalador registra o comando, então um aviso é emitido e este projeto passa a ter prioridade no PATH.
 - Dado `--vault CAMINHO` no instalador, quando ele chega no `init`, então o argumento é repassado e o prompt do vault é pulado.
-- Dado que `NIX_HOME` já aponta para uma pasta com `nix.toml`, quando rodei o instalador de novo, então essa pasta é preservada, o binário em `{NIX_HOME}/bin` é substituído e o `init` não é repetido.
+- Dado que `NIX_HOME` já aponta para uma pasta com `settings.db`, quando rodei o instalador de novo, então essa pasta é preservada, o binário em `{NIX_HOME}/bin` é substituído e o `init` não é repetido.
 - Dado Windows arm64 ou macOS Intel, quando executo o instalador, então ele recusa a arquitetura e diz qual binário existe.
 
 **HU-07 — Desinstalar o ambiente**
 > Como usuário, quero um único executável que desfaça a instalação sem apagar o vault.
 
-- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, o binário, `.nix/` e `nix.toml` são apagados, e o vault permanece intacto.
-- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o binário some, mas `nix.toml` e `.nix/` permanecem.
+- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, o binário, `.nix/` e `settings.db` são apagados, e o vault permanece intacto.
+- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o binário some, mas `settings.db` e `.nix/` permanecem.
 - Dado `--yes` (ou `-y`), quando não há terminal interativo, então a confirmação é dispensada e a desinstalação segue.
 - Dado que `NIX_HOME` aponta para outra pasta, quando desinstalo esta cópia, então a variável e o bloco de shell da outra instalação não são removidos.
 - Dado que a desinstalação concluiu, quando abro um **novo** terminal, então o comando `nix` deste projeto não é encontrado no PATH.
@@ -195,6 +203,17 @@ Esta é a regra de negócio central do produto:
 - Dado que peço uma alteração de nota via MCP, quando ela é aplicada, então o índice é atualizado automaticamente.
 - Dado `update_note` em modo replace ou `delete_note`, quando o cliente chama a ferramenta, então a escrita só ocorre com `confirm=true` após aprovação (anotação `destructiveHint`).
 
+**HU-08 — Configurar e operar pela interface**
+> Como usuário, quero ver o índice, sincronizar e ajustar a configuração sem editar arquivo à mão.
+
+- Dado que já rodei `nix init`, quando executo `nix ui`, então o navegador abre numa página local e o terminal mostra a URL.
+- Dado que ainda não configurei, quando executo `nix ui`, então o comando pede `nix init` e não sobe servidor.
+- Dado a página de configuração, quando salvo um campo válido, então o valor passa a valer e a origem deixa de ser o padrão.
+- Dado um campo definido por variável de ambiente, quando abro a configuração, então o campo aparece travado.
+- Dado que desfaço uma alteração no histórico, quando a operação termina, então o valor anterior volta a valer.
+- Dado o botão Encerrar ou Ctrl+C no terminal, quando confirmo e não há sincronização, então o processo da interface termina.
+- Dado uma sincronização em andamento, quando clico em Encerrar, então a página pede para esperar. Ctrl+C nesse meio só fecha o índice depois que a sincronização termina.
+
 ## 7. Requisitos não funcionais
 
 | ID | Categoria | Requisito |
@@ -208,7 +227,7 @@ Esta é a regra de negócio central do produto:
 | RNF-07 | Confiabilidade | Interrupção durante a sincronização não deve corromper o índice; a operação seguinte deve retomar de onde parou. |
 | RNF-08 | Observabilidade | Logs estruturados em arquivo, com nível configurável. No stdio, nada em stdout além do protocolo. |
 | RNF-09 | Usabilidade | Toda mensagem de erro deve indicar a ação corretiva. |
-| RNF-10 | Manutenibilidade | Núcleo independente de interface; CLI e MCP são adaptadores finos sobre o mesmo core. |
+| RNF-10 | Manutenibilidade | Núcleo independente de interface; CLI, MCP e a interface local são adaptadores finos sobre o mesmo core. |
 
 ## 8. Regras de negócio
 
@@ -231,19 +250,21 @@ Esta é a regra de negócio central do produto:
 
 ## 10. Roadmap
 
-**Entregue na v0.1**
+**Entregue**
 
-- Configuração TOML + env (`nix.toml` na pasta do aplicativo; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
-- Servidor MCP stdio com 12 ferramentas, recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
-- CLI de bootstrap: `init [--vault] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
+- Configuração em `settings.db` na pasta do aplicativo (ambiente ganha do banco; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
+- Servidor MCP stdio com 19 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend), recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
+- CLI de bootstrap: `init [--vault] [--embedding-model] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
 - Instalador `install.bat` / `install.ps1` / `install.sh` (binário único da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
-- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `nix.toml`; não toca no vault).
+- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `settings.db`; não toca no vault).
+- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso, diagnóstico, configuração e histórico).
+- Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
 - Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Exemplos em `.cursor/mcp.json`.
 - Escrita com write-through, confirmação e backup.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
-- Seções TOML legadas (`openai`, `agent`, `mcp`, `limits`) geram aviso; `agent.longterm_folder` migra para `vault.longterm_folder` na sessão.
+- Seções de configuração fora de `vault`, `index`, `retrieval`, `safety` e `logging` não são gravadas. Um campo definido por `NIX_SECAO__CAMPO` ganha do banco.
 
 **Próximo**
 
@@ -264,7 +285,7 @@ Esta é a regra de negócio central do produto:
 
 ## 12. Fora de escopo
 
-Interface gráfica ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário; sincronização de arquivos entre dispositivos.
+Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário; sincronização de arquivos entre dispositivos.
 
 ## 13. Glossário
 
@@ -275,4 +296,4 @@ Interface gráfica ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consu
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
 - **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa o binário único, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
-- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga o binário, `.nix/` e `nix.toml`; não altera o vault.
+- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga o binário, `.nix/` e `settings.db`; não altera o vault.

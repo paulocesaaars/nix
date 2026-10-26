@@ -8,7 +8,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 
 ## 1. Princípios de design
 
-1. **Núcleo independente de interface.** Toda a lógica vive em `nix.core`. CLI e MCP são adaptadores finos que chamam os mesmos serviços. Nenhuma regra de negócio é duplicada.
+1. **Núcleo independente de interface.** Toda a lógica vive em `nix.core`. CLI, MCP e a interface local são adaptadores finos que chamam os mesmos serviços. Nenhuma regra de negócio é duplicada.
 2. **Local por padrão.** Embeddings e banco vetorial rodam na máquina do usuário, sem custo e sem enviar o vault para terceiros. O Nix não faz chamadas remotas.
 3. **Indexação sob consentimento.** Não existe watcher de arquivos. O vault só é varrido quando o usuário pede (`nix sync` / ferramenta `sync_index`) ou quando as próprias ferramentas escrevem (write-through).
 4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar `index.data_dir` (padrão `.nix/data` na pasta do aplicativo) e rodar `nix sync --full` reconstrói tudo.
@@ -26,7 +26,8 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 | Estado do índice | SQLite | Controle de arquivos, hashes e chunks; transacional |
 | CLI de bootstrap | Typer + Rich | Comandos tipados, ajuda automática, saída formatada e progresso |
 | Servidor MCP | SDK oficial `mcp` (FastMCP, **somente stdio**) | O cliente inicia o processo; stdout é do protocolo |
-| Configuração | TOML + Pydantic | Arquivo legível, validação forte, override por variável de ambiente |
+| Interface local | Starlette + Uvicorn (já no SDK `mcp`) + Jinja2, HTMX e Pico.css vendidos no pacote | Formulário e operação no navegador, sem Node e sem CDN |
+| Configuração | SQLite (`settings.db`) + Pydantic | Histórico e desfazer no mesmo arquivo, validação forte, override por variável de ambiente |
 | Parsing de Markdown | `python-frontmatter` + splitter consciente de cabeçalhos | Preserva metadados e estrutura das notas |
 | Qualidade | ruff, mypy | Padrão do ecossistema |
 
@@ -40,7 +41,8 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 graph TB
     subgraph Interfaces
         Client["Cursor / Claude Code / Copilot"]
-        CLI["CLI bootstrap<br/>init / sync / status / doctor"]
+        CLI["CLI<br/>init / config / sync / status / doctor / ui"]
+        UI["Interface local<br/>nix ui"]
         MCP["Servidor MCP<br/>stdio"]
     end
 
@@ -49,7 +51,7 @@ graph TB
         RAG["Serviço de recuperação<br/>híbrido + reordenação"]
         IDX["Serviço de indexação<br/>sync incremental / write-through"]
         VAULT["Serviço de vault<br/>leitura, escrita, confinamento"]
-        CFG["Configuração<br/>TOML + env"]
+        CFG["Configuração<br/>settings.db + env"]
     end
 
     subgraph Infra["Infraestrutura local"]
@@ -62,6 +64,8 @@ graph TB
     Client -->|"MCP stdio"| MCP
     CLI --> CFG
     CLI --> IDX
+    UI --> CFG
+    UI --> IDX
     MCP --> TOOLS
     TOOLS --> RAG
     TOOLS --> VAULT
@@ -82,7 +86,7 @@ graph TB
 ```
 nix/
 ├── install.bat / install.sh / install.ps1  # baixa o binário, confere SHA-256, registra PATH e inicia `nix init`
-├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix e nix.toml
+├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix e settings.db
 ├── bin/nix / bin/nix.cmd   # shims só do checkout de desenvolvimento (acham o .venv)
 ├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH no checkout
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
@@ -92,7 +96,7 @@ nix/
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
 ├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
 ├── nix.jpeg                # foto da Nix (mascote no README)
-├── nix.toml                # config local (não versionado; gerado por `nix init`)
+├── settings.db            # config local (não versionado; criado por `nix init`)
 ├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs
 ├── pyproject.toml          # metadados do pacote e entry point do comando `nix`
 ├── requirements.txt        # dependências de runtime
@@ -100,10 +104,11 @@ nix/
 ├── README.md
 ├── PRD.md
 ├── TDD.md
-├── AGENTS.md
+├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
+├── skills-lock.json        # origem das skills (paulocesaaars/skills)
+├── .claude/skills/ / .agents/skills/  # cópias das skills de desenvolvimento; não editar aqui
 ├── .cursor/
-│   ├── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
-│   └── skills/revisao-codigo/
+│   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
     ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/
     ├── nix_frozen.py           # entrada do binário; não relança o .venv
@@ -111,16 +116,19 @@ nix/
         ├── __init__.py
         ├── __main__.py             # python -m nix (pacote instalado)
         ├── config/
-        │   ├── schema.py           # modelos Pydantic da configuração
+        │   ├── schema.py           # modelos Pydantic da configuração e textos de ajuda
         │   ├── embedding_models.py # catálogo técnico dos embeddings (validação + FastEmbed)
-        │   ├── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
-        │   ├── loader.py           # precedência env > arquivo > default; avisos de seções legadas
-        │   └── template.toml       # config comentado gerado por `nix init`
+        │   ├── embedding_present.py # textos de apresentação dos modelos (CLI e interface)
+        │   ├── store.py            # settings.db: valores, histórico, versão do esquema
+        │   ├── editor.py           # gravação validada (CLI e interface)
+        │   ├── loader.py           # precedência env > banco > padrão
+        │   └── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         ├── core/
         │   ├── vault/
         │   │   ├── reader.py       # varredura, filtros, leitura segura
         │   │   ├── writer.py       # escrita atômica, backup, YAML, confinamento
-        │   │   ├── markdown.py     # frontmatter, cabeçalhos, wikilinks, tags
+        │   │   ├── markdown.py     # frontmatter, cabeçalhos, wikilinks, tags, links
+        │   │   ├── frontmatter_edit.py  # edição linha a linha do YAML
         │   │   ├── paths.py        # normalização e validação de caminhos
         │   │   └── longterm.py     # remember → notas no vault
         │   ├── index/
@@ -131,6 +139,7 @@ nix/
         │   │   ├── tokenize.py     # tiktoken, com aproximação se a DLL falhar
         │   │   ├── vectorstore.py  # adaptador Chroma
         │   │   ├── sync.py         # diff e sincronização incremental
+        │   │   ├── lock.py         # trava entre processos (.nix/sync.lock)
         │   │   ├── writeback.py    # reindexação write-through
         │   │   ├── attachments.py  # texto de PDFs referenciados
         │   │   ├── graph.py        # grafo de wikilinks (cache)
@@ -142,6 +151,7 @@ nix/
         │   │   ├── rerank.py       # cross-encoder opcional
         │   │   └── service.py      # fachada de recuperação
         │   ├── insights/           # órfãs, duplicatas, links, resumo
+        │   ├── admin/              # init e relatório do doctor, sem saída de terminal
         │   └── tools/
         │       ├── registry.py     # definição canônica das ferramentas
         │       ├── search.py
@@ -152,19 +162,22 @@ nix/
         │   ├── ascii-art.txt
         │   ├── commands/
         │   │   ├── setup.py        # init, doctor
+        │   │   ├── config_cmds.py  # config list/get/set/unset/history/undo
+        │   │   ├── ui_cmd.py       # nix ui
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
-        │   ├── embedding_copy.py   # textos de apresentação dos modelos
+        │   ├── embedding_copy.py   # tabela do nix init; textos em config/embedding_present.py
         │   └── render.py           # banner, tabelas de sync/status, erros em stderr
         ├── mcp/
-        │   ├── server.py           # FastMCP/MCPServer stdio
+        │   ├── server.py           # FastMCP/MCPServer stdio; recarrega a config entre chamadas
         │   ├── traffic.py          # log de interações MCP (arquivo)
         │   └── resources.py        # nix://note/{+rel_path}
+        ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e Pico vendidos
         └── observability/
             ├── logging.py
             └── stdio.py            # isola stdout de bibliotecas
 ```
 
-Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `nix.toml`.
+Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `settings.db`.
 
 O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/bootstrap.py` cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`). `scripts/uninstall.py` desfaz esse checkout. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`. O binário é compilado por `scripts/build_frozen.py` com Python 3.12.
 
@@ -356,18 +369,25 @@ Definidas uma única vez em `core/tools/registry.py` e registradas no servidor M
 | --- | --- | --- |
 | `search_notes` | `(query, top_k=5, folder?, tags?, date_from?, date_to?) -> list[Chunk]` | — |
 | `read_note` | `(rel_path) -> NoteContent` | — |
+| `get_note_outline` | `(rel_path) -> NoteOutline` (título, chaves, linhas, headings) | — |
+| `read_note_lines` | `(rel_path, start_line?, end_line?, heading?) -> NoteLines` | — |
 | `list_notes` | `(folder?, tag?, limit=50) -> list[NoteRef]` (`rel_path`, `title`, `tags`) | — |
+| `list_all_tags` | `(folder?, limit=200) -> list[{tag, count}]` | — |
 | `get_linked_notes` | `(rel_path, direction=both) -> list[NoteRef]` | — |
 | `create_note` | `(rel_path, content, frontmatter?) -> WriteResult` | write-through; pasta padrão `vault.default_new_note_folder` (`Inbox`) se o caminho não tiver `/` |
 | `append_to_note` | `(rel_path, content, section?) -> WriteResult` | write-through |
-| `update_note` | `(rel_path, content, mode=replace\|patch, confirm) -> WriteResult` | write-through |
+| `update_note` | `(rel_path, content, mode=replace\|patch\|prepend, confirm) -> WriteResult` | write-through; `prepend` não exige `confirm` |
+| `update_frontmatter` | `(rel_path, set?, remove?) -> WriteResult` | write-through; só a chave alterada é reemitida |
+| `manage_tags` | `(rel_path, add?, remove?) -> WriteResult` | write-through; tags inline do corpo ficam |
+| `move_note` | `(src, dest, update_links=true, overwrite, confirm) -> WriteResult` | `after_move`: remove o id antigo, indexa o caminho novo e as notas reescritas |
+| `move_file` | `(src, dest, update_links=true, overwrite, confirm) -> WriteResult` | igual a `move_note` para o id; PDF só entra no índice com `index.index_attachments` |
 | `delete_note` | `(rel_path, confirm) -> WriteResult` | remove do índice |
 | `sync_index` | `(full=False, dry_run=False) -> SyncReport` | sincronização manual |
 | `index_status` | `() -> IndexStatus` | — |
 | `vault_insights` | `(kind, limit=20) -> insights` | — |
 | `remember` | `(content, title?) -> WriteResult` | write-through em `vault.longterm_folder` |
 
-Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34).
+Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34). `move_note` e `move_file` não levam `destructiveHint`; sobrescrever o destino ainda exige `overwrite=true` e `confirm=true`. `read_note_lines` devolve no máximo 400 linhas (`truncated`, `next_start_line`). As linhas de `search_notes`, do outline e de `read_note_lines` são do arquivo bruto, com o frontmatter incluído.
 
 `vault_insights` (órfãs, duplicatas, sugestão de wikilinks, resumo) usa o índice SQLite. A sugestão de links não relê o vault.
 
@@ -382,7 +402,7 @@ O instalador na raiz do repositório não entra no núcleo: só baixa o binário
 ```
 install.ps1 / install.sh          # release estável (ou NIX_VERSION) → SHA-256 → {NIX_HOME}/bin/nix
 install.bat                       # delega a install.ps1
-uninstall.ps1 / uninstall.sh      # PATH, binário, nix.toml e .nix (não o vault)
+uninstall.ps1 / uninstall.sh      # PATH, binário, settings.db e .nix (não o vault)
 uninstall.bat                     # delega a uninstall.ps1
 scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path → nix init
 scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12
@@ -391,23 +411,26 @@ scripts/smoke_frozen.py           # stdout de --version e imports do doctor
 
 O binário publicado cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
 
-`NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. Argumentos extras (`--vault PATH`, `--force`) vão para `nix init` só quando `nix.toml` ainda não existe. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`). O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
+`NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. Argumentos extras (`--vault PATH`, `--force`) vão para `nix init` só quando `settings.db` ainda não existe. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`). O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
-O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação; `--keep-data` preserva `nix.toml` e `.nix/`. O vault não é alterado.
+O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação; `--keep-data` preserva `settings.db` e `.nix/`. O vault não é alterado.
 
-No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `nix.toml` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
+No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `settings.db` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
 
 ```
 nix                           # inicia o servidor MCP stdio
 nix init [--vault PATH] [--embedding-model NOME] [--force]
-                              # pergunta (ou recebe) o vault; cria nix.toml na pasta do Nix
-                              # sem --force, arquivo existente só atualiza vault.path
+                              # pergunta (ou recebe) o vault; grava settings.db
+                              # sem --force, configuração existente só atualiza vault.path
+nix config list|get|set|unset|history|undo
 nix sync [--full] [--dry-run] [--json]
 nix status [--json]           # via call_tool("index_status")
-nix doctor [--json]           # resumo; --json emite dump da config validada
+nix doctor [--json]           # relatório; --json serializa o mesmo DoctorReport
+nix ui [--no-browser] [--port N]
+                              # interface local; exige nix init
 ```
 
-`--json` em `sync` e `status` emite o relatório em formato estruturado. `nix doctor --json` serializa a configuração (incluindo `unknown_sections` e `legacy_warnings`). Erros de domínio (`NixError`) saem no stderr, sem traceback.
+`--json` em `sync` e `status` emite o relatório em formato estruturado. `nix doctor --json` serializa o relatório de diagnóstico (ambiente, configuração e checagens). Erros de domínio (`NixError`) saem no stderr, sem traceback. Fora de `init` e `doctor`, os comandos falham com ação corretiva se o `nix init` ainda não rodou.
 
 Se `nix` roda sem subcomando num terminal interativo, um aviso vai para stderr e o servidor stdio inicia mesmo assim — o cliente MCP (stdin não-TTY) não vê essa mensagem.
 
@@ -447,64 +470,48 @@ No Windows a variável de usuário `NIX_HOME` está visível na IDE. O caminho a
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral não expande: o processo da IDE não lê os rcs do shell. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`.
 
-O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug.
+O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug. Trocar `logging.file` ou o nível passa a valer quando o processo recarrega a configuração.
+
+Antes de cada ferramenta, o processo compara a data da última gravação do `settings.db`. Se mudou, recompõe o `Runtime` com a configuração nova e mantém `index.embedding_model` e `index.data_dir` deste processo (a pasta é comparada já resolvida). Enquanto esses dois divergirem, a resposta da ferramenta inclui `config_warning`. A leitura de resource registra o mesmo aviso no log e devolve só o texto da nota. Troca de modelo continua exigindo `nix sync --full`.
+
+### 9.3 Interface local
+
+`nix ui` sobe Starlette em `127.0.0.1`, numa porta livre (ou `--port`), imprime a URL e abre o navegador (`--no-browser` só imprime). O processo termina com Ctrl+C ou com o botão Encerrar. Se houver sincronização, o botão pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. Sem `nix init`, o comando não sobe.
+
+O token da URL vira cookie `HttpOnly` (`SameSite=Strict`). Pedidos seguintes exigem esse cookie. POST exige o mesmo token no formulário ou no header `X-CSRF-Token`. `Host` e `Origin` têm de ser o endereço local. Arquivos estáticos (HTMX, extensão SSE, Pico.css) estão no pacote; não há CDN.
+
+Telas: status do índice, sincronização (prévia, progresso por SSE e confirmação extra para `--full`), diagnóstico, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. A sincronização roda numa thread e segura a trava de `.nix/sync.lock`, a mesma do `nix sync` e do write-through. Enquanto ela corre, status e diagnóstico não abrem o SQLite do índice por outra thread. O diagnóstico da interface usa o runtime deste processo; `nix doctor` no terminal abre o seu.
 
 ## 10. Configuração
 
-Arquivo TOML único, procurado nesta ordem: `$NIX_CONFIG` (se definido, é o único candidato) → `{app_root}/nix.toml` → `nix.toml` no CWD e nos diretórios pais (último recurso, só no checkout). No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma — o CWD do editor não entra. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos resolvem contra o diretório do arquivo, não o CWD. Precedência de valores: **variável de ambiente > arquivo > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no mesmo caminho (`config_write_path`). Estado (SQLite, Chroma, backups, logs) fica em `{app_root}/.nix/`.
+Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no banco. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`.
 
-Seções fora de `vault` / `index` / `retrieval` / `safety` / `logging` são ignoradas e geram aviso. As chaves legadas `[openai]`, `[agent]`, `[mcp]` e `[limits]` têm mensagem específica; `agent.longterm_folder` é copiado para `vault.longterm_folder` **só nesta sessão** até o TOML ser editado.
-
-```toml
-# nix.toml — gerado por `nix init` na pasta do Nix
-
-[vault]
-path = "C:/Obsidian/MeuVault"
-include = ["**/*.md"]
-exclude = [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"]
-follow_symlinks = false
-default_new_note_folder = "Inbox"
-default_frontmatter = { created = "auto", source = "nix" }
-longterm_folder = "Nix/Memória"
-
-[index]
-data_dir = ".nix/data"
-embedding_model = "BAAI/bge-m3"
-embedding_batch_size = 32
-chunk_size_tokens = 800
-chunk_overlap_tokens = 120
-min_chunk_tokens = 80
-auto_sync_external_changes = false
-auto_index_agent_writes = true
-warn_when_stale = true
-index_attachments = true
-# Usado só se retrieval.rerank = true
-rerank_model = "Xenova/ms-marco-MiniLM-L-6-v2"
-
-[retrieval]
-top_k = 5
-candidate_pool = 20
-hybrid = true
-lexical_weight = 0.4
-rrf_k = 60
-neighbor_expansion = 1
-min_score = 0.25
-rerank = false
-expand_query = true
-
-[safety]
-confirm_destructive = true
-backup_before_overwrite = true
-backup_dir = ".nix/backups"
-backup_retention_days = 30
-
-[logging]
-level = "info"
-file = ".nix/logs/nix.log"
-log_prompts = false
+```sql
+CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,   -- schema_version, initialized
+    value TEXT NOT NULL
+);
+CREATE TABLE settings (
+    section    TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (section, key)
+);
+CREATE TABLE settings_history (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    section        TEXT NOT NULL,
+    key            TEXT NOT NULL,
+    old_value_json TEXT,          -- nulo se a chave não existia
+    new_value_json TEXT,          -- nulo se a chave foi removida
+    source         TEXT NOT NULL, -- init | cli | ui
+    changed_at     TEXT NOT NULL
+);
 ```
 
-Toda a configuração é validada por Pydantic no carregamento: caminho do vault deve existir e ser diretório, modelos devem estar entre os suportados, valores numéricos em faixas válidas. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, `vault.path` deve usar `/` (ex.: `C:/Obsidian/MeuVault`); barra invertida quebra o TOML.
+`schema_version` é `1`. Versão diferente da que o processo entende impede o uso e pede atualização. Só entram chaves de `vault`, `index`, `retrieval`, `safety` e `logging`. O texto de ajuda de cada campo está no schema Pydantic. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `include`, `exclude`, `follow_symlinks`, `index_attachments` ou `vault.path` avisa que é preciso `nix sync`.
+
+Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, `vault.path` é gravado com `/`. O histórico permite desfazer uma alteração (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova.
 
 ## 11. Segurança
 
@@ -515,7 +522,8 @@ Toda a configuração é validada por Pydantic no carregamento: caminho do vault
 | Exposição de notas privadas | Filtros `exclude` aplicados na indexação **e** na leitura, para que uma nota excluída não seja acessível nem por `read_note` |
 | Corrupção do protocolo MCP | stdout reservado ao stdio; logs só em arquivo; `silence_progress_env` na inicialização; FastEmbed com `capture_stdout=True` por padrão (a CLI de `sync` desliga só para mostrar o download); `NixError` só no stderr |
 | Injeção via conteúdo de nota | Trechos recuperados são dados estruturados (caminho + conteúdo); ferramentas destrutivas sempre exigem confirmação humana |
-| Corrupção do índice | Transação por arquivo, verificação de compatibilidade de modelo, reconstrução completa sempre disponível |
+| Corrupção do índice | Transação por arquivo, verificação de compatibilidade de modelo, reconstrução completa sempre disponível; trava de sync entre processos |
+| Interface local | Escuta só em 127.0.0.1; token de uso único vira cookie HttpOnly; checagem de Host e Origin; CSRF nos POST |
 
 ## 12. Desempenho
 
@@ -540,8 +548,10 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-06 | Registry único de ferramentas | Implementações separadas para CLI e MCP | Elimina divergência de comportamento e duplicação de regras de segurança |
 | AD-07 | Busca híbrida desde a fundação | Somente densa | Notas pessoais são cheias de nomes próprios e siglas que o embedding dilui |
 | AD-08 | Artefatos de índice na pasta do aplicativo (`.nix/`), fora do vault | `.nix/` dentro do vault | Evita poluir a sincronização do Obsidian; o estado acompanha o aplicativo |
-| AD-09 | MCP somente stdio | HTTP loopback | O cliente inicia o processo; não há porta, autenticação nem processo órfão |
+| AD-09 | MCP somente stdio | HTTP como transporte do MCP | O cliente inicia o processo; não há porta no protocolo. A interface local é outro processo, só enquanto `nix ui` está aberto |
 | AD-10 | Binário único Nuitka (`install.*` baixa o artefato da release; checkout de desenvolvimento segue com `scripts/bootstrap.py`) | PyInstaller onefile, venv com o Python do sistema | Um arquivo por plataforma, sem runtime na máquina do usuário. A partida seguinte reusa o cache `{CACHE_DIR}/nix/onefile-{VERSION}`. O modo arquivo único do PyInstaller descompacta a cada processo e atrasa o stdio do MCP |
+| AD-11 | Configuração em `settings.db` na pasta da instalação | TOML, JSON, índice SQLite | A config não se perde ao apagar `.nix/data`. Histórico e desfazer ficam no mesmo arquivo. O ambiente continua ganhando do valor gravado |
+| AD-12 | Interface com Starlette, HTMX e Pico.css vendidos no pacote | Streamlit, NiceGUI, app com Node | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP |
 
 ## 14. Evolução prevista
 
