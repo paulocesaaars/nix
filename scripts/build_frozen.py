@@ -195,7 +195,11 @@ def nuitka_command(product: str, filename: str) -> list[str]:
         f"--product-version={product}",
         "--product-name=Nix",
         "--nofollow-import-to=pytest",
-        "--nofollow-import-to=*.tests",
+        # `*.tests` também casa com jinja2.tests, módulo de produção (os testes
+        # de template: defined, odd, ...). O Starlette importa esse módulo ao
+        # criar Jinja2Templates, e o binário morre antes do `nix --version`.
+        # O componente extra deixa de fora só os módulos de pacote.tests.caso.
+        "--nofollow-import-to=*.tests.*",
         "--include-module=nix_launch",
     ]
     for name in _PACKAGES:
