@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "atualizar-documentacao": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/atualizar-documentacao/SKILL.md",
+      "computedHash": "bffecb4b02aed8d14d94a827103c0b1a38a926cc056907e7ceb01004504fb66c"
+    },
+    "configurar-agentes": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/configurar-agentes/SKILL.md",
+      "computedHash": "db2db49ef18952afcf34a1b4f4a8c6060166dc9f08e8e941b0681fd9b7dcc997"
+    },
+    "gerar-release": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/gerar-release/SKILL.md",
+      "computedHash": "f5748c70167e7e8e3ae29cbf962d21abcbb4c9c9023d636373c9aeddf3304452"
+    },
+    "revisao-codigo": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/revisao-codigo/SKILL.md",
+      "computedHash": "3cff9ca38e1491e544e2bd089fe278e230cc1cece0e024daa5d5d11e7115303c"
+    }
+  }
+}

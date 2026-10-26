@@ -22,21 +22,6 @@ documentos que existirem.
 
 ---
 
-## Skills do agente
-
-Skills versionadas ficam em `.cursor/skills/`. Quando a tarefa corresponder a
-uma delas, **leia o `SKILL.md` completo antes** de agir — as skills têm fluxos
-e restrições que não estão duplicadas neste arquivo.
-
-| Necessidade | Skill | Caminho |
-|-------------|-------|---------|
-| Revisão de código (sugestões, SOLID, arquitetura; **sem implementar**) | `revisao-codigo` | [`.cursor/skills/revisao-codigo/SKILL.md`](.cursor/skills/revisao-codigo/SKILL.md) |
-
-**Prioridade:** para *code review* com sugestões alinhadas à documentação
-técnica e sem editar arquivos, use **`revisao-codigo`**.
-
----
-
 ## Regras obrigatórias do agente
 
 ### Antes de codar
@@ -47,6 +32,17 @@ técnica e sem editar arquivos, use **`revisao-codigo`**.
    camadas, dependências ou configuração.
 3. Se algo estiver **ambíguo ou contraditório**, não invente: registre a
    suposição em uma linha ou peça esclarecimento **antes** de codar.
+
+### Ferramentas de pesquisa e versionamento
+
+| Necessidade | Ferramenta |
+|-------------|------------|
+| Pesquisar stacks, bibliotecas, frameworks, APIs e versões | MCP **Context7** — consulte a documentação atualizada antes de escolher ou usar uma dependência; não confie só na memória |
+| Analisar código, histórico, PRs ou estrutura de repositórios (externos ou locais) | MCP **Octocode** |
+| Operações no GitHub: PRs, issues, releases, checks de CI, tags remotas | **GitHub CLI** (`gh`) — operações locais de versionamento (commit, branch, diff) seguem com `git` |
+
+Se a ferramenta indicada estiver indisponível ou sem autenticação, informe o
+usuário e diga qual alternativa foi usada.
 
 ### Arquitetura
 
