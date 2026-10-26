@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path
 
 from nix.config.schema import NixConfig
 
 _CONFIGURED = False
+_LOG_PATH: Path | None = None
+_FILE_HANDLER = "nix.file"
 _SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),
     re.compile(r"(?i)(api[_-]?key\s*[=:]\s*)\S+"),
@@ -49,21 +52,44 @@ class RedactingFilter(logging.Filter):
 
 def configure_logging(config: NixConfig, *, extra_secrets: list[str] | None = None) -> logging.Logger:
     """Configura o logger raiz `nix` para o arquivo (stdout no stdio é do protocolo)."""
-    global _CONFIGURED
+    global _CONFIGURED, _LOG_PATH
     logger = logging.getLogger("nix")
     logger.setLevel(getattr(logging, config.logging.level.upper(), logging.INFO))
     logger.propagate = False
-
+    log_path = config.logging.file_path.resolve()
     redactor = RedactingFilter(list(extra_secrets or []))
-
     if _CONFIGURED:
-        for handler in logger.handlers:
-            handler.addFilter(redactor)
+        if _LOG_PATH is None or not _same_path(_LOG_PATH, log_path):
+            _retarget(logger, log_path, redactor)
+            _retarget(logging.getLogger(), log_path, redactor)
+            _LOG_PATH = log_path
         return logger
 
-    log_path: Path = config.logging.file_path
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler = _file_handler(log_path, redactor)
+    logger.addHandler(handler)
+
+    root = logging.getLogger()
+    root.addFilter(redactor)
+    if not any(isinstance(existing, logging.FileHandler) for existing in root.handlers):
+        root.addHandler(_file_handler(log_path, redactor))
+        if root.level == logging.WARNING or root.level == logging.NOTSET:
+            root.setLevel(logging.WARNING)
+    for lib in ("httpx", "httpcore", "chromadb", "fastembed", "huggingface_hub", "onnxruntime"):
+        logging.getLogger(lib).addFilter(redactor)
+
+    _LOG_PATH = log_path
+    _CONFIGURED = True
+    return logger
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return os.path.normcase(str(left)) == os.path.normcase(str(right))
+
+
+def _file_handler(path: Path, redactor: RedactingFilter) -> logging.FileHandler:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(path, encoding="utf-8")
+    handler.set_name(_FILE_HANDLER)
     handler.setFormatter(
         logging.Formatter(
             fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -71,23 +97,17 @@ def configure_logging(config: NixConfig, *, extra_secrets: list[str] | None = No
         )
     )
     handler.addFilter(redactor)
-    logger.addHandler(handler)
+    return handler
 
-    root = logging.getLogger()
-    root.addFilter(redactor)
-    if not any(isinstance(h, logging.FileHandler) for h in root.handlers):
-        root_handler = logging.FileHandler(log_path, encoding="utf-8")
-        root_handler.setFormatter(handler.formatter)
-        root_handler.addFilter(redactor)
-        root.addHandler(root_handler)
-        if root.level == logging.WARNING or root.level == logging.NOTSET:
-            root.setLevel(logging.WARNING)
-    for lib in ("httpx", "httpcore", "chromadb", "fastembed", "huggingface_hub", "onnxruntime"):
-        lib_logger = logging.getLogger(lib)
-        lib_logger.addFilter(redactor)
 
-    _CONFIGURED = True
-    return logger
+def _retarget(target: logging.Logger, path: Path, redactor: RedactingFilter) -> None:
+    owned = [handler for handler in target.handlers if handler.name == _FILE_HANDLER]
+    if not owned:
+        return
+    for handler in owned:
+        target.removeHandler(handler)
+        handler.close()
+    target.addHandler(_file_handler(path, redactor))
 
 
 def get_logger(name: str = "nix") -> logging.Logger:

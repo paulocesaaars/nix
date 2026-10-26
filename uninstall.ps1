@@ -19,7 +19,7 @@ foreach ($arg in $args) {
     if ($arg -in @("-h", "--help")) {
         Write-Host @"
 Remove NIX_HOME e {NIX_HOME}\bin do PATH se apontarem para esta instalação,
-apaga o binário e, salvo --keep-data, apaga nix.toml e .nix.
+apaga o binário e, salvo --keep-data, apaga settings.db e .nix.
 O vault do Obsidian não é alterado.
 
 Uso:
@@ -98,7 +98,7 @@ if (-not $Yes) {
         Die "Sem terminal interativo. Rode de novo com --yes."
     }
     Write-Host "Isto remove o Nix em $Root."
-    if (-not $KeepData) { Write-Host "nix.toml e .nix também serão apagados. O vault não." }
+    if (-not $KeepData) { Write-Host "settings.db e .nix também serão apagados. O vault não." }
     $answer = Read-Host "Continuar? [s/N]"
     if ($answer.Trim().ToLower() -notin @("s", "sim", "y", "yes")) {
         Write-Host "Desinstalação cancelada."
@@ -125,14 +125,16 @@ if ((Test-Path -LiteralPath $bin) -and -not (Get-ChildItem -Force -LiteralPath $
 }
 
 if (-not $KeepData) {
-    foreach ($rel in @("nix.toml", ".nix")) {
-        $path = Join-Path $Root $rel
-        if (Test-Path -LiteralPath $path) { Remove-Item -Recurse -Force -LiteralPath $path }
+    foreach ($name in @("settings.db", "settings.db-wal", "settings.db-shm")) {
+        $path = Join-Path $Root $name
+        if (Test-Path -LiteralPath $path) { Remove-Item -Force -LiteralPath $path }
     }
-    Write-Host "Binário, nix.toml e .nix removidos de $Root. O vault não foi alterado."
+    $nixDir = Join-Path $Root ".nix"
+    if (Test-Path -LiteralPath $nixDir) { Remove-Item -Recurse -Force -LiteralPath $nixDir }
+    Write-Host "Binário, settings.db e .nix removidos de $Root. O vault não foi alterado."
 }
 else {
-    Write-Host "Binário removido de $Root. nix.toml e .nix foram preservados."
+    Write-Host "Binário removido de $Root. settings.db e .nix foram preservados."
 }
 
 Write-Host "Abra um terminal novo: o comando nix desta instalação deixa de valer."

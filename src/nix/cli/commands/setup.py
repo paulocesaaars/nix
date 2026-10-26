@@ -1,51 +1,22 @@
-"""nix init e doctor."""
+"""nix init e nix doctor."""
 
 from __future__ import annotations
 
 import json
-import re
-import shutil
 import sys
-from importlib.resources import files
 from pathlib import Path
 
 import typer
 
 from nix.cli.deps import with_errors
-from nix.cli.render import (
-    console,
-    print_banner,
-    print_embedding_choice_table,
-    print_tokenizer_warning,
-)
+from nix.cli.render import console, print_banner, print_embedding_choice_table
 from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
-from nix.config.loader import config_write_path, load_config, public_dict, resolve_config_path
-from nix.config.paths import app_root, env_home, is_packaged
+from nix.config.store import SettingsStore
+from nix.core.admin.doctor import DoctorCheck, build_doctor_report
+from nix.core.admin.setup import initialize
 from nix.core.errors import ConfigError
 
-_PATH_LINE = re.compile(r"(?m)^path\s*=\s*.*$")
-_EMBED_LINE = re.compile(r"(?m)^embedding_model\s*=\s*.*$")
 _DEFAULT_EMBEDDING = default_embedding_model()
-
-
-def _toml_path(path: Path) -> str:
-    return json.dumps(path.resolve().as_posix(), ensure_ascii=False)
-
-
-def _apply_vault_path(text: str, vault: Path) -> str:
-    line = f"path = {_toml_path(vault)}"
-    updated, count = _PATH_LINE.subn(line, text, count=1)
-    if count:
-        return updated
-    return text.replace("[vault]", f"[vault]\n{line}", 1)
-
-
-def _apply_embedding_model(text: str, model: str) -> str:
-    line = f"embedding_model = {json.dumps(model, ensure_ascii=False)}"
-    updated, count = _EMBED_LINE.subn(line, text, count=1)
-    if count:
-        return updated
-    return text.replace("[index]", f"[index]\n{line}", 1)
 
 
 def _validate_embedding(raw: str) -> str:
@@ -100,43 +71,6 @@ def _ask_vault() -> Path:
         return path.resolve()
 
 
-def _import_fix_hint(mod: str, exc: BaseException) -> str:
-    from nix.core.index.native_compat import native_extension_remedy
-
-    text = str(exc)
-    blocked = "DLL" in text or "Controle de Aplicativo" in text or "Application Control" in text
-    if blocked:
-        extra = f"O Windows bloqueou a extensão nativa. {native_extension_remedy()}"
-        if mod == "tiktoken":
-            extra += " O chunking segue com contagem aproximada."
-        if mod == "chromadb":
-            extra += (
-                " O Chroma 1.x puxa cygrpc só por causa do OpenTelemetry; "
-                "o Nix tenta contornar isso no load."
-            )
-            if not is_packaged():
-                extra += " Se o doctor ainda falhar, recrie o ambiente com Python 3.12."
-        return extra
-    if is_packaged():
-        return (
-            "O binário não carregou o módulo. Rode install.ps1 ou install.sh de novo "
-            "para substituir o executável."
-        )
-    return "Rode `pip install -r requirements.txt`."
-
-
-def _print_next_steps() -> None:
-    console.print("[bold]Configuração concluída.[/bold]")
-
-
-def _session_activate_hint() -> str:
-    root = app_root()
-    sh = (root / "bin" / "env.sh").as_posix()
-    cmd = str(root / "bin" / "env.cmd")
-    ps1 = str(root / "bin" / "env.ps1")
-    return f"source {sh} (Git Bash/Unix), call {cmd} (cmd) ou . {ps1} (PowerShell)"
-
-
 def _resolve_vault(explicit: str | None) -> Path:
     if explicit is not None and explicit.strip():
         return _validate_vault(explicit)
@@ -171,9 +105,19 @@ def _resolve_embedding(explicit: str | None, *, ask: bool) -> str:
     return _ask_embedding()
 
 
+def _print_check(check: DoctorCheck) -> None:
+    line = f"{check.label}: {check.message}"
+    if check.level == "error":
+        console.print(f"[red]{line}[/red]")
+    elif check.level == "warn":
+        console.print(f"[yellow]{line}[/yellow]")
+    else:
+        console.print(line)
+
+
 @with_errors
 def cmd_init(
-    force: bool = typer.Option(False, "--force", help="Sobrescreve o arquivo existente"),
+    force: bool = typer.Option(False, "--force", help="Regrava a configuração do zero"),
     vault: str | None = typer.Option(
         None,
         "--vault",
@@ -185,128 +129,56 @@ def cmd_init(
         help="Modelo de embedding (nome ou número da lista do init)",
     ),
 ) -> None:
-    dest = config_write_path()
-    dest.parent.mkdir(parents=True, exist_ok=True)
     print_banner(
         "[bold]Olá. Eu sou o Nix[/bold] — ponte MCP entre o vault e os agentes de desenvolvimento.\n"
         "[dim]Vamos apontar o vault e indexar as notas.[/dim]"
     )
     vault_path = _resolve_vault(vault)
-    creating = force or not dest.exists()
+    creating = force or not SettingsStore().is_initialized()
     model = _resolve_embedding(embedding_model, ask=creating)
-    if dest.exists() and not force:
-        current = dest.read_text(encoding="utf-8")
-        current = _apply_vault_path(current, vault_path)
-        if embedding_model is not None and embedding_model.strip():
-            current = _apply_embedding_model(current, model)
-        dest.write_text(current, encoding="utf-8")
-        console.print(f"Configuração em [bold]{dest}[/bold]. [cyan]vault.path[/cyan] = {_toml_path(vault_path)}")
-        if embedding_model is not None and embedding_model.strip():
-            console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(model)}")
-            console.print("[dim]Se o índice já existia com outro modelo, rode `nix sync --full`.[/dim]")
-        _print_next_steps()
-        return
-    template = files("nix.config").joinpath("template.toml").read_text(encoding="utf-8")
-    text = _apply_vault_path(template, vault_path)
-    text = _apply_embedding_model(text, model)
-    dest.write_text(text, encoding="utf-8")
-    console.print(f"Arquivo criado em [bold]{dest}[/bold].")
-    console.print(f"[cyan]vault.path[/cyan] = {_toml_path(vault_path)}")
-    console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(model)}")
-    _print_next_steps()
+    explicit_model = embedding_model is not None and bool(embedding_model.strip())
+    result = initialize(
+        vault=vault_path,
+        embedding_model=model,
+        force=force,
+        update_embedding=creating or explicit_model,
+    )
+    console.print(f"Configuração em [bold]{result.settings_path}[/bold].")
+    console.print(f"[cyan]vault.path[/cyan] = {result.vault_path}")
+    if result.embedding_written:
+        console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(result.embedding_model)}")
+    if result.embedding_written and result.previously_initialized:
+        console.print("[dim]Se o índice já existia com outro modelo, rode `nix sync --full`.[/dim]")
+    console.print("[bold]Configuração concluída.[/bold]")
 
 
 @with_errors
 def cmd_doctor(
-    as_json: bool = typer.Option(False, "--json", help="Dump completo da configuração"),
+    as_json: bool = typer.Option(False, "--json", help="Relatório completo em JSON"),
 ) -> None:
-    from nix import __version__
-
-    console.print(f"Nix {__version__} · Python {sys.version.split()[0]}")
-    home_path = env_home()
-    home = str(home_path) if home_path is not None else ""
-    if home:
-        console.print(f"NIX_HOME: {home}")
-    if is_packaged():
-        console.print(f"comando nix: {Path(sys.argv[0]).resolve()}")
-    else:
-        nix_cmd = shutil.which("nix") or shutil.which("nix.cmd")
-        if nix_cmd:
-            console.print(f"comando nix: {nix_cmd}")
-        elif not home:
-            console.print(
-                f"[yellow]NIX_HOME ausente e `nix` não está no PATH desta sessão. "
-                f"Rode `{_session_activate_hint()}`.[/yellow]"
-            )
-        else:
-            console.print(
-                f"[yellow]comando `nix` não está no PATH desta sessão. Rode `{_session_activate_hint()}`.[/yellow]"
-            )
-    path = resolve_config_path()
-    if path:
-        console.print(f"Config: {path}")
-    else:
-        console.print(f"Config: {config_write_path()} (ainda não existe — rode `nix init`)")
-    try:
-        config = load_config()
-        console.print("Config carregada: ok")
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]Falha ao carregar config: {exc}[/red]")
-        return
+    report = build_doctor_report()
     if as_json:
-        dumped = public_dict(config)
-        dumped["unknown_sections"] = list(config.unknown_sections)
-        dumped["legacy_warnings"] = list(config.legacy_warnings)
-        console.print_json(json.dumps(dumped, ensure_ascii=False, indent=2))
+        console.print_json(json.dumps(report.to_dict(), ensure_ascii=False))
+        return
+    console.print(f"Nix {report.version} · Python {report.python}")
+    if report.nix_home:
+        console.print(f"NIX_HOME: {report.nix_home}")
+    if report.command:
+        console.print(f"comando nix: {report.command}")
+    elif report.command_problem:
+        console.print(f"[yellow]{report.command_problem}[/yellow]")
+    if report.initialized:
+        console.print(f"Config: {report.settings_path}")
     else:
-        console.print(f"vault.path: {config.vault.path or '(vazio)'}")
-        console.print(f"index.embedding_model: {config.index.embedding_model}")
-        console.print(f"index.data_dir: {config.index.data_dir} → {config.index.data_path}")
-        for warning in config.legacy_warnings:
-            console.print(f"[yellow]{warning}[/yellow]")
-    try:
-        root = config.require_vault()
-        console.print(f"Vault: {root} ok")
-    except ConfigError as exc:
-        console.print(f"[yellow]Vault: {exc.message}[/yellow]")
-    from nix.core.index.native_compat import mmh3_is_stub, native_extension_remedy, prepare_native_imports
-    from nix.core.index.tokenize import TokenCounter
-
-    prepare_native_imports()
-    if mmh3_is_stub():
-        console.print(
-            "[yellow]mmh3: stub (só para o FastEmbed importar). "
-            f"Se o ChromaDB precisar do hash nativo: {native_extension_remedy()}[/yellow]"
-        )
-    imports: tuple[tuple[str, str], ...] = (
-        ("chromadb", "chromadb"),
-        ("fastembed", "fastembed.text.text_embedding"),
-        ("mcp", "mcp"),
-        ("tiktoken", "tiktoken"),
-    )
-    for label, module in imports:
-        try:
-            __import__(module)
-            console.print(f"Import {label}: ok")
-        except Exception as exc:  # noqa: BLE001
-            hint = _import_fix_hint(label, exc)
-            console.print(f"[red]Import {label} falhou: {exc}. {hint}[/red]")
-    print_tokenizer_warning(approximate=TokenCounter().approximate)
-    data = config.index.data_path
-    try:
-        data.mkdir(parents=True, exist_ok=True)
-        probe = data / ".nix-write-test"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
-        console.print(f"data_dir gravável: {data}")
-    except OSError as exc:
-        console.print(f"[red]Não foi possível escrever em {data}: {exc}. Ajuste index.data_dir.[/red]")
-    try:
-        from nix.cli.deps import get_runtime
-
-        runtime = get_runtime()
-        status = runtime.status()
-        console.print(f"Índice: {status.files} notas, {status.chunks} chunks, stale={status.stale}")
-        runtime.close()
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"[yellow]Índice ainda não utilizável: {exc}[/yellow]")
+        console.print(f"Config: {report.settings_path} (ainda não existe — rode `nix init`)")
+    if report.config_error:
+        console.print(f"[red]Falha ao carregar config: {report.config_error}[/red]")
+    elif report.initialized and report.config is not None:
+        console.print("Config carregada: ok")
+        console.print(f"vault.path: {report.vault_path or '(vazio)'}")
+        console.print(f"index.embedding_model: {report.embedding_model}")
+        console.print(f"index.data_dir: {report.data_dir} → {report.data_path}")
+    for check in report.checks:
+        if check.label == "Config":
+            continue
+        _print_check(check)

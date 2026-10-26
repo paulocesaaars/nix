@@ -21,7 +21,9 @@ htmlcov/
 *.db
 chroma/
 
-# Segredos e config local
+# Configuração local (settings.db entra em *.db; o TOML antigo não volta)
+*.db-wal
+*.db-shm
 nix.toml
 .env
 .env.*

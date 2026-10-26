@@ -7,7 +7,6 @@ import json
 import typer
 
 from nix.cli.deps import get_runtime, with_errors
-from nix.cli.embedding_copy import sync_model_hint
 from nix.cli.render import (
     apply_sync_progress,
     console,
@@ -15,6 +14,7 @@ from nix.cli.render import (
     print_tokenizer_warning,
     sync_progress,
 )
+from nix.config.embedding_present import sync_model_hint
 from nix.core.index.sync import json_safe
 from nix.core.models import IndexStatus
 from nix.core.models import SyncProgress as SyncProgressEvent

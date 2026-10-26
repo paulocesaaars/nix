@@ -1,5 +1,5 @@
 # Instala o binário do Nix (sem Python), grava NIX_HOME, coloca bin no PATH
-# e inicia nix init se ainda não houver nix.toml.
+# e inicia nix init se ainda não houver settings.db.
 #
 # Uso:
 #   irm https://raw.githubusercontent.com/paulocesaaars/nix/main/install.ps1 | iex
@@ -29,7 +29,7 @@ function Die([string]$Message) {
 if ($args.Count -eq 1 -and $args[0] -in @("-h", "--help")) {
     Write-Host @"
 Baixa o binário do Nix para a pasta de instalação, grava NIX_HOME, coloca
-{NIX_HOME}\bin no PATH do usuário e, se não houver nix.toml, executa nix init.
+{NIX_HOME}\bin no PATH do usuário e, se não houver settings.db, executa nix init.
 
 Argumentos extras vão para nix init, por exemplo:
   .\install.ps1 --vault "C:/Obsidian/MeuVault"
@@ -150,14 +150,14 @@ try {
     Write-Host "NIX_HOME=$Root"
     Write-Host "Comando nix: $BinDir"
 
-    $config = Join-Path $Root "nix.toml"
+    $config = Join-Path $Root "settings.db"
     if (-not (Test-Path -LiteralPath $config)) {
         Write-Host "nix-install: iniciando configuração (nix init)..."
         & $Dest init @args
         if ($LASTEXITCODE -ne 0) { Stop-NixInstall $LASTEXITCODE }
     }
     else {
-        Write-Host "nix.toml já existe em $Root. O init não foi repetido."
+        Write-Host "settings.db já existe em $Root. O init não foi repetido."
         Write-Host "Para reconfigurar: nix init --vault CAMINHO"
     }
 

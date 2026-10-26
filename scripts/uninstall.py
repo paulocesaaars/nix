@@ -1,4 +1,4 @@
-"""Remove o PATH do Nix e apaga artefatos locais (.venv, .nix, nix.toml)."""
+"""Remove o PATH do Nix e apaga artefatos locais (.venv, .nix, settings.db)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from register_path import unregister_user_command  # noqa: E402
 _HELP = """\
 Remove o Nix de um checkout de desenvolvimento: tira NIX_HOME e o comando nix
 do PATH se apontarem para esta pasta, apaga .venv e, salvo --keep-data,
-apaga também .nix (índice, backups, logs) e nix.toml.
+apaga também .nix (índice, backups, logs) e settings.db.
 O vault do Obsidian e o código-fonte não são alterados.
 O binário instalado na máquina usa uninstall.ps1, uninstall.sh ou uninstall.bat.
 
@@ -96,7 +96,9 @@ def _local_targets(*, keep_data: bool) -> list[Path]:
     targets.extend(sorted((ROOT / "src").glob("*.egg-info")))
     if not keep_data:
         targets.append(ROOT / ".nix")
-        targets.append(ROOT / "nix.toml")
+        targets.append(ROOT / "settings.db")
+        targets.append(ROOT / "settings.db-wal")
+        targets.append(ROOT / "settings.db-shm")
     return targets
 
 
@@ -108,10 +110,10 @@ def _print_plan(*, keep_data: bool) -> None:
     print("  - NIX_HOME e o comando nix do PATH do usuário")
     print("  - .venv")
     if keep_data:
-        print("  (nix.toml e .nix serão mantidos por --keep-data)")
+        print("  (settings.db e .nix serão mantidos por --keep-data)")
     else:
         print("  - .nix (índice, backups, logs)")
-        print("  - nix.toml")
+        print("  - settings.db")
     print()
     print("Não será alterado:")
     print("  - o vault do Obsidian")

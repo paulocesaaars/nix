@@ -149,6 +149,15 @@ class VectorStore:
             )
         return results
 
+    def close(self) -> None:
+        self._collection = None
+        client = self._client
+        self._client = None
+        closer = getattr(client, "close", None)
+        if callable(closer):
+            with contextlib.suppress(Exception):
+                closer()
+
     def reset(self) -> None:
         client = self._client_or_open()
         with capture_library_stdout(), contextlib.suppress(Exception):

@@ -15,7 +15,7 @@ for arg in "$@"; do
     -h|--help)
       cat <<'EOF'
 Remove NIX_HOME e $NIX_HOME/bin do PATH se apontarem para esta instalação,
-apaga o binário e, salvo --keep-data, apaga nix.toml e .nix.
+apaga o binário e, salvo --keep-data, apaga settings.db e .nix.
 O vault do Obsidian não é alterado.
 
 Uso:
@@ -79,7 +79,7 @@ if [ "$yes" -ne 1 ]; then
   fi
   echo "Isto remove o Nix em $root."
   if [ "$keep" -ne 1 ]; then
-    echo "nix.toml e .nix também serão apagados. O vault não."
+    echo "settings.db e .nix também serão apagados. O vault não."
   fi
   printf 'Continuar? [s/N] '
   read -r answer || answer=""
@@ -122,10 +122,10 @@ fi
 
 if [ "$keep" -ne 1 ]; then
   rm -rf "$root/.nix"
-  rm -f "$root/nix.toml"
-  echo "Binário, nix.toml e .nix removidos de $root. O vault não foi alterado."
+  rm -f "$root/settings.db" "$root/settings.db-wal" "$root/settings.db-shm"
+  echo "Binário, settings.db e .nix removidos de $root. O vault não foi alterado."
 else
-  echo "Binário removido de $root. nix.toml e .nix foram preservados."
+  echo "Binário removido de $root. settings.db e .nix foram preservados."
 fi
 
 echo "Abra um terminal novo: o comando nix desta instalação deixa de valer."

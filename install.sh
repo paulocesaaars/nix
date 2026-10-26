@@ -1,6 +1,6 @@
 #!/bin/sh
 # Instala o binário do Nix (sem Python), grava NIX_HOME, coloca bin no PATH
-# e inicia nix init se ainda não houver nix.toml.
+# e inicia nix init se ainda não houver settings.db.
 #
 # Uso:
 #   curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/install.sh | sh
@@ -25,7 +25,7 @@ die() {
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   cat <<'EOF'
 Baixa o binário do Nix, grava NIX_HOME, coloca $NIX_HOME/bin no PATH e,
-se não houver nix.toml, executa nix init.
+se não houver settings.db, executa nix init.
 
 Argumentos extras vão para nix init, por exemplo:
   sh install.sh --vault "$HOME/Vault"
@@ -218,11 +218,11 @@ else
   echo "A instalação segue. Registre NIX_HOME e o PATH à mão (INSTALL.md) e abra um terminal novo." >&2
 fi
 
-if [ ! -f "$root/nix.toml" ]; then
+if [ ! -f "$root/settings.db" ]; then
   echo "nix-install: iniciando configuração (nix init)..."
   "$root/bin/nix" init "$@"
 else
-  echo "nix.toml já existe em $root. O init não foi repetido."
+  echo "settings.db já existe em $root. O init não foi repetido."
   echo "Para reconfigurar: nix init --vault CAMINHO"
 fi
 

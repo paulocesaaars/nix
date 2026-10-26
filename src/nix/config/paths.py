@@ -1,8 +1,7 @@
 """Raiz do aplicativo e resolução de caminhos da configuração.
 
-Caminhos relativos no TOML resolvem contra o diretório do arquivo (ou
-`app_root` se ainda não houver config), nunca contra o CWD — o MCP iniciado
-pelo editor costuma ter CWD do workspace, não da pasta do Nix.
+Caminhos relativos resolvem contra `app_root` (a pasta da instalação), nunca
+contra o CWD — o MCP iniciado pelo editor costuma ter CWD do workspace.
 
 No checkout editável, `app_root` é a pasta do repositório, senão `$NIX_HOME`,
 senão o CWD. No binário Nuitka, `__file__` aponta para a extração temporária:
@@ -105,8 +104,9 @@ def default_state_dir() -> Path:
     return app_root() / ".nix"
 
 
-def default_config_path() -> Path:
-    return app_root() / "nix.toml"
+def settings_path() -> Path:
+    """Configuração persistida: `{app_root}/settings.db`."""
+    return app_root() / "settings.db"
 
 
 def resolve_app_path(value: str, anchor: Path | None = None) -> Path:

@@ -2,7 +2,7 @@
 
 Uma única tabela alimenta a validação da config, o `nix init` e o
 registro no FastEmbed. Textos de apresentação (quando usar, CPU) ficam
-na CLI (`nix.cli.embedding_copy`).
+em `nix.config.embedding_present`, usados pela CLI e pela interface.
 """
 
 from __future__ import annotations
