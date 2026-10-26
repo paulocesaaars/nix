@@ -1,31 +1,25 @@
-{% if notice %}
-<p><strong>Aviso:</strong> {{ notice }}</p>
-{% endif %}
-{% if error %}
-<p>{{ error }}</p>
-{% else %}
-<p>{{ summary }}</p>
-{% if tokenizer %}
-<p>{{ tokenizer }}</p>
-{% endif %}
-{% if errors %}
-<ul>
-  {% for item in errors %}
-  <li>{{ item }}</li>
-  {% endfor %}
-</ul>
-{% endif %}
-<form method="post" action="/sync/start" hx-post="/sync/start" hx-target="#job" hx-swap="innerHTML"
-      hx-on::before-swap="if (event.detail.xhr.status === 409) { event.detail.shouldSwap = true; event.detail.isError = false; }">
-  <input type="hidden" name="csrf" value="{{ csrf_token }}">
-  <label>
-    <input type="checkbox" name="full" value="on">
-    Reindexação completa (nix sync --full)
-  </label>
-  <label>
-    <input type="checkbox" name="confirm_full" value="on">
-    Confirmo a reindexação completa
-  </label>
-  <button type="submit">Sincronizar</button>
-</form>
-{% endif %}
+{% from "_ui.html" import alert, notices %}
+<section class="card stack">
+  <div class="row between">
+    <h2>Prévia</h2>
+    <span class="badge b-n">nada foi gravado</span>
+  </div>
+  {{ notices(notice, error) }}
+  {% if report %}
+  <div class="kpis">
+    <div><div class="kpi-label">Novas</div><div class="kpi-value kpi-sm">{{ report.added }}</div></div>
+    <div><div class="kpi-label">Atualizadas</div><div class="kpi-value kpi-sm">{{ report.updated }}</div></div>
+    <div><div class="kpi-label">Removidas</div><div class="kpi-value kpi-sm">{{ report.removed }}</div></div>
+    <div><div class="kpi-label">Inalteradas</div><div class="kpi-value kpi-sm">{{ report.skipped }}</div></div>
+    <div><div class="kpi-label">Com erro</div><div class="kpi-value kpi-sm {{ 'is-err' if report.failed else '' }}">{{ report.failed }}</div></div>
+  </div>
+  <p class="muted">{{ summary }}</p>
+  {% if tokenizer %}{{ alert("info", tokenizer) }}{% endif %}
+  {% if errors %}
+  <ul class="small">
+    {% for item in errors %}<li class="mono wrap-any">{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div>{% include "sync_start_form.html" %}</div>
+  {% endif %}
+</section>

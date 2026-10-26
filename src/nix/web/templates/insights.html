@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_ui.html" import notices %}
+{% block content %}
+{% set kinds = [("summary", "Resumo"), ("orphans", "Órfãs"), ("duplicates", "Duplicadas"), ("links", "Sugestões de link")] %}
+<div class="head">
+  <div>
+    <h1>Insights</h1>
+    <p class="sub">Qualidade do vault segundo o índice. A UI só aponta; quem edita é você ou o agente.</p>
+  </div>
+</div>
+
+<nav class="seg" aria-label="Tipo de insight">
+  {% for key, label in kinds %}<a href="/insights?kind={{ key }}" {% if kind == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+
+{{ notices(notice, error) }}
+
+{% if items is not none %}
+{% if kind == "summary" %}
+<div class="kpis">
+  <div class="card"><div class="kpi-label">Notas</div><div class="kpi-value">{{ items.files | num }}</div></div>
+  <div class="card"><div class="kpi-label">Trechos</div><div class="kpi-value">{{ items.chunks | num }}</div></div>
+  <div class="card"><div class="kpi-label">Com erro</div><div class="kpi-value {{ 'is-err' if items.errors else '' }}">{{ items.errors }}</div></div>
+  <a class="card card-link" href="/insights?kind=orphans"><div class="kpi-label">Órfãs</div><div class="kpi-value {{ 'is-warn' if items.orphans else '' }}">{{ items.orphans }}</div></a>
+  <a class="card card-link" href="/insights?kind=duplicates"><div class="kpi-label">Títulos duplicados</div><div class="kpi-value {{ 'is-warn' if items.duplicate_titles else '' }}">{{ items.duplicate_titles }}</div></a>
+</div>
+{% if items.orphan_sample %}
+<section class="card stack">
+  <h2>Algumas órfãs</h2>
+  <div class="stack-sm">
+    {% for rel in items.orphan_sample %}<a class="mono" href="/notes/view?path={{ rel | urlencode }}">{{ rel }}</a>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% elif not items %}
+<div class="card empty">Nada a apontar aqui.</div>
+
+{% elif kind == "orphans" %}
+<p class="muted">{{ items | length }} nota(s) sem links de entrada nem de saída.</p>
+<div class="table-box">
+  <table>
+    <thead><tr><th>Nota</th><th>Caminho</th><th>Tags</th></tr></thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><a href="/notes/view?path={{ item.rel_path | urlencode }}"><strong>{{ item.title or item.rel_path }}</strong></a></td>
+        <td class="mono muted wrap-any">{{ item.rel_path }}</td>
+        <td><div class="chips">{% for t in item.tags[:4] %}<span class="badge b-n">#{{ t }}</span>{% endfor %}</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif kind == "duplicates" %}
+<p class="muted">{{ items | length }} título(s) usados por mais de uma nota. Wikilinks pelo título ficam ambíguos.</p>
+{% for item in items %}
+<section class="card stack-md">
+  <div class="row between"><h2>{{ item.title }}</h2><span class="badge b-warn">{{ item.paths | length }} notas</span></div>
+  <div class="stack-sm">
+    {% for rel in item.paths %}<a class="mono" href="/notes/view?path={{ rel | urlencode }}">{{ rel }}</a>{% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+{% elif kind == "links" %}
+<p class="muted">Notas que citam o título de outra sem wikilink.</p>
+<div class="table-box">
+  <table>
+    <thead><tr><th>Nota</th><th>Sugestão</th><th>Motivo</th></tr></thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><a href="/notes/view?path={{ item.rel_path | urlencode }}"><strong>{{ item.title or item.rel_path }}</strong></a></td>
+        <td class="mono">[[{{ item.suggested_target }}]]</td>
+        <td class="muted">{{ item.reason }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

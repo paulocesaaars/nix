@@ -5,7 +5,7 @@
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
 | Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
-| Status | Implementado — v2.0.1 |
+| Status | Implementado — v2.1.0 |
 | Autor | Paulo |
 | Data | 2026-10-26 |
 
@@ -40,7 +40,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 ### Não-objetivos (v1)
 
-- Não é um substituto do Obsidian. A interface local cobre configuração e operação (status, sincronização, diagnóstico e histórico), não a edição das notas.
+- Não é um substituto do Obsidian. A interface local cobre configuração, operação e consulta (status, sincronização, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups e histórico), não a edição das notas. A única escrita no vault pela interface é restaurar um backup, com confirmação explícita.
 - Não haverá LLM, chat, RAG conversacional nem orquestração de agente no Nix.
 - O MCP não tem transporte HTTP. Não haverá servidor multiusuário, autenticação de contas nem hospedagem em nuvem. A interface local escuta só em `127.0.0.1` enquanto `nix ui` está aberto.
 - Não haverá sincronização de vault entre máquinas (isso é responsabilidade do Obsidian Sync/Git/Dropbox).
@@ -142,6 +142,10 @@ Esta é a regra de negócio central do produto:
 | RF-61 | `nix config` deve listar, ler, gravar, remover e desfazer valores. A gravação de um ou mais campos valida o conjunto inteiro; se for inválido, nada daquela gravação entra no banco. Campo definido por variável de ambiente não é gravado por cima. `index.auto_sync_external_changes` não pode ser ligado | Must |
 | RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina | Must |
 | RF-63 | Um servidor MCP já em execução deve passar a usar a configuração nova na chamada seguinte. Modelo de embedding e pasta do índice continuam os anteriores até o cliente reiniciar. Troca de modelo exige `nix sync --full` | Must |
+| RF-64 | A interface local deve consultar o vault só para leitura, pelas mesmas ferramentas do MCP: busca com filtros (pasta, tags, datas, quantidade), lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Com sincronização em andamento, a consulta pede para esperar | Should |
+| RF-65 | A interface deve gerar a configuração MCP de Cursor, Claude Code e VS Code com o caminho real do executável e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva | Should |
+| RF-66 | O servidor MCP deve gravar cada chamada de ferramenta (quando, cliente, ferramenta, duração e situação) em `.nix/traffic.db`, mantendo as 5.000 mais recentes. Argumentos só entram com `logging.log_prompts`; o conteúdo das notas nunca entra. Falha ao gravar não derruba a chamada. A interface mostra esse registro com filtros por ferramenta e situação | Should |
+| RF-67 | A interface deve listar os backups de `safety.backup_dir`, comparar cada um com a nota atual, permitir baixá-lo e restaurá-lo. Restaurar exige confirmação, vale só para `.md`, grava backup do estado atual antes e reindexa a nota pelo write-through | Should |
 
 ## 6. Histórias de usuário e critérios de aceite
 
@@ -213,6 +217,9 @@ Esta é a regra de negócio central do produto:
 - Dado que desfaço uma alteração no histórico, quando a operação termina, então o valor anterior volta a valer.
 - Dado o botão Encerrar ou Ctrl+C no terminal, quando confirmo e não há sincronização, então o processo da interface termina.
 - Dado uma sincronização em andamento, quando clico em Encerrar, então a página pede para esperar. Ctrl+C nesse meio só fecha o índice depois que a sincronização termina.
+- Dado o índice sincronizado, quando busco uma pergunta na tela Busca, então vejo os mesmos trechos que `search_notes` devolveria, com caminho, linhas e pontuação.
+- Dado um cliente MCP que chamou ferramentas, quando abro Tráfego MCP, então vejo cada chamada com cliente, duração e situação, sem os argumentos se `logging.log_prompts` estiver desligado.
+- Dado um backup de uma nota, quando marco a confirmação e restauro, então a nota volta ao conteúdo do backup, o estado anterior ganha backup e o índice é atualizado.
 
 ## 7. Requisitos não funcionais
 
@@ -253,11 +260,11 @@ Esta é a regra de negócio central do produto:
 **Entregue**
 
 - Configuração em `settings.db` na pasta do aplicativo (ambiente ganha do banco; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
-- Servidor MCP stdio com 19 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend), recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo.
+- Servidor MCP stdio com 19 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend), recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
 - CLI de bootstrap: `init [--vault] [--embedding-model] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
 - Instalador `install.bat` / `install.ps1` / `install.sh` (binário único da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
 - Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `settings.db`; não toca no vault).
-- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso, diagnóstico, configuração e histórico).
+- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, configuração e histórico).
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
 - Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Exemplos em `.cursor/mcp.json`.
 - Escrita com write-through, confirmação e backup.

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_ui.html" import notices %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Tags</h1>
+    <p class="sub">Tags indexadas e quantas notas usam cada uma. Use-as no filtro da busca.</p>
+  </div>
+  <form class="row" method="get" action="/tags">
+    <input class="input" name="folder" value="{{ folder }}" placeholder="Filtrar por pasta" aria-label="Pasta">
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+</div>
+
+{{ notices(notice, error) }}
+
+{% if not error %}
+{% if not tags %}
+<div class="card empty">Nenhuma tag indexada{% if folder %} em {{ folder }}{% endif %}.</div>
+{% else %}
+<div class="kpis">
+  <div class="card"><div class="kpi-label">Tags</div><div class="kpi-value">{{ tags | length | num }}</div></div>
+  <div class="card"><div class="kpi-label">Usos</div><div class="kpi-value">{{ total | num }}</div></div>
+  <div class="card"><div class="kpi-label">Mais usada</div><div class="kpi-value kpi-sm">#{{ tags[0].tag }}</div><div class="kpi-note">{{ tags[0].count }} nota(s)</div></div>
+</div>
+
+<section class="card stack">
+  <h2>Nuvem</h2>
+  <div class="chips">
+    {% for item in tags[:60] %}<a class="chip" href="/notes?tag={{ item.tag | urlencode }}">#{{ item.tag }} <span class="count">{{ item.count }}</span></a>{% endfor %}
+  </div>
+</section>
+
+<div class="table-box">
+  <table>
+    <thead><tr><th>Tag</th><th class="num">Notas</th><th>Proporção</th><th></th></tr></thead>
+    <tbody>
+      {% for item in tags %}
+      <tr>
+        <td class="mono">#{{ item.tag }}</td>
+        <td class="num">{{ item.count }}</td>
+        <td><div class="meter"><div class="bar"><span style="width: {{ (item.count * 100 / top) | round(1) }}%"></span></div></div></td>
+        <td class="num"><a class="btn btn-sm" href="/search?tags={{ item.tag | urlencode }}">Buscar</a> <a class="btn btn-sm" href="/notes?tag={{ item.tag | urlencode }}">Notas</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

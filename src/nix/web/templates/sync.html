@@ -1,21 +1,84 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon, alert, notices %}
 {% block content %}
-<h1>Sincronizar</h1>
-{% if notice %}
-<p><strong>Aviso:</strong> {{ notice }}</p>
-{% endif %}
-{% if hint %}
-<p>{{ hint }}</p>
-{% endif %}
-<p>A prévia só mostra o que mudaria. A sincronização grava o índice.</p>
-<form method="post" action="/sync/preview" hx-post="/sync/preview" hx-target="#preview" hx-swap="innerHTML">
-  <input type="hidden" name="csrf" value="{{ csrf_token }}">
-  <button type="submit">Prévia</button>
-</form>
+<div class="head">
+  <div>
+    <h1>Sincronizar</h1>
+    <p class="sub">Leva ao índice o que mudou no vault fora do Nix. A prévia não grava nada.</p>
+  </div>
+</div>
+
+{{ notices(notice, error) }}
+{% if hint %}{{ alert("info", hint) }}{% endif %}
+
+<div class="grid">
+  <section class="card stack">
+    <div class="row between">
+      <h2>Incremental</h2>
+      <span class="badge b-a">recomendado</span>
+    </div>
+    <p class="muted">Processa só as notas novas, alteradas ou removidas desde a última sincronização.</p>
+    <div class="row">
+      <form class="inline" method="post" action="/sync/preview" hx-post="/sync/preview" hx-target="#preview" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn" type="submit">Prévia</button>
+      </form>
+      {% include "sync_start_form.html" %}
+    </div>
+  </section>
+
+  <section class="card stack">
+    <div class="row between">
+      <h2>Reindexação completa</h2>
+      <span class="badge b-warn">demorada</span>
+    </div>
+    <p class="muted">Recria o índice do zero com <span class="mono">{{ model }}</span>. Use depois de trocar o modelo de embedding ou o chunking.</p>
+    <form method="post" action="/sync/start" hx-post="/sync/start" hx-target="#job" hx-swap="innerHTML" hx-disabled-elt="find button"
+          hx-on::before-swap="if (event.detail.xhr.status === 409) { event.detail.shouldSwap = true; event.detail.isError = false; }"
+          class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="full" value="on">
+      <label class="check">
+        <input type="checkbox" name="confirm_full" value="on">
+        <span>Confirmo a reindexação completa (<span class="mono">nix sync --full</span>)</span>
+      </label>
+      <div><button class="btn btn-danger" type="submit">{{ icon("sync", 16, "2") }}Reindexar tudo</button></div>
+    </form>
+  </section>
+</div>
+
 <div id="preview"></div>
 <div id="job">
   {% if running %}
   {% include "sync_stream.html" %}
   {% endif %}
 </div>
+
+<section class="stack-md">
+  <h2 class="section-title">Últimas execuções</h2>
+  {% if not runs %}
+  <div class="card empty">Nenhuma sincronização registrada.</div>
+  {% else %}
+  <div class="table-box">
+    <table>
+      <thead>
+        <tr><th>Quando</th><th>Origem</th><th class="num">Novas</th><th class="num">Atualizadas</th><th class="num">Removidas</th><th class="num">Erros</th><th class="num">Duração</th></tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td>{{ run.started_at | when }}</td>
+          <td><span class="badge b-n">{{ run.trigger }}</span></td>
+          <td class="num">{{ run.added }}</td>
+          <td class="num">{{ run.updated }}</td>
+          <td class="num">{{ run.removed }}</td>
+          <td class="num">{% if run.failed %}<span class="badge b-err" title="{{ run.errors | join('\n') }}">{{ run.failed }}</span>{% else %}0{% endif %}</td>
+          <td class="num">{{ (run.seconds * 1000) | duration if run.seconds is not none else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

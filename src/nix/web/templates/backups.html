@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Backups</h1>
+    <p class="sub">Cópias que o Nix grava antes de sobrescrever, mover ou remover uma nota.</p>
+  </div>
+</div>
+
+{% if error %}{{ alert("err", error) }}{% endif %}
+{% if not enabled %}
+{% call alert("warn", "safety.backup_before_overwrite está desligado: novas escritas não geram backup.") %}
+<a class="btn btn-sm" href="/settings#safety">Abrir configuração</a>
+{% endcall %}
+{% endif %}
+
+<p class="muted small">Pasta <span class="mono">{{ backup_dir }}</span> · retenção de {{ retention }} dia(s).</p>
+
+{% if not entries %}
+<div class="card empty">Nenhum backup ainda.</div>
+{% else %}
+<div class="table-box">
+  <table>
+    <thead><tr><th>Quando</th><th>Nota</th><th class="num">Tamanho</th><th>Nota atual</th><th></th></tr></thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr>
+        <td>{{ entry.created_at | when }}</td>
+        <td class="mono wrap-any">{{ entry.rel_path }}</td>
+        <td class="num">{{ entry.size_bytes | filesize }}</td>
+        <td>{% if entry.current_exists %}<span class="badge b-n">existe</span>{% else %}<span class="badge b-warn">removida</span>{% endif %}</td>
+        <td class="num"><a class="btn btn-sm" href="/backups/view?stamp={{ entry.stamp }}&amp;path={{ entry.rel_path | urlencode }}">Comparar</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

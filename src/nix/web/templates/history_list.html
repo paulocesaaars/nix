@@ -1,36 +1,27 @@
-<div id="history">
-  {% if warning %}
-  <p><strong>Aviso:</strong> {{ warning }}</p>
-  {% endif %}
+{% from "_ui.html" import alert, icon %}
+<div id="history" class="stack">
+  {% if message %}{{ alert("ok", message) }}{% endif %}
+  {% if warning %}{{ alert("warn", warning) }}{% endif %}
   {% if not rows %}
-  <p>Nenhuma alteração registrada.</p>
+  <div class="card empty">Nenhuma alteração registrada.</div>
   {% else %}
-  <div style="overflow-x: auto">
+  <div class="table-box">
     <table>
       <thead>
-        <tr>
-          <th>Id</th>
-          <th>Quando</th>
-          <th>Origem</th>
-          <th>Campo</th>
-          <th>Anterior</th>
-          <th>Novo</th>
-          <th></th>
-        </tr>
+        <tr><th>#</th><th>Quando</th><th>Origem</th><th>Campo</th><th>Mudança</th><th></th></tr>
       </thead>
       <tbody>
         {% for row in rows %}
         <tr>
-          <td>{{ row.id }}</td>
-          <td>{{ row.changed_at }}</td>
-          <td>{{ row.source }}</td>
-          <td>{{ row.dotted }}</td>
-          <td>{{ row.old_value }}</td>
-          <td>{{ row.new_value }}</td>
-          <td>
-            <form method="post" action="/history/{{ row.id }}/undo" hx-post="/history/{{ row.id }}/undo" hx-target="#history" hx-swap="outerHTML">
+          <td class="muted">{{ row.id }}</td>
+          <td>{{ row.changed_at | when }}</td>
+          <td><span class="badge b-n">{{ row.source }}</span></td>
+          <td class="mono">{{ row.dotted }}</td>
+          <td class="mono wrap-any"><del>{{ row.old_value }}</del> → <strong>{{ row.new_value }}</strong></td>
+          <td class="num">
+            <form class="inline" method="post" action="/history/{{ row.id }}/undo" hx-post="/history/{{ row.id }}/undo" hx-target="#history" hx-swap="outerHTML" hx-disabled-elt="find button">
               <input type="hidden" name="csrf" value="{{ csrf_token }}">
-              <button type="submit">Desfazer</button>
+              <button class="btn btn-sm" type="submit">{{ icon("undo", 14, "2") }}Desfazer</button>
             </form>
           </td>
         </tr>

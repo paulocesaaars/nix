@@ -1,32 +1,98 @@
 {% extends "base.html" %}
+{% from "_ui.html" import icon, alert, notices %}
 {% block content %}
-<h1>Status</h1>
-{% if notice %}
-<p><strong>Aviso:</strong> {{ notice }}</p>
-{% endif %}
+<div class="head">
+  <div>
+    <h1>Status</h1>
+    <p class="sub">Visão geral do índice local e do vault.</p>
+  </div>
+  <div class="row">
+    <a class="btn btn-primary" href="/sync">{{ icon("sync", 16, "2") }}Sincronizar</a>
+  </div>
+</div>
+
+{{ notices(notice, error) }}
+
 {% if status %}
-<dl>
-  <dt>Notas</dt>
-  <dd>{{ status.files }}</dd>
-  <dt>Trechos</dt>
-  <dd>{{ status.chunks }}</dd>
-  <dt>Erros</dt>
-  <dd>{{ status.errors }}</dd>
-  <dt>Última sincronização</dt>
-  <dd>{{ status.last_sync_at or "—" }}</dd>
-  <dt>Modelo de embedding</dt>
-  <dd>{{ status.embedding_model or "—" }}</dd>
-  <dt>Vault</dt>
-  <dd>{{ status.vault_path or "—" }}</dd>
-  <dt>Desatualizado</dt>
-  <dd>{{ "sim" if status.stale else "não" }}</dd>
-  {% if status.stale_reason %}
-  <dt>Motivo</dt>
-  <dd>{{ status.stale_reason }}</dd>
-  {% endif %}
-  <dt>Pasta de dados</dt>
-  <dd>{{ status.data_dir or "—" }}</dd>
-</dl>
+{% if status.stale %}
+{% call alert("warn", (status.stale_reason or "Há mudanças no vault que ainda não estão no índice.") ~ " Nada é vetorizado sem a sua autorização.", "O índice está desatualizado.") %}
+<a class="btn btn-sm" href="/sync">Ver o que mudou</a>
+{% endcall %}
 {% endif %}
-<p>Configuração: {{ settings_path }}</p>
+
+<div class="kpis">
+  <div class="card">
+    <div class="kpi-label">Notas indexadas</div>
+    <div class="kpi-value">{{ status.files | num }}</div>
+  </div>
+  <div class="card">
+    <div class="kpi-label">Trechos</div>
+    <div class="kpi-value">{{ status.chunks | num }}</div>
+    {% if status.files %}<div class="kpi-note">média de {{ (status.chunks / status.files) | round | int }} por nota</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="kpi-label">Com erro</div>
+    <div class="kpi-value {{ 'is-err' if status.errors else '' }}">{{ status.errors | num }}</div>
+    {% if status.errors %}<a class="kpi-note" href="/notes">Ver notas com erro</a>{% endif %}
+  </div>
+  <div class="card">
+    <div class="kpi-label">Última sincronização</div>
+    <div class="kpi-value kpi-sm">{{ status.last_sync_at | when }}</div>
+  </div>
+</div>
+
+<div class="grid">
+  <section class="card stack">
+    <div class="row between">
+      <h2>Índice</h2>
+      {% if status.stale %}
+      <span class="badge b-warn"><span class="dot"></span>Desatualizado</span>
+      {% else %}
+      <span class="badge b-ok"><span class="dot"></span>Em dia</span>
+      {% endif %}
+    </div>
+    <dl>
+      <dt>Modelo de embedding</dt><dd class="mono">{{ status.embedding_model or "—" }}</dd>
+      <dt>Vault</dt><dd class="mono">{{ status.vault_path or "—" }}</dd>
+      <dt>Pasta de dados</dt><dd class="mono">{{ status.data_dir or "—" }}</dd>
+      <dt>Configuração</dt><dd class="mono">{{ settings_path }}</dd>
+    </dl>
+  </section>
+
+  <section class="card stack">
+    <h2>Atividade recente</h2>
+    {% if not calls and not runs %}
+    <p class="muted">Nenhuma chamada MCP nem sincronização registrada ainda.</p>
+    {% else %}
+    <div>
+      {% for call in calls %}
+      <div class="list-row">
+        <span class="badge b-a">MCP</span>
+        <span class="grow"><span class="mono">{{ call.tool }}</span>{% if call.client %} <span class="muted">· {{ call.client }}</span>{% endif %}</span>
+        {% if call.status != "ok" %}<span class="badge b-err">erro</span>{% endif %}
+        <span class="muted small">{{ call.called_at | when }}</span>
+      </div>
+      {% endfor %}
+      {% for run in runs %}
+      <div class="list-row">
+        <span class="badge {{ 'b-err' if run.failed else 'b-ok' }}">Sync</span>
+        <span class="grow">{{ run.added }} novas · {{ run.updated }} atualizadas · {{ run.removed }} removidas{% if run.failed %} · {{ run.failed }} com erro{% endif %}</span>
+        <span class="muted small">{{ run.started_at | when }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <a class="strong-link" href="/traffic">Ver tráfego completo</a>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+
+<section class="stack-md">
+  <h2 class="section-title">Atalhos</h2>
+  <div class="kpis">
+    <a class="card card-link stack-sm" href="/search"><strong>Testar uma busca</strong><span class="muted">Veja o que o agente receberia para uma pergunta.</span></a>
+    <a class="card card-link stack-sm" href="/insights"><strong>Revisar insights</strong><span class="muted">Notas órfãs, títulos duplicados e sugestões de link.</span></a>
+    <a class="card card-link stack-sm" href="/connect"><strong>Conectar ao editor</strong><span class="muted">Gere a configuração MCP do Cursor, Claude Code ou VS Code.</span></a>
+  </div>
+</section>
 {% endblock %}

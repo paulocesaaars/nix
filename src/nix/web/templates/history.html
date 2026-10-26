@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Histórico</h1>
+<div class="head">
+  <div>
+    <h1>Histórico</h1>
+    <p class="sub">Cada mudança de configuração, da CLI ou da UI. Desfazer grava o valor anterior como uma nova mudança.</p>
+  </div>
+</div>
 {% include "history_list.html" %}
 {% endblock %}

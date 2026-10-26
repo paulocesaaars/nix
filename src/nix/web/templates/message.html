@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_ui.html" import alert %}
 {% block content %}
-<p>{{ message }}</p>
+{{ alert("warn", message) }}
 {% endblock %}

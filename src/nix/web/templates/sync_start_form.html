@@ -1,0 +1,6 @@
+{% from "_ui.html" import icon %}
+<form class="inline" method="post" action="/sync/start" hx-post="/sync/start" hx-target="#job" hx-swap="innerHTML" hx-disabled-elt="find button"
+      hx-on::before-swap="if (event.detail.xhr.status === 409) { event.detail.shouldSwap = true; event.detail.isError = false; }">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <button class="btn btn-primary" type="submit">{{ icon("sync", 16, "2") }}Sincronizar</button>
+</form>

@@ -1,41 +1,48 @@
 {% extends "base.html" %}
+{% from "_ui.html" import level_badge %}
 {% block content %}
-<h1>Diagnóstico</h1>
-<dl>
-  <dt>Versão</dt>
-  <dd>{{ report.version }}</dd>
-  <dt>Python</dt>
-  <dd>{{ report.python }}</dd>
-  <dt>NIX_HOME</dt>
-  <dd>{{ report.nix_home or "—" }}</dd>
-  <dt>Comando</dt>
-  <dd>
-    {{ report.command or "—" }}
-    {% if report.command_problem %}
-    <br>{{ report.command_problem }}
-    {% endif %}
-  </dd>
-  <dt>Configuração</dt>
-  <dd>{{ report.settings_path }}</dd>
-  <dt>Inicializado</dt>
-  <dd>{{ "sim" if report.initialized else "não" }}</dd>
-</dl>
-<table>
-  <thead>
-    <tr>
-      <th>Verificação</th>
-      <th>Nível</th>
-      <th>Mensagem</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for check in report.checks %}
-    <tr>
-      <td>{{ check.label }}</td>
-      <td>{{ check.level }}</td>
-      <td>{{ check.message }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="head">
+  <div>
+    <h1>Diagnóstico</h1>
+    <p class="sub">O mesmo relatório do <span class="mono">nix doctor</span>, com a ação para cada problema.</p>
+  </div>
+  <a class="btn" href="/doctor">Rodar de novo</a>
+</div>
+
+<div class="kpis">
+  <div class="card"><div class="kpi-label">Tudo certo</div><div class="kpi-value is-ok">{{ counts.ok }}</div></div>
+  <div class="card"><div class="kpi-label">Avisos</div><div class="kpi-value {{ 'is-warn' if counts.warn else '' }}">{{ counts.warn }}</div></div>
+  <div class="card"><div class="kpi-label">Erros</div><div class="kpi-value {{ 'is-err' if counts.error else '' }}">{{ counts.error }}</div></div>
+</div>
+
+<div class="table-box">
+  <table>
+    <thead><tr><th>Verificação</th><th>Situação</th><th>Detalhe e ação</th></tr></thead>
+    <tbody>
+      {% for check in checks %}
+      <tr>
+        <td><strong>{{ check.label }}</strong></td>
+        <td>{{ level_badge(check.level) }}</td>
+        <td class="wrap-any">{{ check.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<section class="card stack">
+  <h2>Ambiente</h2>
+  <dl>
+    <dt>Versão</dt><dd>{{ report.version }}</dd>
+    <dt>Python</dt><dd class="mono">{{ report.python }}</dd>
+    <dt>NIX_HOME</dt><dd class="mono">{{ report.nix_home or "—" }}</dd>
+    <dt>Comando</dt>
+    <dd>
+      <span class="mono">{{ report.command or "—" }}</span>
+      {% if report.command_problem %}<br><span class="small warn-text">{{ report.command_problem }}</span>{% endif %}
+    </dd>
+    <dt>Configuração</dt><dd class="mono">{{ report.settings_path }}</dd>
+    <dt>Inicializado</dt><dd>{{ "sim" if report.initialized else "não" }}</dd>
+  </dl>
+</section>
 {% endblock %}

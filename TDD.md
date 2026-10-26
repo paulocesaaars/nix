@@ -26,7 +26,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 | Estado do índice | SQLite | Controle de arquivos, hashes e chunks; transacional |
 | CLI de bootstrap | Typer + Rich | Comandos tipados, ajuda automática, saída formatada e progresso |
 | Servidor MCP | SDK oficial `mcp` (FastMCP, **somente stdio**) | O cliente inicia o processo; stdout é do protocolo |
-| Interface local | Starlette + Uvicorn (já no SDK `mcp`) + Jinja2, HTMX e Pico.css vendidos no pacote | Formulário e operação no navegador, sem Node e sem CDN |
+| Interface local | Starlette + Uvicorn (já no SDK `mcp`) + Jinja2, HTMX e CSS próprio (`web/static/nix.css`) vendidos no pacote | Operação e consulta no navegador, sem Node, sem build e sem CDN |
 | Configuração | SQLite (`settings.db`) + Pydantic | Histórico e desfazer no mesmo arquivo, validação forte, override por variável de ambiente |
 | Parsing de Markdown | `python-frontmatter` + splitter consciente de cabeçalhos | Preserva metadados e estrutura das notas |
 | Qualidade | ruff, mypy | Padrão do ecossistema |
@@ -169,9 +169,10 @@ nix/
         │   └── render.py           # banner, tabelas de sync/status, erros em stderr
         ├── mcp/
         │   ├── server.py           # FastMCP/MCPServer stdio; recarrega a config entre chamadas
-        │   ├── traffic.py          # log de interações MCP (arquivo)
+        │   ├── traffic.py          # log de interações MCP (arquivo e .nix/traffic.db)
         │   └── resources.py        # nix://note/{+rel_path}
-        ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e Pico vendidos
+        ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e nix.css vendidos
+        │   └── routes/             # ops, vault, integration, maintenance
         └── observability/
             ├── logging.py
             └── stdio.py            # isola stdout de bibliotecas
@@ -478,9 +479,17 @@ Antes de cada ferramenta, o processo compara a data da última gravação do `se
 
 `nix ui` sobe Starlette em `127.0.0.1`, numa porta livre (ou `--port`), imprime a URL e abre o navegador (`--no-browser` só imprime). O processo termina com Ctrl+C ou com o botão Encerrar. Se houver sincronização, o botão pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. Sem `nix init`, o comando não sobe.
 
-O token da URL vira cookie `HttpOnly` (`SameSite=Strict`). Pedidos seguintes exigem esse cookie. POST exige o mesmo token no formulário ou no header `X-CSRF-Token`. `Host` e `Origin` têm de ser o endereço local. Arquivos estáticos (HTMX, extensão SSE, Pico.css) estão no pacote; não há CDN.
+O token da URL vira cookie `HttpOnly` (`SameSite=Strict`). Pedidos seguintes exigem esse cookie. POST exige o mesmo token no formulário ou no header `X-CSRF-Token`. `Host` e `Origin` têm de ser o endereço local. Arquivos estáticos (HTMX, extensão SSE, `nix.css` e `nix.js`) estão no pacote; não há CDN nem fonte remota (a interface usa as fontes do sistema).
 
 Telas: status do índice, sincronização (prévia, progresso por SSE e confirmação extra para `--full`), diagnóstico, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. A sincronização roda numa thread e segura a trava de `.nix/sync.lock`, a mesma do `nix sync` e do write-through. Enquanto ela corre, status e diagnóstico não abrem o SQLite do índice por outra thread. O diagnóstico da interface usa o runtime deste processo; `nix doctor` no terminal abre o seu.
+
+Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP, numa thread com a trava do runtime (`RuntimeGate`). Se a trava estiver ocupada pela sincronização, a tela pede para esperar em vez de bloquear.
+
+Conectar cliente monta o trecho de Cursor, Claude Code e VS Code em `core/admin/client_config.py` com o executável de `nix_command()` (o mesmo do `nix doctor`). A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo.
+
+Tráfego MCP: o middleware de `mcp/traffic.py` grava cada `tools/call` em `{app_root}/.nix/traffic.db` (`core/admin/traffic.py`), tabela `mcp_calls` com quando, cliente (do `initialize`), ferramenta, argumentos resumidos (só com `logging.log_prompts`), situação, duração e erro. Cada gravação abre e fecha a conexão em WAL (o esquema é criado uma vez por processo), porque servidor e interface são processos diferentes; a interface lê em modo somente leitura e não cria o arquivo. A tabela guarda as 5.000 chamadas mais recentes. O texto de erro só é gravado com `logging.log_prompts`; sem ele o banco guarda apenas que houve erro. Se a gravação falhar, o servidor registra um aviso e tenta de novo na chamada seguinte; depois de 3 falhas seguidas, para de gravar naquele processo. A chamada nunca é afetada.
+
+Backups (`core/admin/backups.py`): lista `safety.backup_dir/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `VaultWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
 
 ## 10. Configuração
 
@@ -551,7 +560,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-09 | MCP somente stdio | HTTP como transporte do MCP | O cliente inicia o processo; não há porta no protocolo. A interface local é outro processo, só enquanto `nix ui` está aberto |
 | AD-10 | Binário único Nuitka (`install.*` baixa o artefato da release; checkout de desenvolvimento segue com `scripts/bootstrap.py`) | PyInstaller onefile, venv com o Python do sistema | Um arquivo por plataforma, sem runtime na máquina do usuário. A partida seguinte reusa o cache `{CACHE_DIR}/nix/onefile-{VERSION}`. O modo arquivo único do PyInstaller descompacta a cada processo e atrasa o stdio do MCP |
 | AD-11 | Configuração em `settings.db` na pasta da instalação | TOML, JSON, índice SQLite | A config não se perde ao apagar `.nix/data`. Histórico e desfazer ficam no mesmo arquivo. O ambiente continua ganhando do valor gravado |
-| AD-12 | Interface com Starlette, HTMX e Pico.css vendidos no pacote | Streamlit, NiceGUI, app com Node | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP |
+| AD-12 | Interface com Starlette, HTMX e CSS próprio vendidos no pacote | Streamlit, NiceGUI, app com Node; Pico.css; Tailwind | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP. O Pico (sem classes) não cobria menu lateral, selos, abas, diff e cartões sem sobrescrever quase tudo; Tailwind exigiria build ou CDN |
 
 ## 14. Evolução prevista
 

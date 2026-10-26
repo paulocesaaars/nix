@@ -1,0 +1,34 @@
+{% from "_ui.html" import notices %}
+<div class="stack">
+  {{ notices(notice, error) }}
+  {% if form.q and not error %}
+  {% if not results %}
+  <div class="card empty">Nenhum trecho encontrado para <strong>{{ form.q }}</strong>. Tire filtros ou rode uma sincronização.</div>
+  {% else %}
+  <p class="muted">{{ results | length }} trecho(s) para <strong>{{ form.q }}</strong>, em ordem de relevância.</p>
+  {% for hit in results %}
+  <article class="card hit">
+    <div class="hit-head">
+      <div class="row nowrap shrink">
+        <span class="rank">{{ loop.index }}</span>
+        <div class="shrink">
+          <a class="hit-title" href="/notes/view?path={{ hit.rel_path | urlencode }}&amp;start={{ hit.start_line or 1 }}">{{ hit.title or hit.rel_path }}</a>
+          <div class="mono muted wrap-any">{{ hit.rel_path }}{% if hit.heading_path %} › {{ hit.heading_path }}{% endif %}</div>
+        </div>
+      </div>
+      <div class="row tight">
+        {% if hit.start_line %}<span class="badge b-n">linhas {{ hit.start_line }}–{{ hit.end_line }}</span>{% endif %}
+        <span class="badge b-a" title="Pontuação de fusão (RRF)">score {{ hit.score }}</span>
+      </div>
+    </div>
+    <div class="snippet">{{ hit.content | truncate(700) | highlight(form.q) }}</div>
+    {% if hit.tags %}
+    <div class="chips">{% for tag in hit.tags %}<a class="chip" href="/notes?tag={{ tag | urlencode }}">#{{ tag }}</a>{% endfor %}</div>
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% endif %}
+  {% elif not form.q %}
+  <div class="card empty">Digite uma pergunta. A busca combina similaridade semântica e termos exatos.</div>
+  {% endif %}
+</div>

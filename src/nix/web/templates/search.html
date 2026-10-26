@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Busca</h1>
+    <p class="sub">A mesma busca híbrida que o agente usa em <span class="mono">search_notes</span>, para testar o que ele receberia.</p>
+  </div>
+</div>
+
+<form class="card stack" method="get" action="/search" hx-get="/search" hx-target="#results" hx-push-url="true" hx-disabled-elt="find button[type=submit]">
+  <div class="row nowrap">
+    <input class="input" id="q" type="search" name="q" value="{{ form.q }}" placeholder="Pergunte como o agente perguntaria…" aria-label="Consulta" autofocus required>
+    <button class="btn btn-primary" type="submit">{{ icon("search", 16, "2") }}Buscar</button>
+  </div>
+  <details {% if form.folder or form.tags or form.date_from or form.date_to %}open{% endif %}>
+    <summary class="muted small clickable">Filtros</summary>
+    <div class="filters">
+      <label class="field"><span class="lbl">Pasta</span><input class="input" name="folder" value="{{ form.folder }}" placeholder="Projetos/"></label>
+      <label class="field"><span class="lbl">Tags (vírgula)</span><input class="input" name="tags" value="{{ form.tags }}" placeholder="arquitetura, api"></label>
+      <label class="field"><span class="lbl">De</span><input class="input" type="date" name="date_from" value="{{ form.date_from }}"></label>
+      <label class="field"><span class="lbl">Até</span><input class="input" type="date" name="date_to" value="{{ form.date_to }}"></label>
+      <label class="field"><span class="lbl">Resultados</span><input class="input" type="number" name="top_k" min="1" max="50" value="{{ form.top_k }}"></label>
+    </div>
+  </details>
+</form>
+
+<div id="results">
+  {% include "search_results.html" %}
+</div>
+{% endblock %}

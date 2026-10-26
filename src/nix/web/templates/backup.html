@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, alert %}
+{% block content %}
+<div class="head">
+  <div class="shrink">
+    <a class="small" href="/backups">← Backups</a>
+    <h1 class="wrap-any">{{ path }}</h1>
+    {% if diff %}<p class="sub">Backup de {{ diff.entry.created_at | when }} comparado com a nota atual.</p>{% endif %}
+  </div>
+  {% if diff %}
+  <a class="btn" href="/backups/download?stamp={{ stamp }}&amp;path={{ path | urlencode }}">{{ icon("download", 16, "2") }}Baixar backup</a>
+  {% endif %}
+</div>
+
+{% if error %}{{ alert("err", error) }}{% endif %}
+
+{% if diff %}
+<section class="card stack">
+  <div class="row between">
+    <h2>Diferenças</h2>
+    <div class="row tight">
+      {% if not diff.entry.current_exists %}<span class="badge b-warn">nota removida</span>{% endif %}
+      {% if not diff.too_large %}<span class="badge b-ok">+{{ diff.added }}</span>
+      <span class="badge b-err">−{{ diff.removed }}</span>{% endif %}
+    </div>
+  </div>
+  {% if diff.too_large %}
+  <p class="muted">Os arquivos são grandes demais para comparar aqui. Baixe o backup e compare no seu editor.</p>
+  {% elif diff.identical %}
+  <p class="muted">A nota atual é igual a este backup.</p>
+  {% else %}
+  <div class="diff table-box">
+    {% for line in diff.lines %}<div class="{{ line.kind }}">{{ line.text }}</div>{% endfor %}
+  </div>
+  {% if diff.truncated %}<p class="small muted">Diferença longa: mostrando o começo. Baixe o backup para ver tudo.</p>{% endif %}
+  {% endif %}
+</section>
+
+{% if not diff.identical %}
+<section class="card stack" id="restore">
+  <div class="row between">
+    <h2>Restaurar</h2>
+    <span class="badge b-err">grava no vault</span>
+  </div>
+  <p class="muted">O conteúdo do backup substitui a nota{% if not diff.entry.current_exists %} (ela será recriada){% endif %}. O estado atual ganha o próprio backup antes, então dá para voltar.</p>
+  <form method="post" action="/backups/restore" hx-post="/backups/restore" hx-target="#restore-result" hx-swap="innerHTML" hx-disabled-elt="find button" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="stamp" value="{{ stamp }}">
+    <input type="hidden" name="path" value="{{ path }}">
+    <label class="check"><input type="checkbox" name="confirm" value="on"><span>Confirmo a restauração de <span class="mono">{{ path }}</span></span></label>
+    <div><button class="btn btn-danger" type="submit">{{ icon("undo", 16, "2") }}Restaurar backup</button></div>
+  </form>
+  <div id="restore-result"></div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

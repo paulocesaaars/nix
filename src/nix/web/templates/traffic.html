@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Tráfego MCP</h1>
+    <p class="sub">Chamadas de ferramenta feitas pelos clientes MCP, gravadas pelo servidor em <span class="mono">.nix/traffic.db</span>.</p>
+  </div>
+  <a class="btn" href="/traffic{% if tool or status %}?tool={{ tool | urlencode }}&amp;status={{ status }}{% endif %}">Atualizar</a>
+</div>
+
+{% if view.error %}{{ alert("err", view.error) }}{% endif %}
+
+<div class="kpis">
+  <div class="card"><div class="kpi-label">Chamadas</div><div class="kpi-value">{{ view.summary.calls | num }}</div></div>
+  <div class="card"><div class="kpi-label">Falhas</div><div class="kpi-value {{ 'is-err' if view.summary.failures else '' }}">{{ view.summary.failures | num }}</div></div>
+  <div class="card"><div class="kpi-label">Duração média</div><div class="kpi-value">{{ view.summary.avg_ms | duration }}</div></div>
+  <div class="card"><div class="kpi-label">Mais chamada</div><div class="kpi-value kpi-sm mono">{{ view.summary.top_tool or "—" }}</div></div>
+</div>
+
+<form class="card filters" method="get" action="/traffic">
+  <label class="field"><span class="lbl">Ferramenta</span>
+    <select class="input" name="tool">
+      <option value="">Todas</option>
+      {% for name in view.tools %}<option value="{{ name }}" {% if name == tool %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="field"><span class="lbl">Situação</span>
+    <select class="input" name="status">
+      <option value="">Todas</option>
+      <option value="ok" {% if status == "ok" %}selected{% endif %}>ok</option>
+      <option value="error" {% if status == "error" %}selected{% endif %}>erro</option>
+    </select>
+  </label>
+  <div class="row end"><button class="btn btn-primary" type="submit">Filtrar</button></div>
+</form>
+
+{% if not view.calls %}
+<div class="card empty">Nenhuma chamada registrada{% if tool or status %} com esses filtros{% endif %}. Conecte um cliente em <a href="/connect">Conectar cliente</a>.</div>
+{% else %}
+<div class="table-box">
+  <table>
+    <thead><tr><th>Quando</th><th>Cliente</th><th>Ferramenta</th><th>Argumentos</th><th class="num">Duração</th><th>Situação</th></tr></thead>
+    <tbody>
+      {% for call in view.calls %}
+      <tr>
+        <td>{{ call.called_at | when }}</td>
+        <td class="muted">{{ call.client or "—" }}</td>
+        <td class="mono">{{ call.tool }}</td>
+        <td class="mono muted wrap-any">{{ call.arguments or "—" }}</td>
+        <td class="num">{{ call.duration_ms | duration }}</td>
+        <td>{% if call.status == "ok" %}<span class="badge b-ok">ok</span>{% else %}<span class="badge b-err" title="{{ call.error or '' }}">erro</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if log_prompts %}
+{{ alert("warn", "logging.log_prompts está ligado: os argumentos das chamadas (consultas, caminhos) ficam gravados. O conteúdo das notas nunca é gravado.") }}
+{% else %}
+{{ alert("info", "Os argumentos não são gravados. Para ver consultas e caminhos, ligue logging.log_prompts em Configuração e reinicie o cliente MCP.") }}
+{% endif %}
+{% endblock %}

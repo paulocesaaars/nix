@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_ui.html" import notices, alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Notas</h1>
+    <p class="sub">Notas no índice. Abra uma para ver o contorno, as linhas e os links.</p>
+  </div>
+</div>
+
+<form class="card filters" method="get" action="/notes">
+  <label class="field"><span class="lbl">Pasta</span><input class="input" name="folder" value="{{ folder }}" placeholder="Projetos"></label>
+  <label class="field"><span class="lbl">Tag</span><input class="input" name="tag" value="{{ tag }}" placeholder="arquitetura"></label>
+  <div class="row end">
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+    {% if folder or tag %}<a class="btn" href="/notes">Limpar</a>{% endif %}
+  </div>
+</form>
+
+{{ notices(notice, error) }}
+
+{% if index %}
+{% if index.errors %}
+{% call alert("err", (index.errors | length) ~ " arquivo(s) falharam na última indexação: " ~ (index.errors | join(", ")) ~ ". Veja o motivo no resumo da sincronização.") %}
+<a class="btn btn-sm" href="/sync">Abrir sincronização</a>
+{% endcall %}
+{% endif %}
+
+{% if not index.notes %}
+<div class="card empty">Nenhuma nota encontrada{% if folder or tag %} com esses filtros{% endif %}.</div>
+{% else %}
+<p class="muted">{{ index.notes | length }} nota(s){% if index.notes | length >= 500 %}. Mostrando as 500 primeiras; filtre por pasta ou tag{% endif %}.</p>
+<div class="table-box">
+  <table>
+    <thead><tr><th>Título</th><th>Caminho</th><th>Tags</th></tr></thead>
+    <tbody>
+      {% for item in index.notes %}
+      <tr>
+        <td><a href="/notes/view?path={{ item.rel_path | urlencode }}"><strong>{{ item.title or item.rel_path }}</strong></a></td>
+        <td class="mono muted wrap-any">{{ item.rel_path }}</td>
+        <td><div class="chips">{% for t in item.tags[:4] %}<a class="chip" href="/notes?tag={{ t | urlencode }}">#{{ t }}</a>{% endfor %}{% if item.tags | length > 4 %}<span class="muted small">+{{ item.tags | length - 4 }}</span>{% endif %}</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

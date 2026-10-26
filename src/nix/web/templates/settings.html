@@ -1,64 +1,74 @@
 {% extends "base.html" %}
+{% from "_ui.html" import alert %}
 {% block content %}
-<h1>Configuração</h1>
-{% if message %}
-<p>{{ message }}</p>
-{% endif %}
-{% for warning in warnings %}
-<p><strong>Aviso:</strong> {{ warning }}</p>
-{% endfor %}
-{% if error %}
-<p><strong>Erro:</strong> {{ error }}</p>
-{% endif %}
-<form method="post" action="/settings" autocomplete="off">
+<div class="head">
+  <div>
+    <h1>Configuração</h1>
+    <p class="sub">Valores gravados no <span class="mono">settings.db</span>. Variáveis de ambiente ganham do banco e aparecem travadas.</p>
+  </div>
+</div>
+
+{% if message %}{{ alert("ok", message) }}{% endif %}
+{% for warning in warnings %}{{ alert("warn", warning) }}{% endfor %}
+{% if error %}{{ alert("err", error) }}{% endif %}
+
+<nav class="seg" aria-label="Seções">
+  {% for group in groups %}<a href="#{{ group.key }}">{{ group.title }}</a>{% endfor %}
+</nav>
+
+<form method="post" action="/settings" autocomplete="off" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">
   {% for group in groups %}
-  <fieldset>
-    <legend>{{ group.title }}</legend>
+  <section class="card" id="{{ group.key }}">
+    <h2 class="card-title">{{ group.title }}</h2>
     {% for field in group.fields %}
-    {% if field.widget == "bool" %}
-    <label>
-      <input type="checkbox" name="{{ field.dotted }}" value="on" {% if field.checked %}checked{% endif %} {% if not field.editable %}disabled{% endif %}>
-      {{ field.dotted }}
-    </label>
-    {% elif field.widget == "choice" %}
-    <label>
-      {{ field.dotted }}
-      <select name="{{ field.dotted }}" {% if not field.editable %}disabled{% endif %}>
-        {% for choice in field.choices %}
-        <option value="{{ choice }}" {% if choice == field.value_text %}selected{% endif %}>{{ choice }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% elif field.widget == "lines" or field.widget == "json" %}
-    <label>
-      {{ field.dotted }}
-      <textarea name="{{ field.dotted }}" rows="4" {% if not field.editable %}disabled{% endif %}>{{ field.value_text }}</textarea>
-    </label>
-    {% elif field.widget == "int" or field.widget == "float" %}
-    <label>
-      {{ field.dotted }}
-      <input type="number" name="{{ field.dotted }}" value="{{ field.value_text }}" step="{{ field.step }}"
-             {% if field.min_value is not none %}min="{{ field.min_value }}"{% endif %}
-             {% if field.max_value is not none %}max="{{ field.max_value }}"{% endif %}
-             {% if not field.editable %}disabled{% endif %}>
-    </label>
-    {% else %}
-    <label>
-      {{ field.dotted }}
-      <input type="text" name="{{ field.dotted }}" value="{{ field.value_text }}" {% if not field.editable %}disabled{% endif %}>
-    </label>
-    {% endif %}
-    <small>Origem: {{ field.origin }}</small>
-    {% if field.description %}
-    <small>{{ field.description }}</small>
-    {% endif %}
-    {% if field.lock_message %}
-    <small>{{ field.lock_message }}</small>
-    {% endif %}
+    {% set fid = "f-" ~ field.dotted | replace(".", "-") %}
+    <div class="setting">
+      <div class="stack-sm">
+        <label class="mono" for="{{ fid }}"><strong>{{ field.dotted }}</strong></label>
+        {% if field.description %}<span class="muted">{{ field.description }}</span>{% endif %}
+        <div class="row tight">
+          {% if field.source == "env" %}
+          <span class="badge b-warn" title="{{ field.lock_message }}">ambiente · travado</span>
+          {% elif field.source == "db" %}
+          <span class="badge b-a">settings.db</span>
+          {% else %}
+          <span class="badge b-n">padrão</span>
+          {% endif %}
+          {% for impact in field.impacts %}<span class="badge b-n">{{ impact }}</span>{% endfor %}
+        </div>
+        {% if field.lock_message %}<span class="small muted">{{ field.lock_message }}</span>{% endif %}
+      </div>
+      <div>
+        {% if field.widget == "bool" %}
+        <label class="check">
+          <input id="{{ fid }}" type="checkbox" name="{{ field.dotted }}" value="on" {% if field.checked %}checked{% endif %} {% if not field.editable %}disabled{% endif %}>
+          <span>{{ "ligado" if field.checked else "desligado" }}</span>
+        </label>
+        {% elif field.widget == "choice" %}
+        <select class="input" id="{{ fid }}" name="{{ field.dotted }}" {% if not field.editable %}disabled{% endif %}>
+          {% for choice in field.choices %}
+          <option value="{{ choice }}" {% if choice == field.value_text %}selected{% endif %}>{{ choice }}</option>
+          {% endfor %}
+        </select>
+        {% elif field.widget == "lines" or field.widget == "json" %}
+        <textarea class="input" id="{{ fid }}" name="{{ field.dotted }}" rows="4" {% if not field.editable %}disabled{% endif %}>{{ field.value_text }}</textarea>
+        {% elif field.widget == "int" or field.widget == "float" %}
+        <input class="input" id="{{ fid }}" type="number" name="{{ field.dotted }}" value="{{ field.value_text }}" step="{{ field.step }}"
+               {% if field.min_value is not none %}min="{{ field.min_value }}"{% endif %}
+               {% if field.max_value is not none %}max="{{ field.max_value }}"{% endif %}
+               {% if not field.editable %}disabled{% endif %}>
+        {% else %}
+        <input class="input" id="{{ fid }}" type="text" name="{{ field.dotted }}" value="{{ field.value_text }}" {% if not field.editable %}disabled{% endif %}>
+        {% endif %}
+      </div>
+    </div>
     {% endfor %}
-  </fieldset>
+  </section>
   {% endfor %}
-  <button type="submit">Salvar</button>
+  <div class="save-bar">
+    <a class="btn" href="/settings">Descartar</a>
+    <button class="btn btn-primary" type="submit">Salvar alterações</button>
+  </div>
 </form>
 {% endblock %}

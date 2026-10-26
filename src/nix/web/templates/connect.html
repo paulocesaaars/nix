@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Conectar cliente</h1>
+    <p class="sub">Configuração MCP pronta para colar, com o caminho deste Nix.</p>
+  </div>
+</div>
+
+{% if problem %}
+{{ alert("err", problem, "Executável não encontrado.") }}
+{% else %}
+<section class="card stack">
+  <div class="row between">
+    <h2>Executável detectado</h2>
+    <span class="badge b-ok"><span class="dot"></span>encontrado</span>
+  </div>
+  <p class="mono wrap-any">{{ command }}</p>
+  <p class="small muted">Sem argumentos, ele sobe o servidor MCP por stdio. Os logs vão para <span class="mono">.nix/logs/nix.log</span>; o stdout é do protocolo.</p>
+</section>
+
+<section class="card stack">
+  <div class="seg" role="tablist" aria-label="Cliente">
+    {% for snip in snippets %}
+    <button type="button" role="tab" id="tab-{{ snip.key }}" aria-controls="panel-{{ snip.key }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ snip.label }}</button>
+    {% endfor %}
+  </div>
+  {% for snip in snippets %}
+  <div class="stack" role="tabpanel" id="panel-{{ snip.key }}" aria-labelledby="tab-{{ snip.key }}" {% if not loop.first %}hidden{% endif %}>
+    <div class="row between">
+      <span class="muted">Onde: <span class="mono">{{ snip.file_hint }}</span></span>
+      <button class="btn btn-sm" type="button" data-copy="code-{{ snip.key }}">{{ icon("copy", 14, "2") }}<span data-label>Copiar</span></button>
+    </div>
+    <pre class="code" id="code-{{ snip.key }}">{{ snip.content }}</pre>
+    {% for line in snip.notes %}<p class="small muted">{{ line }}</p>{% endfor %}
+  </div>
+  {% endfor %}
+  {{ alert("info", "Use o caminho absoluto. \"command\": \"nix\" e ${env:NIX_HOME} costumam falhar na IDE, porque ela não lê o PATH nem o perfil do terminal.") }}
+</section>
+
+<section class="card stack">
+  <h2>Depois de colar</h2>
+  <ol class="steps">
+    <li>Reinicie o cliente ou recarregue os servidores MCP.</li>
+    <li>Peça ao agente algo como “busque nas minhas notas sobre …”.</li>
+    <li>Confira a chamada em <a href="/traffic">Tráfego MCP</a>.</li>
+  </ol>
+</section>
+{% endif %}
+
+<section class="card stack">
+  <div class="row between">
+    <h2>Ferramentas expostas</h2>
+    <span class="muted small">{{ tools | length }} ferramentas</span>
+  </div>
+  <div class="tools">
+    {% for tool in tools %}
+    <div class="tool" title="{{ tool.description }}"><span class="mono">{{ tool.name }}</span><span class="badge b-{{ tool.kind }}">{{ tool.label }}</span></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

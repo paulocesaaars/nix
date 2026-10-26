@@ -1,3 +1,10 @@
-<div hx-ext="sse" sse-connect="/sync/events" sse-swap="progress" sse-close="done" hx-swap="innerHTML">
-  <p>Sincronização em andamento.</p>
-</div>
+<section class="card stack" aria-live="polite">
+  <div class="row between">
+    <h2>{{ "Reindexação completa" if full else "Sincronização" }}</h2>
+    <span class="badge b-a"><span class="dot"></span>em andamento</span>
+  </div>
+  <div hx-ext="sse" sse-connect="/sync/events" sse-swap="progress" sse-close="done" hx-swap="innerHTML" class="stack">
+    <div class="bar"><span style="width: 0%"></span></div>
+    <p class="muted">Preparando…</p>
+  </div>
+</section>

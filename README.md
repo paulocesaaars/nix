@@ -172,7 +172,7 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
 | `nix status [--json]` | Notas, chunks, último sync e defasagem |
 | `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |
-| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, configuração, histórico) |
+| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, consultas ao vault, conexão de clientes, tráfego MCP, backups, configuração, histórico) |
 
 ## Ferramentas MCP
 
@@ -204,7 +204,14 @@ Dezenove ferramentas, definidas em `src/nix/core/tools/registry.py`. Notas tamb�
 
 Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimento, a pasta do repositório). Caminhos relativos resolvem contra essa pasta. Variáveis `NIX_SECAO__CAMPO` ganham do banco (ex.: `NIX_VAULT__PATH`) e o campo correspondente fica travado no `nix config` e na interface. `nix init` grava o vault e o modelo. `nix config set secao.chave valor` altera um campo; listas e objetos entram como JSON. `nix config undo` restaura o valor anterior.
 
-`nix ui` abre as mesmas operações no navegador: status, sincronização com prévia e progresso, diagnóstico, formulário e histórico. O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.
+`nix ui` abre as mesmas operações no navegador, sem precisar de um LLM:
+
+- **Operação:** status, sincronização com prévia e progresso, diagnóstico.
+- **Vault (somente leitura):** busca, notas (com outline e trechos), tags e insights.
+- **Integração:** trechos prontos para conectar Cursor, Claude Code e VS Code; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
+- **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita no vault feita pela interface, com confirmação; formulário de configuração e histórico.
+
+O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.
 
 | Chave | Padrão | Função |
 | --- | --- | --- |

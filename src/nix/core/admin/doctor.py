@@ -125,6 +125,11 @@ def build_doctor_report(
     )
 
 
+def nix_command() -> tuple[str | None, str | None]:
+    """Executável que sobe o servidor MCP e, se não achar, a ação corretiva."""
+    return _command(env_home() is not None)
+
+
 def _command(has_home: bool) -> tuple[str | None, str | None]:
     if is_packaged():
         return str(Path(sys.argv[0]).resolve()), None

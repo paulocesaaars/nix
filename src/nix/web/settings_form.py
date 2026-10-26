@@ -32,10 +32,13 @@ class FieldView:
     min_value: str | None
     max_value: str | None
     step: str
+    source: str
+    impacts: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class SettingsGroup:
+    key: str
     title: str
     fields: tuple[FieldView, ...]
 
@@ -55,13 +58,13 @@ def field_groups() -> list[SettingsGroup]:
     for entry in snapshot():
         if entry.section != section:
             if bucket:
-                groups.append(SettingsGroup(title, tuple(bucket)))
+                groups.append(SettingsGroup(section, title, tuple(bucket)))
             section = entry.section
             title = _SECTIONS.get(section, section)
             bucket = []
         bucket.append(_view(entry))
     if bucket:
-        groups.append(SettingsGroup(title, tuple(bucket)))
+        groups.append(SettingsGroup(section, title, tuple(bucket)))
     return groups
 
 
@@ -113,7 +116,23 @@ def _view(entry: ConfigEntry) -> FieldView:
         min_value=_limit(entry.ge, entry.widget),
         max_value=_limit(entry.le, entry.widget),
         step="1" if entry.widget == "int" else "any",
+        source=entry.source,
+        impacts=_impacts(entry),
     )
+
+
+def _impacts(entry: ConfigEntry) -> tuple[str, ...]:
+    impact = require_field(entry.section, entry.key).impact
+    labels: list[str] = []
+    if impact.requires_full_sync:
+        labels.append("exige sync --full")
+    elif impact.requires_sync:
+        labels.append("exige sync")
+    if impact.requires_restart:
+        labels.append("exige reinício")
+    if impact.immutable:
+        labels.append("fixo")
+    return tuple(labels)
 
 
 def _value_text(entry: ConfigEntry) -> str:

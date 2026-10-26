@@ -1,4 +1,3 @@
-{% if notice %}
-<p><strong>Aviso:</strong> {{ notice }}</p>
-{% endif %}
+{% from "_ui.html" import alert %}
+{% if notice %}{{ alert("warn", notice) }}{% endif %}
 {% include "sync_stream.html" %}

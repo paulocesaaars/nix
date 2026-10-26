@@ -1,2 +1,5 @@
-<progress value="{{ current }}" max="{{ maximum }}"></progress>
-<p>{{ current }}/{{ total }} — {{ action }}{% if rel_path %} {{ rel_path }}{% endif %}{% if detail %} ({{ detail }}){% endif %}</p>
+<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ percent }}"><span style="width: {{ percent }}%"></span></div>
+<div class="row between">
+  <span>{{ action | capitalize }}{% if rel_path %} <span class="mono wrap-any">{{ rel_path }}</span>{% endif %}{% if detail %} <span class="muted">({{ detail }})</span>{% endif %}</span>
+  <span class="muted small">{{ current }}/{{ total }} · {{ percent }}%</span>
+</div>

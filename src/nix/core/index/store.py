@@ -440,6 +440,22 @@ class IndexStore:
                 (started_at, finished_at, trigger, added, updated, removed, failed, error_log),
             )
 
+    def recent_sync_runs(self, limit: int = 10) -> list[sqlite3.Row]:
+        return list(
+            self._conn.execute(
+                "SELECT * FROM sync_runs ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        )
+
+    def error_files(self, limit: int = 100) -> list[sqlite3.Row]:
+        return list(
+            self._conn.execute(
+                "SELECT rel_path, indexed_at FROM files WHERE status = 'error' ORDER BY rel_path LIMIT ?",
+                (limit,),
+            )
+        )
+
     def clear_all(self) -> None:
         with self._conn:
             self._conn.execute("DELETE FROM chunks")

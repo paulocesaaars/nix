@@ -1,15 +1,14 @@
+{% from "_ui.html" import alert %}
 {% if error %}
-<p><strong>Erro:</strong> {{ error }}</p>
+{{ alert("err", error) }}
 {% else %}
-<p>{{ summary }}</p>
+<div class="bar"><span style="width: 100%"></span></div>
+{{ alert("err" if report and report.failed else "ok", summary, "Sincronização concluída.") }}
 {% endif %}
-{% if tokenizer %}
-<p>{{ tokenizer }}</p>
-{% endif %}
+{% if tokenizer %}{{ alert("info", tokenizer) }}{% endif %}
 {% if errors %}
-<ul>
-  {% for item in errors %}
-  <li>{{ item }}</li>
-  {% endfor %}
+<ul class="small">
+  {% for item in errors %}<li class="mono wrap-any">{{ item }}</li>{% endfor %}
 </ul>
 {% endif %}
+{% if not error %}<div><a class="btn btn-sm" href="/sync">Atualizar a página</a></div>{% endif %}
