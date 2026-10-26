@@ -29,15 +29,27 @@ def _version_text(stdout: str) -> str:
     return stdout.replace("\r\n", "\n").strip("\n")
 
 
-def _check_version(binary: Path, version: str, env: dict[str, str]) -> None:
-    result = subprocess.run(
-        [str(binary), "--version"],
+def _capture(binary: Path, args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Lê stdout e stderr como UTF-8.
+
+    No Windows o Python do runner decodifica o pipe com cp1252. O binário
+    escreve UTF-8 (o doctor usa «·» e «→»), e um byte fora desse mapa
+    derruba a thread de leitura antes do smoke ver o relatório.
+    """
+    return subprocess.run(
+        [str(binary), *args],
         capture_output=True,
         env=env,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=_TIMEOUT_S,
         check=False,
     )
+
+
+def _check_version(binary: Path, version: str, env: dict[str, str]) -> None:
+    result = _capture(binary, ["--version"], env)
     stdout = _version_text(result.stdout)
     if result.returncode != 0 or stdout != version:
         _fail(
@@ -51,14 +63,7 @@ def _check_version(binary: Path, version: str, env: dict[str, str]) -> None:
 
 
 def _run(binary: Path, args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        [str(binary), *args],
-        capture_output=True,
-        env=env,
-        text=True,
-        timeout=_TIMEOUT_S,
-        check=False,
-    )
+    result = _capture(binary, args, env)
     if result.returncode != 0:
         _fail(
             f"`nix {' '.join(args)}` falhou (código {result.returncode}).\n"
