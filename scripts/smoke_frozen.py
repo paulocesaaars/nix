@@ -90,11 +90,11 @@ def main() -> None:
         vault.mkdir()
         env = os.environ.copy()
         env["NIX_HOME"] = str(home)
-        env.pop("NIX_CONFIG", None)
         env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
         env["TQDM_DISABLE"] = "1"
         env["TOKENIZERS_PARALLELISM"] = "false"
         env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         _check_version(binary, version, env)
         _check_version(binary, version, env)
         _run(binary, ["init", "--vault", str(vault)], env)

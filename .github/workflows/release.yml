@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag já existente a (re)publicar, ex.: v0.1.0"
+        description: "Tag já existente a (re)publicar, ex.: v1.2.3"
         required: true
         type: string
 
@@ -33,7 +33,7 @@ jobs:
           TAG="${INPUT_TAG:-$REF_NAME}"
           case "$TAG" in
             v*) ;;
-            *) echo "::error::Tag '$TAG' inválida. Use o formato vX.Y.Z (ex.: v0.1.0)."; exit 1 ;;
+            *) echo "::error::Tag '$TAG' inválida. Use o formato vX.Y.Z (ex.: v1.2.3)."; exit 1 ;;
           esac
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
@@ -129,6 +129,11 @@ jobs:
 
       - name: Smoke
         shell: bash
+        env:
+          # O runner Windows captura o passo por pipe em cp1252. Sem isto o
+          # Python do smoke quebra (ou troca letras) ao imprimir o relatório.
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"
         run: |
           name="$(tr -d '\r' < dist/asset-name.txt)"
           python scripts/smoke_frozen.py "dist/${name}" "${{ needs.check.outputs.version }}"

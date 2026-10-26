@@ -24,7 +24,7 @@ def _pyproject_version() -> str:
 
 def main() -> None:
     if len(sys.argv) != 2:
-        _fail("Uso: python scripts/check_version.py <versao>  (ex.: 1.0.0)")
+        _fail("Uso: python scripts/check_version.py <versao>  (ex.: 1.2.3)")
 
     expected = sys.argv[1]
     declared = _pyproject_version()

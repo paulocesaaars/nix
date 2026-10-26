@@ -34,6 +34,10 @@ _PACKAGES = (
     "tiktoken",
     "tokenizers",
     "huggingface_hub",
+    # O filelock 4 só entrega SoftFileLock via import_module. No Windows o
+    # Nuitka elimina o único import estático (ramo não-win32) e o binário
+    # sobe sem filelock._soft; o doctor então perde o fastembed.
+    "filelock",
     "grpc",
 )
 # 4.3 inclui as tabelas unicode do Rich e o tratamento da dylib do onnxruntime no macOS.
@@ -49,6 +53,7 @@ _METADATA = (
     "tiktoken",
     "tokenizers",
     "huggingface_hub",
+    "filelock",
     "numpy",
     "pydantic",
     "typer",
