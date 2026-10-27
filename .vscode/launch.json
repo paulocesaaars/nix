@@ -71,6 +71,30 @@
       "justMyCode": true
     },
     {
+      "name": "Nix: interface (nix ui)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${command:python.interpreterPath}",
+      "module": "nix",
+      "args": ["ui"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Nix: interface (--no-browser, porta 8765)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${command:python.interpreterPath}",
+      "module": "nix",
+      "args": ["ui", "--no-browser", "--port", "8765"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
       "name": "Nix: servidor MCP (stdio)",
       "type": "debugpy",
       "request": "launch",
