@@ -5,7 +5,7 @@
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe vaults Obsidian a agentes de desenvolvimento |
 | Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `vault`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
-| Status | Implementado — v2.3.0 |
+| Status | Implementado — v2.3.1 |
 | Autor | Paulo |
 | Data | 2026-10-27 |
 
