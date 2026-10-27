@@ -368,7 +368,7 @@ Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sess
 
 ## 12. Fora de escopo
 
-Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário (exceto a nota de sessão, que depende de `nix hooks install`, RN-07); leitura dos arquivos de sessão dos agentes; Codex; banco vetorial separado para sessões; Devin na nuvem; sincronização de arquivos entre dispositivos.
+Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário (exceto a nota de sessão, que depende de `nix hooks install`, RN-07); leitura dos arquivos de sessão dos agentes; banco vetorial separado para sessões; Devin na nuvem; sincronização de arquivos entre dispositivos.
 
 ## 13. Glossário
 
