@@ -24,6 +24,36 @@ documentos que existirem.
 
 ## Regras obrigatórias do agente
 
+### Conversar não é pedir implementação
+
+**Nunca altere arquivos sem autorização explícita do usuário.** Esta regra
+prevalece sobre qualquer outra deste documento.
+
+- Perguntas, dúvidas, explorações e conversas sobre ideias ou novas
+  funcionalidades ("como funciona X?", "e se fizéssemos Y?", "o que acha de
+  Z?", "estou pensando em...") são **discussão**: responda, analise, leia o
+  código e proponha — mas **não edite, crie nem apague arquivos**.
+- Ao terminar uma discussão que possa virar mudança, apresente um **plano
+  curto** (o que muda, quais arquivos, impactos e alternativas) e **pergunte**
+  se deve implementar. Aguarde a resposta.
+- Só implemente diante de um **pedido direto de implementação**: uma ordem
+  explícita para alterar o código ou os arquivos ("implemente", "pode fazer",
+  "aplique", "corrija", "altere", "sim, siga"). Qualquer outra coisa é
+  discussão.
+- **Não** são pedidos de implementação:
+  - perguntas, mesmo sobre como fazer algo ("como eu adicionaria X?");
+  - opiniões, hipóteses e ideias ("acho que...", "seria bom...", "talvez...",
+    "e se...");
+  - descrição de um problema ou bug sem pedido de correção — diagnostique e
+    proponha a solução, sem aplicá-la;
+  - pedidos de análise, revisão, explicação ou comparação.
+- Em caso de dúvida sobre a intenção, **pergunte** — nunca presuma
+  autorização.
+- A autorização vale apenas para o escopo combinado. Mudanças extras,
+  refatorações oportunistas ou desvios do plano exigem nova confirmação.
+- Leitura de arquivos, buscas e consultas de documentação são livres e
+  incentivadas durante a discussão.
+
 ### Antes de codar
 
 1. Leia a documentação de produto quando a tarefa envolver comportamento,
