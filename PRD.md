@@ -4,8 +4,8 @@
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe vaults Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `vault`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
-| Status | Implementado — v2.3.1 |
+| Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `vault`, `config`, `sync`, `status`, `doctor`, `ui`, `session`, `hooks`, `skills`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (`nix` e `nix-hook` em `NIX_HOME`, `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
+| Status | Implementado — v2.4.1 |
 | Autor | Paulo |
 | Data | 2026-10-27 |
 
@@ -15,7 +15,7 @@ Especificações técnicas: [TDD.md](./TDD.md).
 
 ## 1. Visão
 
-Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code, Copilot e o Devin CLI. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
+Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
 
 Tudo roda na máquina do usuário. Embeddings e banco vetorial são locais e gratuitos. Não há LLM no Nix: o raciocínio fica no cliente MCP.
 
@@ -26,7 +26,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 - **Busca literal insuficiente.** A busca do Obsidian encontra palavras, não ideias. Quem não lembra o termo exato usado não acha a nota.
 - **Conhecimento fragmentado.** A resposta para uma pergunta costuma estar espalhada em várias notas, e sintetizar isso manualmente é caro.
 - **Captura com atrito.** Registrar uma nota nova no formato certo, com os links e tags corretos, exige abrir o Obsidian e lembrar das convenções.
-- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code, Copilot e o Devin CLI não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
+- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
 
 ## 3. Objetivos
 
@@ -36,7 +36,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 | O2 | Dar ao usuário controle explícito sobre quando a base é vetorizada | Nenhuma vetorização de arquivos externos ocorre sem `nix sync` ou `sync_index` |
 | O3 | Manter o índice consistente após edições feitas pelas ferramentas | 100% das escritas via MCP refletidas no índice ao final da operação |
 | O4 | Custo zero e privacidade | Embeddings e banco vetorial 100% locais e gratuitos; nenhuma chamada remota |
-| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot e no Devin CLI local |
+| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop |
 
 ### Não-objetivos (v1)
 
@@ -121,8 +121,8 @@ Esta é a regra de negócio central do produto:
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
-| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar o binário da plataforma, conferir o SHA-256, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `settings.db`. Não exige Python na máquina | Must |
-| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar o binário, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` | Must |
+| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar os binários `nix` e `nix-hook` da plataforma, conferir o SHA-256 de cada um, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `settings.db`. Não exige Python na máquina | Must |
+| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar `nix` e `nix-hook`, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` | Must |
 
 ### 5.6 Interface MCP
 
@@ -169,12 +169,13 @@ Guarda as sessões feitas com Claude Code, Cursor, Copilot, Devin CLI e Devin De
 | RF-110 | O handoff reúne o primeiro e o último pedido, os 5 últimos, os arquivos alterados, o último erro e o que ficou aberto, em até 6.000 caracteres e terminando no caminho da nota. Há no máximo um pendente por projeto, entregue uma única vez | Must |
 | RF-112 | O handoff é criado no `session-end`, no `session_handoff` e por `nix session handoff --create`; é entregue na saída do hook de início de sessão ou em `session_handoff` | Must |
 | RF-120 | `nix hooks install` roda no repositório, mostra os arquivos que vai criar ou alterar e só escreve depois de confirmar (ou com `--yes`); nenhum agente vem marcado. `remove` apaga só o que a Nix marcou e `status` mostra o que está ativo. Os hooks ficam no projeto, nunca na pasta da conta, com backup antes de alterar arquivo existente | Must |
+| RF-127 | `nix skills install` roda no repositório, mostra as pastas que vai criar ou alterar e só escreve depois de confirmar (ou com `--yes`); nenhum agente vem marcado. Copia as skills do pacote (`sessoes-nix`) para a pasta do agente: Claude em `.claude/skills/`, Cursor e Copilot em `.agents/skills/`, Devin CLI e Devin Desktop em `.devin/skills/`. `remove` apaga só as pastas com a marca da Nix, `status` mostra o que está ativo, e uma pasta já existente sem essa marca não é sobrescrita. Uma pasta marcada com o texto da skill incompleto fica desatualizada e o `install` seguinte a completa. As skills de desenvolvimento não entram nesse comando | Must |
 | RF-130 | `nix hook` usa um ponto de entrada mínimo (sem CLI nem Pydantic), termina sempre com código 0 e em menos de 300 ms com o cache do binário aquecido; só o início da sessão escreve no stdout (o handoff, no formato do agente). Evento de projeto sem hooks instalados é descartado | Must |
 | RF-136 | No `session-end`, um processo destacado grava a nota sem o hook esperar; um único consolidador roda por vez e processa a fila inteira | Must |
 | RF-140 | A interface tem a tela Sessões (lista por projeto e agente, nota, handoff pendente com cancelamento) e, na tela Conectar clientes, o Devin Desktop e o arquivo de hook de cada agente, sem oferecer skill | Should |
 | RF-150 | Cada chunk guarda o hash do texto vetorizado; ao reindexar um arquivo alterado, o vetor de chunk com o mesmo hash é reaproveitado e só os novos passam pelo embedding. O resultado do sync informa os chunks reaproveitados | Must |
 
-Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sessions` e `read_session` (leitura), expostas com `sessions.enabled`. A skill `sessoes-nix` fica no repositório `paulocesaaars/skills` e orienta o agente a chamá-las; o Nix não a instala.
+Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sessions` e `read_session` (leitura), expostas com `sessions.enabled`. A skill `sessoes-nix` vem no pacote, orienta o agente a chamá-las e entra no projeto com `nix skills install`.
 
 ## 6. Histórias de usuário e critérios de aceite
 
@@ -335,16 +336,16 @@ Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sess
 **Entregue**
 
 - Configuração em `settings.db` na pasta do aplicativo (ambiente ganha do banco; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
-- Servidor MCP stdio com 20 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend, `list_vaults`), recursos `nix://note/{+rel_path}` (vault padrão) e `nix://vault/{name}/note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
+- Servidor MCP stdio com 20 ferramentas de vault (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend, `list_vaults`) e, com `sessions.enabled`, as 3 de sessão, recursos `nix://note/{+rel_path}` (vault padrão) e `nix://vault/{name}/note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
 - CLI de bootstrap: `init [--name] [--vault] [--embedding-model] [--force]` (o primeiro vault chama-se `Default` se `--name` for omitido), `vault` (listar, cadastrar, renomear, remover, padrão, pasta e ajustes), `sync` e `status` com `--vault` repetível e `--all`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor. Uma configuração anterior, de um vault só, vira o `Default` e conserva o índice e os backups já gravados.
 - Vários vaults nomeados (de 1 a 5, exatamente um padrão) no mesmo processo. Ferramenta sem `vault` usa o padrão. Busca em um, em vários ou em todos. Escrita num único vault.
-- Instalador `install.bat` / `install.ps1` / `install.sh` (binário único da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
-- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `settings.db`; não toca no vault).
+- Instalador `install.bat` / `install.ps1` / `install.sh` (`nix` e `nix-hook` da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
+- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, `nix` e `nix-hook`, `.nix/` e `settings.db`; não toca no vault).
 - CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em um ou mais vaults, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, tela Vaults, configuração e histórico).
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
-- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code e do Devin CLI local.
+- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code, Devin CLI e Devin Desktop.
 - Escrita com write-through, confirmação e backup.
-- Sessões dos agentes: `sessions.db`, hooks por projeto para Claude Code, Cursor, Copilot, Devin CLI e Devin Desktop (`nix hooks install/remove/status`), nota no vault, handoff, as ferramentas `list_sessions`, `read_session` e `session_handoff`, a tela Sessões e o reaproveitamento de vetores por hash de chunk.
+- Sessões dos agentes: `sessions.db`, hooks por projeto para Claude Code, Cursor, Copilot, Devin CLI e Devin Desktop (`nix hooks install/remove/status`), a skill `sessoes-nix` instalada no projeto com `nix skills install/remove/status`, nota no vault, handoff, as ferramentas `list_sessions`, `read_session` e `session_handoff`, a tela Sessões e o reaproveitamento de vetores por hash de chunk.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
@@ -379,7 +380,8 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
 - **Sessão** — conversa de um agente com o projeto, gravada pelos hooks em `sessions.db` e resumida numa nota do vault.
 - **Handoff** — resumo montado por regras (sem LLM) do ponto em que uma sessão parou, entregue uma única vez a outro agente.
-- **Hook de sessão** — comando que o agente chama a cada evento (`nix hook`), instalado por projeto com `nix hooks install`.
+- **Hook de sessão** — comando que o agente chama a cada evento (`nix-hook` no binário publicado, `nix hook` no checkout), instalado por projeto com `nix hooks install`.
+- **Skill da Nix** — `SKILL.md` que vem no pacote e o `nix skills install` copia para a pasta de skills do agente, no projeto. O arquivo `.nix-skill` marca essas pastas para o `remove` não apagar as skills de desenvolvimento.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
-- **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa o binário único, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
-- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga o binário, `.nix/` e `settings.db`; não altera o vault.
+- **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa `nix` e `nix-hook`, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
+- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `nix` e `nix-hook`, `.nix/` e `settings.db`; não altera o vault.

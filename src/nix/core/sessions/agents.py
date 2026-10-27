@@ -1,7 +1,8 @@
 """Agentes suportados e o formato do contexto que cada um aceita no início da sessão.
 
 Ponto único da lista de agentes (só biblioteca padrão: o hook importa este módulo).
-Um agente novo entra aqui e em `core/admin/agent_hooks.SPECS`.
+Um agente novo entra aqui, em `core/admin/agent_hooks.SPECS` e em
+`core/admin/agent_skills.DESTINATIONS`.
 """
 
 from __future__ import annotations

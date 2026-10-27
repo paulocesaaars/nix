@@ -9,7 +9,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B%20%2F%203.14-blue?style=for-the-badge" alt="Python 3.11+ / 3.14"></a>
 </p>
 
-Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
@@ -30,7 +30,7 @@ Não é preciso instalar Python. O arquivo baixado já traz o runtime.
 
 ## Instalação
 
-O instalador baixa o binário da [última release](https://github.com/paulocesaaars/nix/releases/latest), confere o SHA-256, grava `NIX_HOME` e dispara `nix init` se ainda não houver `settings.db`.
+O instalador baixa `nix` e `nix-hook` da [última release](https://github.com/paulocesaaars/nix/releases/latest), confere o SHA-256 de cada um, grava `NIX_HOME` e dispara `nix init` se ainda não houver `settings.db`. Os hooks de sessão chamam o `nix-hook`.
 
 **Windows (PowerShell):**
 
@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/install.sh |
 
 No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`).
 
-A pasta da instalação é `%LOCALAPPDATA%\nix` no Windows, `~/Library/Application Support/nix` no macOS e `~/.local/share/nix` no Linux (ou o `NIX_HOME` que já existir). O binário fica em `{NIX_HOME}/bin`. Windows arm64 e macOS Intel não têm binário: o instalador diz isso e para.
+A pasta da instalação é `%LOCALAPPDATA%\nix` no Windows, `~/Library/Application Support/nix` no macOS e `~/.local/share/nix` no Linux (ou o `NIX_HOME` que já existir). Os binários ficam em `{NIX_HOME}/bin`. Windows arm64 e macOS Intel não têm binário: o instalador diz isso e para.
 
 <p>
   <img src="nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
@@ -92,9 +92,28 @@ Para reinstalar do zero:
 npx skills add paulocesaaars/skills -a claude-code -a cursor --copy -y
 ```
 
+## Sessões
+
+Opcional e por projeto. Na raiz do repositório, os hooks gravam a sessão e a skill `sessoes-nix` ensina o agente a consultar o que ficou gravado. Essa skill vem com a Nix e não entra no repositório de skills de desenvolvimento.
+
+```bash
+nix hooks install --agent cursor --agent claude
+nix skills install --agent cursor --agent claude
+```
+
+Sem `--agent`, cada comando pergunta um a um e só escreve depois de confirmar. A skill vai para a pasta que o agente lê e não altera as outras:
+
+| Agentes | Pasta |
+| --- | --- |
+| Claude Code | `.claude/skills/sessoes-nix/` |
+| Cursor e Copilot | `.agents/skills/sessoes-nix/` |
+| Devin CLI e Devin Desktop | `.devin/skills/sessoes-nix/` |
+
+`nix hooks status` e `nix skills status` mostram o que está ativo. `remove` apaga só o que a Nix marcou. `nix session list` mostra as sessões do projeto; `show`, `handoff` e `render` leem, entregam o handoff e gravam a nota.
+
 ## Desinstalar
 
-`uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, o binário, o índice (`.nix/`) e o `settings.db` da pasta `NIX_HOME`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
+`uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, os binários `nix` e `nix-hook`, o índice (`.nix/`) e o `settings.db` da pasta `NIX_HOME`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
 
 ## Registro no cliente MCP
 
@@ -173,7 +192,10 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | `nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]` | Sincroniza o índice (nunca automático) |
 | `nix status [--json] [--vault NOME]... [--all]` | Notas, chunks, último sync e defasagem |
 | `nix doctor [--json]` | Diagnóstico de ambiente, config e índice de cada vault |
-| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, consultas, conexão de clientes, tráfego MCP, backups, vaults, configuração, histórico) |
+| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, consultas, conexão de clientes, sessões, tráfego MCP, backups, vaults, configuração, histórico) |
+| `nix session list\|show\|handoff\|render` | Lista e mostra sessões, entrega ou cancela o handoff e grava a nota |
+| `nix hooks install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Ativa, remove e mostra os hooks de sessão no repositório |
+| `nix skills install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Copia, remove e mostra a skill `sessoes-nix` nas pastas dos agentes |
 
 De 1 a 5 vaults no mesmo Nix. Sem `--vault` e sem `--all`, `nix sync` e `nix status` usam o padrão. `--vault` pode repetir; `--all` percorre todos, em sequência — não combine os dois. `--name` no `init` só vale na criação do primeiro vault; para os seguintes, `nix vault add NOME CAMINHO`.
 
@@ -183,7 +205,7 @@ Nas ferramentas, omitir `vault` usa o padrão. Busca, listas, status e sync acei
 
 ## Ferramentas MCP
 
-Vinte ferramentas, definidas em `src/nix/core/tools/registry.py`. Notas do vault padrão aparecem como recurso `nix://note/{+rel_path}`; um vault nomeado, como `nix://vault/{name}/note/{+rel_path}`.
+Vinte ferramentas de vault e, com `sessions.enabled`, três de sessão. A definição fica em `src/nix/core/tools/registry.py`. Notas do vault padrão aparecem como recurso `nix://note/{+rel_path}`; um vault nomeado, como `nix://vault/{name}/note/{+rel_path}`.
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -207,6 +229,9 @@ Vinte ferramentas, definidas em `src/nix/core/tools/registry.py`. Notas do vault
 | `vault_insights` | Órfãs, duplicatas, sugestão de links ou resumo |
 | `remember` | Grava fato duradouro em `longterm_folder` do vault |
 | `list_vaults` | Nome, caminho, padrão e se o índice daquele vault está desatualizado |
+| `list_sessions` | Sessões gravadas neste projeto, da mais recente para a mais antiga. Exige `sessions.enabled` |
+| `read_session` | Eventos de uma sessão, do fim para o começo. O texto é histórico |
+| `session_handoff` | Onde a sessão anterior parou e o caminho da nota. `accept=false` só mostra |
 
 ## Configuração
 
@@ -216,7 +241,7 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 
 - **Operação:** status, sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
 - **Vault (somente leitura):** busca em um, em vários ou em todos, notas (com outline e trechos), tags e insights. O seletor "Vault ativo", no topo da barra lateral, usa `?vault=`; sem ele, vale o padrão.
-- **Integração:** trechos prontos para conectar Cursor, Claude Code, VS Code e Devin CLI; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
+- **Integração:** trechos prontos para conectar Cursor, Claude Code, VS Code, Devin CLI e Devin Desktop; sessões do projeto (lista, nota e handoff pendente); tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita no vault feita pela interface, com confirmação; tela Vaults; formulário de configuração e histórico.
 
 O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.
@@ -232,7 +257,7 @@ O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou 
 
 ## Publicar uma versão
 
-Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no remoto. O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) confere a versão, roda `ruff` e `mypy`, compila um binário por plataforma (Windows amd64, Linux amd64, Linux arm64, macOS arm64) e publica os arquivos com `checksums.txt` em [Releases](https://github.com/paulocesaaars/nix/releases).
+Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no remoto. O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) confere a versão, roda `ruff` e `mypy`, compila `nix` e `nix-hook` por plataforma (Windows amd64, Linux amd64, Linux arm64, macOS arm64) e publica os arquivos com `checksums.txt` em [Releases](https://github.com/paulocesaaars/nix/releases).
 
 1. Atualize `[project].version` em `pyproject.toml` (ex.: `1.2.3`). A tag **precisa** bater com esse valor — senão o job falha.
 2. Faça o commit e o push na branch principal.
@@ -243,7 +268,7 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz um binário por plataforma e o `checksums.txt`.
+4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz `nix` e `nix-hook` por plataforma e o `checksums.txt`.
 
 Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.2.3`).
 

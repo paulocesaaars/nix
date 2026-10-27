@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from nix.core.admin.empty_dirs import prune_empty_dirs
 from nix.core.errors import ConfigError
 from nix.core.sessions.agents import AGENTS
 from nix.core.sessions.store import SessionStore
@@ -402,19 +403,8 @@ def _remove_one(root: Path, spec: AgentSpec, backup_dir: Path) -> RemoveResult:
         path.write_text(_dump(doc), encoding="utf-8", newline="\n")
         return RemoveResult(spec, removed, False, backup)
     path.unlink()
-    _prune_empty_dirs(path.parent, root)
+    prune_empty_dirs(path.parent, root)
     return RemoveResult(spec, removed, True, backup)
-
-
-def _prune_empty_dirs(directory: Path, root: Path) -> None:
-    """Apaga a pasta do hook (`.devin`, `.github/hooks`...) se a Nix a deixou vazia. Nunca sobe da raiz."""
-    current = directory
-    while current != root and root in current.parents:
-        try:
-            current.rmdir()
-        except OSError:
-            return
-        current = current.parent
 
 
 @dataclass(frozen=True)

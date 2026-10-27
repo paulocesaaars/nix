@@ -127,10 +127,13 @@ nix/
 │   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
     ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/; `nix hook` segue direto para sessions/hook_entry
-    ├── nix_frozen.py           # entrada do binário; não relança o .venv
+    ├── nix_frozen.py           # entrada do binário completo; não relança o .venv
+    ├── nix_hook_frozen.py      # entrada do binário leve `nix-hook`
     └── nix/
         ├── __init__.py
         ├── __main__.py             # python -m nix (pacote instalado)
+        ├── skills/                 # SKILL.md de produto; `nix skills install` copia para o projeto
+        │   └── sessoes-nix/SKILL.md
         ├── config/
         │   ├── schema.py           # modelos Pydantic da configuração e textos de ajuda
         │   ├── embedding_models.py # catálogo técnico dos embeddings (validação + FastEmbed)
@@ -139,6 +142,7 @@ nix/
         │   ├── editor.py           # gravação validada (CLI e interface)
         │   ├── loader.py           # precedência env > banco > padrão; vaults vêm da tabela
         │   ├── session_defaults.py # padrões de `sessions.*` e validação da pasta; sem dependências, o hook e o schema importam daqui
+        │   ├── executables.py      # no binário publicado, aponta o hook para o irmão `nix-hook`
         │   └── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         ├── core/
         │   ├── vault/
@@ -181,7 +185,7 @@ nix/
         │   │   ├── render.py       # nota Markdown da sessão no vault
         │   │   └── paths.py        # caminho da nota e URI somente leitura do SQLite
         │   ├── runtime.py          # RuntimeHost: resolve / resolve_many, Embedder compartilhado
-        │   ├── admin/              # init, doctor, VaultService e agent_hooks (hooks por projeto dos 5 agentes)
+        │   ├── admin/              # init, doctor, VaultService, agent_hooks, agent_skills, empty_dirs
         │   └── tools/
         │       ├── args.py         # VaultArgs (um nome) e MultiVaultArgs (nome, lista ou "*")
         │       ├── registry.py     # definição canônica das ferramentas
@@ -199,7 +203,9 @@ nix/
         │   │   ├── ui_cmd.py       # nix ui
         │   │   ├── session_cmds.py # nix session list/show/render/handoff
         │   │   ├── hooks_cmds.py   # nix hooks install/remove/status
+        │   │   ├── skills_cmds.py  # nix skills install/remove/status
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
+        │   ├── agents.py           # agentes pedidos ou confirmados, e a raiz do projeto
         │   ├── embedding_copy.py   # tabela do nix init; textos em config/embedding_present.py
         │   └── render.py           # banner, tabelas de sync/status, erros em stderr
         ├── mcp/
@@ -594,6 +600,10 @@ Backups (`core/admin/backups.py`): lista `{safety.backup_dir}/<nome>/{AAAAMMDDTH
 `nix hook` não passa pela CLI: `nix_launch.main` o despacha para `core/sessions/hook_entry.py` antes do relançamento do venv e do import do Typer. O módulo usa só a biblioteca padrão: o import de `nix.cli.app` custa cerca de 380 ms e o Pydantic da configuração, 90 a 150 ms. Por isso `nix/__init__.py` e `nix/config/__init__.py` carregam sob demanda, e os limites (`sessions.max_prompt_bytes` etc.) vêm de uma leitura direta do `settings.db` (`limits.py`). No binário publicado o agente não chama esse `nix`: o Nuitka 4.3 recalcula o CRC do payload onefile em toda partida, e o arquivo completo passa de 1 s. `nix hooks install` grava o irmão `nix-hook` (`src/nix_hook_frozen.py`, cache `hook-<versão>`). O `session-end` dispara o consolidador no binário completo. Fluxo: stdin → `normalize` (tolerante a cada agente, com sanitização) → descarta se o projeto não tem hooks (`hook_projects`) → `SessionStore.record` → no `session-start`, entrega o handoff pendente no stdout (Cursor `additional_context`; Claude Code e Devin CLI `hookSpecificOutput.additionalContext`; Copilot `additionalContext`; Devin Desktop nada) → no `session-end`, cria o handoff, enfileira a sessão em `.nix/sessions-render.queue` e dispara `nix session render --drain` destacado. Sai sempre com código 0 e o erro vai para `.nix/logs/hook.log`.
 
 O consolidador (`service.consolidate`, com a fila e a trava em `drain.py`) pega uma trava em arquivo (`sessions-drain.lock`, não bloqueante): se outro já roda, sai. Se um consolidador anterior morreu no meio, a fila que ele tomou (`.taking`) volta a ser processada. Quem roda esvazia a fila em lote, com um só Embedder, grava as notas pelo `VaultWriter` e aplica `sessions.retention_days`. Sessões que terminam sem `session-end` (cota esgotada) só ganham nota em `session_handoff` ou `nix session render`.
+
+### 9.5 Skills da Nix
+
+`nix skills install` copia as skills que vêm no pacote (`src/nix/skills/<nome>/SKILL.md`, hoje `sessoes-nix`) para a pasta que o agente lê, dentro do repositório: `.claude/skills/` (Claude Code), `.agents/skills/` (Cursor e Copilot) e `.devin/skills/` (Devin CLI e Devin Desktop). Dois agentes que leem a mesma pasta geram uma cópia só. A marca é o arquivo `.nix-skill`, com o nome da skill, gravado antes do `SKILL.md`: se a escrita parar no meio, a pasta fica desatualizada e o `install` seguinte repara. Um agente sem pasta em `DESTINATIONS` é recusado, em vez de o comando dizer que nada mudou. A escolha do agente e a raiz do projeto ficam em `cli/agents.py`, usadas por hooks e skills. A poda de pasta vazia fica em `core/admin/empty_dirs.py`. `remove` apaga só a pasta que tem essa marca; uma pasta de skill de desenvolvimento, ou uma `sessoes-nix` sem a marca, permanece. Antes de alterar ou apagar há backup em `safety.backup_dir/skills/`. Rodar de novo só reescreve o `SKILL.md` quando o texto do pacote mudou. O binário completo inclui o arquivo pelo `--include-package-data=nix`; o `nix-hook` não importa esse módulo.
 
 ## 10. Configuração
 

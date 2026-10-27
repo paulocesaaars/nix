@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import typer
 from rich.markup import escape
 
+from nix.cli.agents import choose_agents, project_root
 from nix.cli.deps import with_errors
 from nix.cli.render import console
 from nix.config.executables import packaged_hook_executable
@@ -16,7 +16,6 @@ from nix.core.admin import agent_hooks
 from nix.core.admin.doctor import nix_command
 from nix.core.errors import ConfigError
 from nix.core.sessions.agents import AGENTS
-from nix.core.sessions.events import find_project
 from nix.core.sessions.store import SessionStore
 
 hooks_app = typer.Typer(
@@ -28,26 +27,11 @@ hooks_app = typer.Typer(
 
 def _agents(requested: list[str] | None) -> list[str]:
     """Agentes pedidos ou escolhidos na hora. Nenhum vem marcado (RF-121)."""
-    names = [item.strip().lower() for item in (requested or []) if item.strip()]
-    for name in names:
-        if name not in AGENTS:
-            raise ConfigError(f"Agente {name!r} desconhecido. Use um de: {', '.join(AGENTS)}.")
-    if names:
-        return list(dict.fromkeys(names))
-    if not sys.stdin.isatty():
-        raise ConfigError(
-            "Informe os agentes com `--agent`, por exemplo `nix hooks install --agent claude --agent cursor`. "
-            f"Nomes aceitos: {', '.join(AGENTS)}."
-        )
-    chosen = [spec.key for spec in agent_hooks.SPECS if typer.confirm(f"Ativar {spec.label}?", default=False)]
-    if not chosen:
-        raise ConfigError("Nenhum agente foi escolhido. Rode de novo e responda `s` para os agentes que quer ativar.")
-    return chosen
-
-
-def _project(project: str | None) -> tuple[Path, str]:
-    key = find_project(project or "")[0]
-    return Path(key), key
+    return choose_agents(
+        requested,
+        command="nix hooks install",
+        question=lambda key: f"Ativar {agent_hooks.spec_for(key).label}?",
+    )
 
 
 def _hook_exe() -> str:
@@ -66,7 +50,7 @@ def cmd_install(
     yes: bool = typer.Option(False, "--yes", "-y", help="Não pede confirmação"),
     project: str | None = typer.Option(None, "--project", help="Pasta do projeto. Padrão: a pasta atual."),
 ) -> None:
-    root, key = _project(project)
+    root, key = project_root(project)
     agents = _agents(agent)
     exe = _hook_exe()
     plans = agent_hooks.plan_install(root, agents, exe)
@@ -96,7 +80,7 @@ def cmd_install(
         if plan.spec.note:
             console.print(f"[dim]{escape(plan.spec.label)}: {escape(plan.spec.note)}[/dim]")
     _warnings(root, plans, config.sessions.enabled, bool(config.sessions.vault.strip()))
-    console.print("[dim]Esta instalação não escreve skill. Adicione a `sessoes-nix` ao projeto, se quiser.[/dim]")
+    console.print("[dim]Para orientar o agente, rode `nix skills install` neste projeto.[/dim]")
 
 
 def _warnings(root: Path, plans: list[agent_hooks.AgentPlan], enabled: bool, has_vault: bool) -> None:
@@ -125,7 +109,7 @@ def cmd_remove(
     agent: list[str] | None = typer.Option(None, "--agent", help="Agente. Sem opção, todos os que a Nix ativou."),
     project: str | None = typer.Option(None, "--project", help="Pasta do projeto. Padrão: a pasta atual."),
 ) -> None:
-    root, key = _project(project)
+    root, key = project_root(project)
     store = SessionStore()
     names = [item.strip().lower() for item in (agent or []) if item.strip()]
     for name in names:
@@ -152,7 +136,7 @@ def cmd_remove(
 def cmd_status(
     project: str | None = typer.Option(None, "--project", help="Pasta do projeto. Padrão: a pasta atual."),
 ) -> None:
-    root, key = _project(project)
+    root, key = project_root(project)
     from rich.table import Table
 
     table = Table(title=f"Hooks de sessão em {key}")
