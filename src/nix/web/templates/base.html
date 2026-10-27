@@ -23,6 +23,25 @@
         <strong>nix</strong>
         <span class="ver">v{{ nix_version }}</span>
       </div>
+      {% if vaults %}
+      <form class="vsw" method="get" action="{{ request.url.path }}">
+        {% for key, value in kept_params %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endfor %}
+        <label class="lbl" for="vault-select">Vault ativo</label>
+        <select class="input vsw-sel" id="vault-select" name="vault" onchange="this.form.submit()">
+          {% for item in vaults %}
+          <option value="{{ item.name }}" {% if item.name == selected_vault %}selected{% endif %}>{{ item.name }}{% if item.is_default %} · padrão{% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if vault_label %}<span class="mono muted vsw-path">{{ vault_label }}</span>{% endif %}
+      </form>
+      {% elif vault_label %}
+      <div class="vsw">
+        <span class="lbl">Vault ativo</span>
+        <span class="mono vsw-path">{{ vault_label }}</span>
+      </div>
+      {% endif %}
       <nav class="navs">
         {% for label, items in nav_groups %}
         <div class="group">
@@ -34,12 +53,6 @@
         {% endfor %}
       </nav>
       <div class="side-foot">
-        {% if vault_label %}
-        <div class="card vault-card stack-sm">
-          <span class="lbl">Vault</span>
-          <span class="mono wrap-any">{{ vault_label }}</span>
-        </div>
-        {% endif %}
         <form method="post" action="/shutdown">
           <input type="hidden" name="csrf" value="{{ csrf_token }}">
           <button class="btn" type="submit">{{ icon("power", 16) }}Encerrar</button>
@@ -48,20 +61,6 @@
     </aside>
     <main class="main">
       <div class="wrap">
-        {% if vaults %}
-        <form class="vault-switch" method="get" action="{{ request.url.path }}">
-          {% for key, value in kept_params %}
-          <input type="hidden" name="{{ key }}" value="{{ value }}">
-          {% endfor %}
-          <label class="lbl" for="vault-select">Vault</label>
-          <select class="input" id="vault-select" name="vault" onchange="this.form.submit()">
-            {% for item in vaults %}
-            <option value="{{ item.name }}" {% if item.name == selected_vault %}selected{% endif %}>{{ item.name }}{% if item.is_default %} (padrão){% endif %}</option>
-            {% endfor %}
-          </select>
-          {% if vault_label %}<span class="muted mono wrap-any">{{ vault_label }}</span>{% endif %}
-        </form>
-        {% endif %}
         {% if vault_error %}<div class="alert alert-err" role="alert">{{ vault_error }}</div>{% endif %}
         {% block content %}{% endblock %}
       </div>

@@ -6,6 +6,8 @@
   --muted: #5A6170;
   --line: #E3E6EB;
   --soft: #F0F2F5;
+  --soft-2: #E9ECF0;
+  --on-ink: #FFFFFF;
   --accent: #0E6F63;
   --accent-ink: #0B5A50;
   --accent-soft: #E2F1EE;
@@ -94,12 +96,12 @@ ul { margin: 0; padding-left: 20px; }
 }
 details > .filters { margin-top: 12px; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
-.vault-card { padding: 12px; }
-.vault-switch {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+.vsw {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--soft);
 }
-.vault-switch select { width: auto; min-width: 12rem; }
+.vsw-sel { font-weight: 600; cursor: pointer; }
+.vsw-path { font-size: 12px; overflow-wrap: anywhere; }
 .vault-picks { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 .vault-picks legend { margin-right: 4px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
@@ -158,6 +160,7 @@ form.inline { display: inline; margin: 0; }
 .b-err { background: var(--err-soft); color: var(--err); }
 .b-n { background: var(--soft); color: var(--muted); }
 .b-a { background: var(--accent-soft); color: var(--accent-ink); }
+.b-ink { background: var(--ink); color: var(--on-ink); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .alert {
   display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
@@ -204,11 +207,27 @@ textarea.input { padding: 10px 12px; min-height: 96px; resize: vertical; font-fa
 .input:focus, .btn:focus-visible, .nav:focus-visible, .check input:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+.sec { padding: 0; overflow: hidden; }
+.sec-h { padding: 16px 20px; }
 .setting {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 8px 24px;
-  padding: 16px 0; border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px 24px; align-items: center;
+  padding: 16px 20px; border-top: 1px solid var(--line);
 }
-.setting:first-of-type { border-top: 0; padding-top: 4px; }
+
+/* Verificações do diagnóstico */
+.ico {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.ico-lg { width: 40px; height: 40px; }
+.ico-ok { background: var(--ok-soft); color: var(--ok); }
+.ico-warn { background: var(--warn-soft); color: var(--warn); }
+.ico-err { background: var(--err-soft); color: var(--err); }
+.ico-n { background: var(--soft); color: var(--muted); }
+.kpi-ico { display: flex; align-items: center; gap: 14px; }
+.kpi-num { font-size: 22px; font-weight: 700; line-height: 1.2; }
+.chk { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; border-top: 1px solid var(--line); }
+.chk > .grow { flex: 1; min-width: 0; }
 .save-bar {
   position: sticky; bottom: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
   padding: 14px 0; background: linear-gradient(transparent, var(--bg) 30%);
@@ -226,7 +245,7 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 /* Segmentos e abas */
 .seg {
   display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px;
-  background: var(--soft); border-radius: 10px; max-width: 100%;
+  background: var(--soft-2); border-radius: 10px; max-width: 100%;
 }
 .seg > a, .seg > button {
   display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
@@ -303,7 +322,11 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .side { flex-basis: 100%; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 12px; gap: 12px; }
   .navs { flex-direction: row; overflow-x: auto; gap: 4px; }
   .group { flex-direction: row; gap: 4px; }
-  .nav-label, .side-foot { display: none; }
+  .nav-label, .side-foot, .vsw .lbl { display: none; }
+  .vsw { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 8px 10px; gap: 8px; }
+  .vsw-sel { width: auto; flex: 1 1 160px; }
+  .vsw-path { flex: 1 1 160px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .setting, .chk { padding-left: 16px; padding-right: 16px; }
   .nav { white-space: nowrap; }
   .main { padding: 24px 16px 40px; }
   dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }

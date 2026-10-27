@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_ui.html" import level_badge %}
+{% from "_ui.html" import level_badge, icon %}
 {% block content %}
 <div class="head">
   <div>
@@ -10,25 +10,24 @@
 </div>
 
 <div class="kpis">
-  <div class="card"><div class="kpi-label">Tudo certo</div><div class="kpi-value is-ok">{{ counts.ok }}</div></div>
-  <div class="card"><div class="kpi-label">Avisos</div><div class="kpi-value {{ 'is-warn' if counts.warn else '' }}">{{ counts.warn }}</div></div>
-  <div class="card"><div class="kpi-label">Erros</div><div class="kpi-value {{ 'is-err' if counts.error else '' }}">{{ counts.error }}</div></div>
+  <div class="card kpi-ico"><span class="ico ico-lg {{ 'ico-ok' if counts.ok else 'ico-n' }}">{{ icon("check", 20, "2.2") }}</span><div><div class="kpi-num">{{ counts.ok }}</div><div class="kpi-label">verificações ok</div></div></div>
+  <div class="card kpi-ico"><span class="ico ico-lg {{ 'ico-warn' if counts.warn else 'ico-n' }}">{{ icon("exclaim", 20, "2.2") }}</span><div><div class="kpi-num">{{ counts.warn }}</div><div class="kpi-label">avisos</div></div></div>
+  <div class="card kpi-ico"><span class="ico ico-lg {{ 'ico-err' if counts.error else 'ico-n' }}">{{ icon("cross", 20, "2.2") }}</span><div><div class="kpi-num">{{ counts.error }}</div><div class="kpi-label">erros</div></div></div>
 </div>
 
-<div class="table-box">
-  <table>
-    <thead><tr><th>Verificação</th><th>Situação</th><th>Detalhe e ação</th></tr></thead>
-    <tbody>
-      {% for check in checks %}
-      <tr>
-        <td><strong>{{ check.label }}</strong></td>
-        <td>{{ level_badge(check.level) }}</td>
-        <td class="wrap-any">{{ check.message }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<section class="card sec">
+  <div class="sec-h"><h2>Verificações</h2></div>
+  {% for check in checks %}
+  {% set lvl = check.level if check.level in ("ok", "warn") else "err" %}
+  <div class="chk">
+    <span class="ico ico-{{ lvl }}">{{ icon({"ok": "check", "warn": "exclaim", "err": "cross"}[lvl], 16, "2.4") }}</span>
+    <div class="grow stack-sm">
+      <div class="row between"><strong>{{ check.label }}</strong>{{ level_badge(check.level) }}</div>
+      <span class="muted wrap-any">{{ check.message }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
 
 <section class="card stack">
   <h2>Ambiente</h2>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_ui.html" import alert %}
+{% from "_ui.html" import alert, icon %}
 {% block content %}
 <div class="head">
   <div>
@@ -19,8 +19,8 @@
 <form method="post" action="/settings" autocomplete="off" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">
   {% for group in groups %}
-  <section class="card" id="{{ group.key }}">
-    <h2 class="card-title">{{ group.title }}</h2>
+  <section class="card sec" id="{{ group.key }}">
+    <div class="sec-h"><h2>{{ group.title }}</h2></div>
     {% for field in group.fields %}
     {% set fid = "f-" ~ field.dotted | replace(".", "-") %}
     <div class="setting">
@@ -29,7 +29,7 @@
         {% if field.description %}<span class="muted">{{ field.description }}</span>{% endif %}
         <div class="row tight">
           {% if field.source == "env" %}
-          <span class="badge b-warn" title="{{ field.lock_message }}">ambiente · travado</span>
+          <span class="badge b-ink" title="{{ field.lock_message }}">{{ icon("lock", 12, "2.4") }}ambiente · travado</span>
           {% elif field.source == "db" %}
           <span class="badge b-a">settings.db</span>
           {% else %}
