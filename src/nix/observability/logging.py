@@ -6,8 +6,10 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from nix.config.schema import NixConfig
+if TYPE_CHECKING:
+    from nix.config.schema import NixConfig
 
 _CONFIGURED = False
 _LOG_PATH: Path | None = None
