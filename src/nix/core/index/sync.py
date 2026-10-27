@@ -61,6 +61,9 @@ class Indexer:
         self.reader = reader or VaultReader(config, vault)
         self.chunker = Chunker(config.index)
         self._on_change = on_change
+        # Contadores do RF-152, zerados a cada sync.
+        self._reused = 0
+        self._embedded = 0
 
     def notify_change(self) -> None:
         if self._on_change:
@@ -103,6 +106,8 @@ class Indexer:
     ) -> SyncReport:
         started = utc_now_iso()
         t0 = time.perf_counter()
+        self._reused = 0
+        self._embedded = 0
         self._check_model(full=full)
         report = SyncReport(dry_run=dry_run, trigger=trigger if trigger in ("manual", "writeback") else "manual")  # type: ignore[arg-type]
         report.tokenizer_approximate = self.chunker.tokenizer_approximate
@@ -213,6 +218,8 @@ class Indexer:
             self.store.delete_file(fid)
             report.removed += 1
 
+        report.chunks_reused = self._reused
+        report.chunks_embedded = self._embedded
         self.store.set_meta("embedding_model", self.config.index.embedding_model)
         self.store.set_meta("vault_path", str(self.vault.root))
         self.store.set_meta("last_sync_at", datetime.now(UTC).isoformat())
@@ -239,8 +246,13 @@ class Indexer:
     def _commit_index(self, meta: FileMeta, note: ParsedNote, content_hash: str) -> int:
         fid = file_id_for(meta.rel_path)
         chunks = self.chunker.chunk_note(note, fid, mtime=meta.mtime)
-        logger.info("Vetorizando %s (%d chunk(s)) em CPU.", meta.rel_path, len(chunks))
-        embeddings = self.embedder.embed([c.embed_text for c in chunks])
+        hashes = [sha256_text(c.embed_text) for c in chunks]
+        embeddings, reused = self._embeddings_for(fid, chunks, hashes)
+        self._reused += reused
+        self._embedded += len(chunks) - reused
+        logger.info(
+            "Vetorizando %s (%d chunk(s), %d reaproveitado(s)) em CPU.", meta.rel_path, len(chunks), reused
+        )
         self.vectors.delete_file(fid)
         self.vectors.upsert(chunks, embeddings)
         self.store.replace_file(
@@ -253,12 +265,36 @@ class Indexer:
             frontmatter=note.frontmatter,
             tags=note.tags,
             links=[link.target for link in note.links],
-            chunks=[_chunk_row(c) for c in chunks],
+            chunks=[_chunk_row(c, h) for c, h in zip(chunks, hashes, strict=True)],
             status="indexed",
         )
         if self.config.index.index_attachments and meta.rel_path.lower().endswith(".md"):
             self._index_referenced_pdfs(note)
         return len(chunks)
+
+    def _embeddings_for(self, fid: str, chunks: list[Chunk], hashes: list[str]) -> tuple[list[list[float]], int]:
+        """Vetores dos chunks, reaproveitando os do índice quando o hash do texto é o mesmo (RF-150).
+
+        O casamento é só pelo hash: o id é `arquivo:ordinal` e se desloca com qualquer
+        inserção no meio da nota. Os vetores antigos são lidos antes do `delete_file`.
+        """
+        reusable: dict[str, list[float]] = {}
+        known = self.store.chunk_hashes(fid)
+        if known:
+            try:
+                old_vectors = self.vectors.embeddings_for_file(fid)
+            except Exception:  # noqa: BLE001
+                logger.warning("Não foi possível ler os vetores de %s; todos serão recalculados.", fid, exc_info=True)
+                old_vectors = {}
+            for digest, chunk_id in known.items():
+                vector = old_vectors.get(chunk_id)
+                if vector:
+                    reusable[digest] = vector
+        pending = [i for i, digest in enumerate(hashes) if digest not in reusable]
+        fresh = self.embedder.embed([chunks[i].embed_text for i in pending])
+        by_index = dict(zip(pending, fresh, strict=True))
+        merged = [by_index[i] if i in by_index else reusable[hashes[i]] for i in range(len(chunks))]
+        return merged, len(chunks) - len(pending)
 
     def _load_note(self, meta: FileMeta) -> tuple[ParsedNote, str]:
         if is_pdf_path(meta.rel_path):
@@ -294,9 +330,10 @@ class Indexer:
                 logger.warning("PDF referenciado não indexado (%s): %s", rel, exc)
 
 
-def _chunk_row(chunk: Chunk) -> dict[str, Any]:
+def _chunk_row(chunk: Chunk, embed_hash: str) -> dict[str, Any]:
     return {
         "id": chunk.id,
+        "embed_hash": embed_hash,
         "ordinal": chunk.ordinal,
         "heading_path": chunk.heading_path,
         "content": chunk.content,
@@ -324,6 +361,8 @@ def combine_sync_reports(items: list[tuple[str, SyncReport]]) -> SyncReport:
         combined.skipped += report.skipped
         combined.failed += report.failed
         combined.chunks_created += report.chunks_created
+        combined.chunks_reused += report.chunks_reused
+        combined.chunks_embedded += report.chunks_embedded
         combined.elapsed_seconds += report.elapsed_seconds
         combined.tokenizer_approximate = combined.tokenizer_approximate or report.tokenizer_approximate
         combined.errors.extend(f"{name}: {err}" for err in report.errors)
@@ -356,6 +395,8 @@ def json_safe(report: SyncReport) -> dict[str, Any]:
         "skipped": report.skipped,
         "failed": report.failed,
         "chunks_created": report.chunks_created,
+        "chunks_reused": report.chunks_reused,
+        "chunks_embedded": report.chunks_embedded,
         "elapsed_seconds": report.elapsed_seconds,
         "errors": report.errors,
         "dry_run": report.dry_run,

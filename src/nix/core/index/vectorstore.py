@@ -100,6 +100,15 @@ class VectorStore:
             metadatas=[_meta(c) for c in chunks],
         )
 
+    def embeddings_for_file(self, file_id: str) -> dict[str, list[float]]:
+        """`{chunk_id: vetor}` dos chunks do arquivo, para reaproveitar o que não mudou (RF-150)."""
+        raw = self._col().get(where={"file_id": file_id}, include=["embeddings"])
+        ids = raw.get("ids")
+        vectors = raw.get("embeddings")
+        if ids is None or vectors is None:
+            return {}
+        return {str(chunk_id): [float(x) for x in vec] for chunk_id, vec in zip(ids, vectors, strict=False)}
+
     def delete_file(self, file_id: str) -> None:
         try:
             self._col().delete(where={"file_id": file_id})

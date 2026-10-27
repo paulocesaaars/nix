@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     title         TEXT NOT NULL DEFAULT '',
     token_count   INTEGER NOT NULL,
     start_line    INTEGER,
-    end_line      INTEGER
+    end_line      INTEGER,
+    embed_hash    TEXT
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -98,6 +99,7 @@ class IndexStore:
 
     def _init_schema(self) -> None:
         self._conn.executescript(_DDL)
+        self._migrate_chunk_hash()
         self._conn.commit()
         current = self.get_meta("schema_version")
         if current is None:
@@ -107,6 +109,23 @@ class IndexStore:
                 f"Schema do índice é {current}, esperado {SCHEMA_VERSION}. "
                 "Apague o diretório de dados (index.data_dir) e rode `nix sync --full`."
             )
+
+    def _migrate_chunk_hash(self) -> None:
+        """RF-151: índice criado antes do hash por chunk ganha a coluna, sem reindexar.
+
+        Os chunks antigos ficam com `embed_hash` nulo. O primeiro sync de cada arquivo
+        alterado refaz o embedding dele e preenche o hash.
+        """
+        columns = {str(row["name"]) for row in self._conn.execute("PRAGMA table_info(chunks)")}
+        if "embed_hash" not in columns:
+            self._conn.execute("ALTER TABLE chunks ADD COLUMN embed_hash TEXT")
+
+    def chunk_hashes(self, file_id: str) -> dict[str, str]:
+        """`{embed_hash: chunk_id}` dos chunks do arquivo que já têm hash."""
+        rows = self._conn.execute(
+            "SELECT id, embed_hash FROM chunks WHERE file_id = ? AND embed_hash IS NOT NULL", (file_id,)
+        )
+        return {str(row["embed_hash"]): str(row["id"]) for row in rows}
 
     def close(self) -> None:
         self._conn.close()
@@ -242,8 +261,8 @@ class IndexStore:
                 """
                 INSERT INTO chunks (
                     id, file_id, ordinal, heading_path, content, title,
-                    token_count, start_line, end_line
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    token_count, start_line, end_line, embed_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -269,6 +288,7 @@ class IndexStore:
                     id, rel_path, title, content_hash, mtime, size_bytes,
                     frontmatter, tags, links, chunk_count, indexed_at, status
                 ) VALUES (?, ?, '', '', ?, ?, 'null', '[]', '[]', 0, ?, 'error')
+                        c.get("embed_hash"),
                 ON CONFLICT(id) DO UPDATE SET
                     status = 'error',
                     mtime = excluded.mtime,

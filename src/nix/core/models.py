@@ -121,6 +121,9 @@ class SyncReport:
     skipped: int = 0
     failed: int = 0
     chunks_created: int = 0
+    # RF-152: chunks que mantiveram o vetor e chunks que passaram pelo embedding neste sync.
+    chunks_reused: int = 0
+    chunks_embedded: int = 0
     elapsed_seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
     dry_run: bool = False
@@ -140,6 +143,8 @@ class SyncReport:
             f"{self.failed} com erro, {self.chunks_created} chunks {verb} "
             f"em {self.elapsed_seconds:.1f}s"
         )
+        if self.chunks_reused:
+            text += f" ({self.chunks_reused} chunks reaproveitados, {self.chunks_embedded} vetorizados)"
         if self.vault_name:
             return f"{self.vault_name}: {text}"
         return text
