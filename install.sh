@@ -164,24 +164,30 @@ case "$tag" in
 esac
 version=${tag#v}
 asset="nix-${version}-${platform}-${arch}"
+hook_asset="nix-hook-${version}-${platform}-${arch}"
 
-echo "nix-install: baixando ${asset} (${tag})..."
-curl -fsSL -o "$workdir/$asset" "${BASE_URL}/${tag}/${asset}" \
-  || die "Não baixei ${asset} da release ${tag}. Confira NIX_VERSION e a conexão, e rode de novo."
 curl -fsSL -o "$workdir/checksums.txt" "${BASE_URL}/${tag}/checksums.txt" \
   || die "Não baixei checksums.txt da release ${tag}. Rode o instalador de novo quando a release estiver completa."
 
-expected=$(grep -F "$asset" "$workdir/checksums.txt" | head -n 1 | awk '{print $1}' || true)
-[ -n "$expected" ] || die "checksums.txt da release ${tag} não lista ${asset}. Rode o instalador de novo quando a release estiver completa."
+fetch_checked() {
+  name=$1
+  echo "nix-install: baixando ${name} (${tag})..."
+  curl -fsSL -o "$workdir/$name" "${BASE_URL}/${tag}/${name}" \
+    || die "Não baixei ${name} da release ${tag}. Confira NIX_VERSION e a conexão, e rode de novo."
+  expected=$(awk -v asset="$name" '$2 == asset { print $1; exit }' "$workdir/checksums.txt")
+  [ -n "$expected" ] || die "checksums.txt da release ${tag} não lista ${name}. Rode o instalador de novo quando a release estiver completa."
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$workdir/$name" | awk '{print $1}')
+  else
+    actual=$(shasum -a 256 "$workdir/$name" | awk '{print $1}')
+  fi
+  expected=$(printf '%s' "$expected" | tr 'A-F' 'a-f')
+  actual=$(printf '%s' "$actual" | tr 'A-F' 'a-f')
+  [ "$expected" = "$actual" ] || die "SHA-256 de ${name} não confere (esperado ${expected}, obtido ${actual}). Rode o instalador de novo."
+}
 
-if command -v sha256sum >/dev/null 2>&1; then
-  actual=$(sha256sum "$workdir/$asset" | awk '{print $1}')
-else
-  actual=$(shasum -a 256 "$workdir/$asset" | awk '{print $1}')
-fi
-expected=$(printf '%s' "$expected" | tr 'A-F' 'a-f')
-actual=$(printf '%s' "$actual" | tr 'A-F' 'a-f')
-[ "$expected" = "$actual" ] || die "SHA-256 de ${asset} não confere (esperado ${expected}, obtido ${actual}). Rode o instalador de novo."
+fetch_checked "$asset"
+fetch_checked "$hook_asset"
 
 found=$(command -v nix 2>/dev/null || true)
 if [ -n "$found" ]; then
@@ -196,19 +202,25 @@ fi
 
 mkdir -p "$root/bin"
 cp "$workdir/$asset" "$root/bin/nix"
-chmod +x "$root/bin/nix"
+cp "$workdir/$hook_asset" "$root/bin/nix-hook"
+chmod +x "$root/bin/nix" "$root/bin/nix-hook"
 if [ "$platform" = "darwin" ]; then
-  xattr -d com.apple.quarantine "$root/bin/nix" 2>/dev/null || true
+  xattr -d com.apple.quarantine "$root/bin/nix" "$root/bin/nix-hook" 2>/dev/null || true
 fi
-echo "nix-install: instalado em $root/bin/nix"
+echo "nix-install: instalado em $root/bin/nix e $root/bin/nix-hook"
 
 export NIX_HOME="$root"
 export PATH="$root/bin:$PATH"
 
-echo "nix-install: aquecendo o cache do executável..."
+echo "nix-install: aquecendo o cache dos executáveis..."
 if ! "$root/bin/nix" --version; then
-  rm -f "$root/bin/nix"
+  rm -f "$root/bin/nix" "$root/bin/nix-hook"
   die "O binário não executou. No macOS, rode o instalador de novo (ele tira a quarentena). Em outros sistemas, confira a mensagem acima."
+fi
+# stdin em /dev/null: `curl | sh` deixaria o hook ler o resto do script.
+if ! "$root/bin/nix-hook" hook --event other --agent cursor </dev/null; then
+  rm -f "$root/bin/nix" "$root/bin/nix-hook"
+  die "O nix-hook não executou. No macOS, rode o instalador de novo (ele tira a quarentena). Em outros sistemas, confira a mensagem acima."
 fi
 
 if register_path "$root"; then

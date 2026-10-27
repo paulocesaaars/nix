@@ -10,6 +10,7 @@ from pathlib import Path
 from starlette.requests import Request
 from starlette.responses import Response
 
+from nix.config.executables import packaged_hook_executable
 from nix.core.admin import agent_hooks
 from nix.core.admin.client_config import client_snippets
 from nix.core.admin.doctor import nix_command
@@ -63,7 +64,7 @@ async def connect_page(request: Request) -> Response:
             "problem": problem,
             "snippets": client_snippets(command) if command else [],
             "hooks_project": project,
-            "hooks": await asyncio.to_thread(_hooks, command, project),
+            "hooks": await asyncio.to_thread(_hooks, _hook_command(command), project),
             "tools": [_tool_view(spec.name, spec.description, spec.read_only, spec.destructive) for spec in specs],
         },
     )
@@ -103,6 +104,14 @@ def _hooks_project(requested: str) -> str:
         if requested in known:
             return requested
     return here
+
+
+def _hook_command(fallback: str | None) -> str | None:
+    """Prévia do comando que `nix hooks install` grava. No binário, é o `nix-hook`."""
+    found = packaged_hook_executable()
+    if found is not None:
+        return str(found)
+    return fallback
 
 
 def _hooks(command: str | None, project: str) -> list[HookView]:

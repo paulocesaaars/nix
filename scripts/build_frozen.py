@@ -1,4 +1,7 @@
-"""Compila o binário único do Nix com Nuitka, na plataforma em que roda.
+"""Compila os binários do Nix com Nuitka, na plataforma em que roda.
+
+Gera o executável completo e o `nix-hook` (só o hook de sessão). O completo
+recalcula o CRC do payload a cada partida e não cabe nos 300 ms do hook.
 
 Exige Python 3.12 e o pacote já instalado neste ambiente (`pip install .`),
 para o metadata de versão entrar no executável. O Nuitka não cruza sistema
@@ -23,6 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY = ROOT / "src" / "nix_frozen.py"
+HOOK_ENTRY = ROOT / "src" / "nix_hook_frozen.py"
 DIST = ROOT / "dist"
 
 _PACKAGES = (
@@ -110,6 +114,11 @@ def target_ids() -> tuple[str, str]:
 def asset_filename(product: str, system: str, arch: str) -> str:
     suffix = ".exe" if system == "windows" else ""
     return f"nix-{product}-{system}-{arch}{suffix}"
+
+
+def hook_asset_filename(product: str, system: str, arch: str) -> str:
+    suffix = ".exe" if system == "windows" else ""
+    return f"nix-hook-{product}-{system}-{arch}{suffix}"
 
 
 def _version_tuple(text: str) -> tuple[int, ...]:
@@ -224,9 +233,92 @@ def nuitka_command(product: str, filename: str) -> list[str]:
     return command
 
 
+# O hook não pode seguir estes imports: cada um puxa CLI, Pydantic ou o índice
+# e o binário leve deixaria de caber nos 300 ms.
+_HOOK_NOFOLLOW = (
+    "pytest",
+    "*.tests.*",
+    "nix.cli",
+    "nix.mcp",
+    "nix.web",
+    "nix.observability",
+    "nix.core.admin",
+    "nix.core.index",
+    "nix.core.retrieval",
+    "nix.core.insights",
+    "nix.core.tools",
+    "nix.core.runtime",
+    "nix.core.vault",
+    "nix.core.models",
+    "nix.config.schema",
+    "nix.config.loader",
+    "nix.config.store",
+    "pydantic",
+    "typer",
+    "rich",
+    "chromadb",
+    "fastembed",
+    "onnxruntime",
+    "mcp",
+    "tiktoken",
+    "tokenizers",
+    "huggingface_hub",
+    "grpc",
+    "numpy",
+    "filelock",
+    "starlette",
+    "uvicorn",
+    "jinja2",
+)
+
+
+def hook_nuitka_command(product: str, filename: str) -> list[str]:
+    """Onefile só com o hook. O cache fica em `hook-{VERSION}`, separado do binário completo."""
+    command = [
+        sys.executable,
+        "-m",
+        "nuitka",
+        "--mode=onefile",
+        f"--output-dir={DIST}",
+        f"--output-filename={filename}",
+        "--lto=no",
+        "--assume-yes-for-downloads",
+        "--python-flag=no_site",
+        "--python-flag=isolated",
+        "--onefile-tempdir-spec={CACHE_DIR}/nix/hook-{VERSION}",
+        f"--product-version={product}",
+        "--product-name=Nix Hook",
+        "--include-module=nix_launch",
+        "--include-module=nix.core.sessions.hook_entry",
+    ]
+    for name in _HOOK_NOFOLLOW:
+        command.append(f"--nofollow-import-to={name}")
+    if sys.platform == "win32":
+        command.extend(
+            [
+                "--windows-console-mode=force",
+                "--company-name=Nix",
+                f"--file-version={file_version(product)}",
+                "--file-description=Hook de sessão do Nix",
+            ]
+        )
+    command.append(str(HOOK_ENTRY))
+    return command
+
+
+def _run_nuitka(command: list[str]) -> None:
+    print("> " + " ".join(command))
+    result = subprocess.run(command, cwd=ROOT, env=_linux_arm64_compiler_env())
+    if result.returncode != 0:
+        _fail(
+            f"Nuitka falhou (código {result.returncode}). "
+            "Veja o log acima, instale o compilador C da plataforma e rode de novo."
+        )
+
+
 def main() -> None:
-    if not ENTRY.is_file():
-        _fail(f"Não achei {ENTRY}. Rode este script na árvore do repositório Nix.")
+    if not ENTRY.is_file() or not HOOK_ENTRY.is_file():
+        _fail(f"Não achei {ENTRY} ou {HOOK_ENTRY}. Rode este script na árvore do repositório Nix.")
     product = project_version()
     _require_toolchain(product)
     system, arch = target_ids()
@@ -235,19 +327,20 @@ def main() -> None:
     for old in DIST.glob("nix-*"):
         if old.is_file():
             old.unlink()
-    command = nuitka_command(product, filename)
-    print("> " + " ".join(command))
-    result = subprocess.run(command, cwd=ROOT, env=_linux_arm64_compiler_env())
-    if result.returncode != 0:
-        _fail(
-            f"Nuitka falhou (código {result.returncode}). "
-            "Veja o log acima, instale o compilador C da plataforma e rode de novo."
-        )
+    _run_nuitka(nuitka_command(product, filename))
     binary = DIST / filename
     if not binary.is_file():
         _fail(f"O Nuitka terminou sem gerar {binary}. Confira --output-filename e rode de novo.")
     (DIST / "asset-name.txt").write_text(filename + "\n", encoding="utf-8")
     print(f"Binário: {binary}")
+
+    hook_name = hook_asset_filename(product, system, arch)
+    _run_nuitka(hook_nuitka_command(product, hook_name))
+    hook_binary = DIST / hook_name
+    if not hook_binary.is_file():
+        _fail(f"O Nuitka terminou sem gerar {hook_binary}. Confira --output-filename e rode de novo.")
+    (DIST / "hook-asset-name.txt").write_text(hook_name + "\n", encoding="utf-8")
+    print(f"Hook: {hook_binary}")
 
 
 if __name__ == "__main__":

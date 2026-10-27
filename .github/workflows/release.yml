@@ -125,7 +125,9 @@ jobs:
         shell: bash
         run: |
           name="$(tr -d '\r' < dist/asset-name.txt)"
+          hook="$(tr -d '\r' < dist/hook-asset-name.txt)"
           codesign --sign - --force "dist/${name}"
+          codesign --sign - --force "dist/${hook}"
 
       - name: Smoke
         shell: bash
@@ -143,12 +145,16 @@ jobs:
         shell: bash
         run: |
           name="$(tr -d '\r' < dist/asset-name.txt)"
+          hook="$(tr -d '\r' < dist/hook-asset-name.txt)"
           echo "path=dist/${name}" >> "$GITHUB_OUTPUT"
+          echo "hook=dist/${hook}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
           name: nix-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ steps.binary.outputs.path }}
+          path: |
+            ${{ steps.binary.outputs.path }}
+            ${{ steps.binary.outputs.hook }}
           if-no-files-found: error
 
   publish:

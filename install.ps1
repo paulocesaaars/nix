@@ -101,30 +101,35 @@ if (-not $Tag) { Die "Não achei uma release estável. Publique uma tag vX.Y.Z o
 if ($Tag -notmatch "^v") { $Tag = "v$Tag" }
 $Version = $Tag -replace "^v", ""
 $Asset = "nix-$Version-windows-$Arch.exe"
+$HookAsset = "nix-hook-$Version-windows-$Arch.exe"
 
 $Root = Get-InstallRoot
 $BinDir = Join-Path $Root "bin"
 $Dest = Join-Path $BinDir "nix.exe"
+$HookDest = Join-Path $BinDir "nix-hook.exe"
 $Work = Join-Path $env:TEMP ("nix-install-" + [guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $Work | Out-Null
 
 try {
-    Write-Host "nix-install: baixando $Asset ($Tag)..."
+    Write-Host "nix-install: baixando $Asset e $HookAsset ($Tag)..."
     try {
-        Invoke-WebRequest -Headers $Headers -UseBasicParsing -Uri "$BaseUrl/$Tag/$Asset" -OutFile (Join-Path $Work $Asset)
         Invoke-WebRequest -Headers $Headers -UseBasicParsing -Uri "$BaseUrl/$Tag/checksums.txt" -OutFile (Join-Path $Work "checksums.txt")
+        Invoke-WebRequest -Headers $Headers -UseBasicParsing -Uri "$BaseUrl/$Tag/$Asset" -OutFile (Join-Path $Work $Asset)
+        Invoke-WebRequest -Headers $Headers -UseBasicParsing -Uri "$BaseUrl/$Tag/$HookAsset" -OutFile (Join-Path $Work $HookAsset)
     }
     catch {
-        Die "Não baixei $Asset da release $Tag. Confira NIX_VERSION e a conexão, e rode de novo. $_"
+        Die "Não baixei os binários da release $Tag. Confira NIX_VERSION e a conexão, e rode de novo. $_"
     }
 
     $checksums = Get-Content (Join-Path $Work "checksums.txt")
-    $expectedLine = $checksums | Where-Object { $_ -match ([regex]::Escape($Asset) + '$') } | Select-Object -First 1
-    if (-not $expectedLine) { Die "checksums.txt da release $Tag não lista $Asset. Rode o instalador de novo quando a release estiver completa." }
-    $expected = (($expectedLine -split '\s+', 2)[0]).ToLower()
-    $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $Work $Asset)).Hash.ToLower()
-    if ($expected -ne $actual) {
-        Die "SHA-256 de $Asset não confere (esperado $expected, obtido $actual). Apague o download e rode o instalador de novo."
+    foreach ($name in @($Asset, $HookAsset)) {
+        $expectedLine = $checksums | Where-Object { $_ -match ([regex]::Escape($name) + '$') } | Select-Object -First 1
+        if (-not $expectedLine) { Die "checksums.txt da release $Tag não lista $name. Rode o instalador de novo quando a release estiver completa." }
+        $expected = (($expectedLine -split '\s+', 2)[0]).ToLower()
+        $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $Work $name)).Hash.ToLower()
+        if ($expected -ne $actual) {
+            Die "SHA-256 de $name não confere (esperado $expected, obtido $actual). Apague o download e rode o instalador de novo."
+        }
     }
 
     $other = Get-Command nix -ErrorAction SilentlyContinue
@@ -135,15 +140,21 @@ try {
 
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
     Move-Item -Force (Join-Path $Work $Asset) $Dest
-    Write-Host "nix-install: instalado em $Dest"
+    Move-Item -Force (Join-Path $Work $HookAsset) $HookDest
+    Write-Host "nix-install: instalado em $Dest e $HookDest"
 
     $env:NIX_HOME = $Root
     $env:Path = "$BinDir;$env:Path"
-    Write-Host "nix-install: aquecendo o cache do executável..."
+    Write-Host "nix-install: aquecendo o cache dos executáveis..."
     & $Dest --version
     if ($LASTEXITCODE -ne 0) {
-        Remove-Item -Force $Dest -ErrorAction SilentlyContinue
+        Remove-Item -Force $Dest, $HookDest -ErrorAction SilentlyContinue
         Die "O binário não executou (código $LASTEXITCODE). Permita nix.exe na Segurança do Windows e rode o instalador de novo."
+    }
+    "" | & $HookDest hook --event other --agent cursor
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -Force $Dest, $HookDest -ErrorAction SilentlyContinue
+        Die "O nix-hook não executou (código $LASTEXITCODE). Permita nix-hook.exe na Segurança do Windows e rode o instalador de novo."
     }
 
     Add-NixUserPath $Root

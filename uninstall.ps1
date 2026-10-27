@@ -116,7 +116,7 @@ foreach ($name in @(".bashrc", ".zshrc", ".bash_profile", ".profile")) {
 }
 
 $bin = Join-Path $Root "bin"
-foreach ($file in @("nix.exe", "nix", "nix.cmd")) {
+foreach ($file in @("nix.exe", "nix", "nix.cmd", "nix-hook.exe", "nix-hook")) {
     $path = Join-Path $bin $file
     if (Test-Path -LiteralPath $path) { Remove-Item -Force -LiteralPath $path }
 }

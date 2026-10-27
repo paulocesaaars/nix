@@ -115,7 +115,7 @@ for file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile
   fi
 done
 
-rm -f "$root/bin/nix" "$root/bin/nix.exe" "$root/bin/nix.cmd"
+rm -f "$root/bin/nix" "$root/bin/nix.exe" "$root/bin/nix.cmd" "$root/bin/nix-hook" "$root/bin/nix-hook.exe"
 if [ -d "$root/bin" ]; then
   rmdir "$root/bin" 2>/dev/null || true
 fi

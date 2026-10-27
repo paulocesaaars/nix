@@ -2,8 +2,9 @@
 
 Cada agente lê um arquivo de hook diferente, dentro do repositório. A Nix só
 escreve nesses arquivos, nunca na pasta da conta (RF-122). As entradas que ela
-cria são reconhecidas pelo comando `nix hook --event E --agent A`, uma marca que
-não polui o esquema de nenhum agente (RF-123).
+cria são reconhecidas pelo comando `nix hook --event E --agent A` (ou
+`nix-hook hook`, no binário publicado), uma marca que não polui o esquema de
+nenhum agente (RF-123).
 
 Os nomes de evento e os formatos vêm da documentação de cada agente, conferida
 em outubro de 2026. O hook de `PreToolUse` fica de fora de propósito: ele roda
@@ -31,8 +32,10 @@ from nix.core.sessions.store import SessionStore
 
 _HOOK_TIMEOUT_S = 10
 
-# `nix hook --event E --agent A` é a marca. O executável pode vir entre aspas ou depois de `& `.
-_MARK = re.compile(r"(?i)\bnix(?:\.exe|\.cmd)?['\"]?\s+hook\s+--event\s+[\w-]+\s+--agent\s+[\w-]+")
+# `nix hook` no checkout e `nix-hook hook` no binário. O executável pode vir entre aspas ou depois de `& `.
+_MARK = re.compile(
+    r"(?i)\bnix(?:-hook)?(?:\.exe|\.cmd)?['\"]?\s+hook\s+--event\s+[\w-]+\s+--agent\s+[\w-]+"
+)
 
 # O Claude Code ignora `settings.local.json` no Git sozinho. Nos demais, o arquivo leva o caminho desta máquina.
 _SELF_IGNORED = {".claude/settings.local.json"}

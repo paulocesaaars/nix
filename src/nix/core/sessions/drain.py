@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
+from nix.config.executables import cli_binary_beside
 from nix.config.paths import app_root, default_state_dir, is_packaged
 
 
@@ -70,9 +71,20 @@ def _read_lines(path: Path) -> list[str]:
         return []
 
 
+def _cli_argv() -> list[str]:
+    """O consolidador precisa do binário completo. O `nix-hook` aponta para o irmão."""
+    if not is_packaged():
+        return [sys.executable, "-P", "-m", "nix"]
+    current = Path(sys.argv[0]).resolve()
+    cli = cli_binary_beside(current)
+    if cli.is_file():
+        return [str(cli)]
+    return [str(current)]
+
+
 def spawn_drain() -> None:
     """Dispara o consolidador em segundo plano e volta na hora."""
-    base = [str(Path(sys.argv[0]).resolve())] if is_packaged() else [sys.executable, "-P", "-m", "nix"]
+    base = _cli_argv()
     command = [*base, "session", "render", "--drain"]
     kwargs: dict[str, object] = {
         "stdin": subprocess.DEVNULL,

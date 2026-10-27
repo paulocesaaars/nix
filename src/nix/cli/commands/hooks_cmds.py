@@ -10,6 +10,7 @@ from rich.markup import escape
 
 from nix.cli.deps import with_errors
 from nix.cli.render import console
+from nix.config.executables import packaged_hook_executable
 from nix.config.loader import load_config
 from nix.core.admin import agent_hooks
 from nix.core.admin.doctor import nix_command
@@ -49,6 +50,14 @@ def _project(project: str | None) -> tuple[Path, str]:
     return Path(key), key
 
 
+def _hook_exe() -> str:
+    """No binário publicado o agente chama o `nix-hook`, que cabe nos 300 ms."""
+    sibling = packaged_hook_executable()
+    if sibling is not None:
+        return agent_hooks.hook_executable(str(sibling), None)
+    return agent_hooks.hook_executable(*nix_command())
+
+
 @hooks_app.command("install", help="Ativa os hooks de sessão neste repositório")
 @with_errors
 def cmd_install(
@@ -59,7 +68,7 @@ def cmd_install(
 ) -> None:
     root, key = _project(project)
     agents = _agents(agent)
-    exe = agent_hooks.hook_executable(*nix_command())
+    exe = _hook_exe()
     plans = agent_hooks.plan_install(root, agents, exe)
     config = load_config()
 
