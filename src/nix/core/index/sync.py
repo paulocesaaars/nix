@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from nix.config.schema import NixConfig
+from nix.config.schema import NixConfig, VaultSettings
 from nix.core.errors import ConfigError, IndexIncompatibleError, PathEscapeError, VaultError
 from nix.core.index.attachments import is_pdf_path, parse_pdf, referenced_pdfs
 from nix.core.index.chunker import Chunker
@@ -46,6 +46,7 @@ class Indexer:
     def __init__(
         self,
         config: NixConfig,
+        vault: VaultSettings,
         store: IndexStore,
         vectors: VectorStore,
         embedder: Embedder,
@@ -53,10 +54,11 @@ class Indexer:
         on_change: Callable[[], None] | None = None,
     ) -> None:
         self.config = config
+        self.vault = vault
         self.store = store
         self.vectors = vectors
         self.embedder = embedder
-        self.reader = reader or VaultReader(config)
+        self.reader = reader or VaultReader(config, vault)
         self.chunker = Chunker(config.index)
         self._on_change = on_change
 
@@ -82,11 +84,12 @@ class Indexer:
         progress: ProgressCb | None = None,
         trigger: str = "manual",
     ) -> SyncReport:
-        with index_lock():
+        callback = _with_vault(self.vault.name, progress) if progress is not None else None
+        with index_lock(self.vault.name):
             return self._sync(
                 full=full,
                 dry_run=dry_run,
-                progress=progress,
+                progress=callback,
                 trigger=trigger,
             )
 
@@ -211,7 +214,7 @@ class Indexer:
             report.removed += 1
 
         self.store.set_meta("embedding_model", self.config.index.embedding_model)
-        self.store.set_meta("vault_path", str(self.config.vault.root))
+        self.store.set_meta("vault_path", str(self.vault.root))
         self.store.set_meta("last_sync_at", datetime.now(UTC).isoformat())
         if self.embedder.dim:
             self.store.set_meta("dim", str(self.embedder.dim))
@@ -269,8 +272,8 @@ class Indexer:
             try:
                 assert_accessible(
                     rel,
-                    self.config.vault.include,
-                    self.config.vault.exclude,
+                    self.vault.include,
+                    self.vault.exclude,
                     apply_include=False,
                 )
             except PathEscapeError:
@@ -302,6 +305,47 @@ def _chunk_row(chunk: Chunk) -> dict[str, Any]:
         "start_line": chunk.start_line,
         "end_line": chunk.end_line,
     }
+
+
+def combine_sync_reports(items: list[tuple[str, SyncReport]]) -> SyncReport:
+    """Soma os relatórios e guarda um resumo por vault."""
+    if not items:
+        return SyncReport(headline="Nenhum vault foi sincronizado. Escolha um com `nix vault list`.")
+    if len(items) == 1:
+        name, report = items[0]
+        report.vault_name = name
+        return report
+    combined = SyncReport(dry_run=items[0][1].dry_run, trigger=items[0][1].trigger)
+    lines: list[str] = []
+    for name, report in items:
+        combined.added += report.added
+        combined.updated += report.updated
+        combined.removed += report.removed
+        combined.skipped += report.skipped
+        combined.failed += report.failed
+        combined.chunks_created += report.chunks_created
+        combined.elapsed_seconds += report.elapsed_seconds
+        combined.tokenizer_approximate = combined.tokenizer_approximate or report.tokenizer_approximate
+        combined.errors.extend(f"{name}: {err}" for err in report.errors)
+        lines.append(f"{name}: {report.summary_pt()}")
+    combined.headline = " · ".join(lines)
+    return combined
+
+
+def _with_vault(vault_name: str, progress: ProgressCb) -> ProgressCb:
+    def tagged(event: SyncProgress) -> None:
+        progress(
+            SyncProgress(
+                current=event.current,
+                total=event.total,
+                rel_path=event.rel_path,
+                action=event.action,
+                detail=event.detail,
+                vault=event.vault or vault_name,
+            )
+        )
+
+    return tagged
 
 
 def json_safe(report: SyncReport) -> dict[str, Any]:

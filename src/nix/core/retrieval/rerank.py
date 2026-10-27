@@ -57,6 +57,7 @@ class Reranker:
                     tags=chunk.tags,
                     folder=chunk.folder,
                     mtime=chunk.mtime,
+                    vault=chunk.vault,
                 )
             )
         return out

@@ -1,6 +1,6 @@
 # Instalar o Nix
 
-Servidor [MCP](https://modelcontextprotocol.io/) que expõe um vault do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot, Codex e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Estas instruções são para **usar** o Nix no seu projeto. Se você vai desenvolver o código, veja o [README.md](README.md).
 
@@ -232,7 +232,7 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
-O mesmo padrão vale para Claude Code e Copilot. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+O mesmo padrão vale para Claude Code, Copilot, Codex (`~/.codex/config.toml` ou `codex mcp add`) e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 
@@ -255,16 +255,19 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 | Comando | Função |
 | --- | --- |
 | `nix` | Inicia o servidor MCP stdio |
-| `nix init [--vault PATH] [--embedding-model NOME] [--force]` | Grava vault e modelo no `settings.db` |
-| `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração |
-| `nix sync [--full] [--dry-run] [--json]` | Sincroniza o índice (nunca automático) |
-| `nix status [--json]` | Notas, chunks, último sync e defasagem |
-| `nix doctor [--json]` | Diagnóstico de ambiente, config e índice |
-| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, configuração, histórico) |
+| `nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]` | Grava o primeiro vault e o modelo no `settings.db`. Sem `--name`, o nome é `Default` |
+| `nix vault list\|add\|rename\|remove\|default\|path\|set` | Cadastra até 5 vaults, renomeia, remove, escolhe o padrão, troca a pasta e grava os ajustes daquele vault |
+| `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração global |
+| `nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]` | Sincroniza o índice (nunca automático) |
+| `nix status [--json] [--vault NOME]... [--all]` | Notas, chunks, último sync e defasagem |
+| `nix doctor [--json]` | Diagnóstico de ambiente, config e índice de cada vault |
+| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, vaults, configuração, histórico) |
+
+De 1 a 5 vaults no mesmo Nix. Sem `--vault` e sem `--all`, `nix sync` e `nix status` usam o padrão. `--vault` pode repetir; `--all` percorre todos, em sequência — não combine os dois. Outro vault entra com `nix vault add NOME CAMINHO`. `nix vault rename` não move o índice nem os backups; se a busca ficar vazia, rode `nix sync --full --vault NOME`.
 
 ## Ferramentas MCP
 
-Dezenove ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path}`.
+Vinte ferramentas. Notas do vault padrão aparecem como recurso `nix://note/{+rel_path}`; um vault nomeado, como `nix://vault/{name}/note/{+rel_path}`.
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -284,19 +287,20 @@ Dezenove ferramentas. Notas também aparecem como recurso `nix://note/{+rel_path
 | `move_file` | Move anexo (PDF, imagem etc.); notas `.md` ficam com `move_note` |
 | `delete_note` | Remove nota e índice; exige `confirm=true` |
 | `sync_index` | Sincronização manual (`full`, `dry_run`) |
-| `index_status` | Contagens, último sync e defasagem |
+| `index_status` | Contagens, último sync e defasagem, por vault |
 | `vault_insights` | Órfãs, duplicatas, sugestão de links ou resumo |
-| `remember` | Grava fato duradouro em `vault.longterm_folder` |
+| `remember` | Grava fato duradouro em `longterm_folder` do vault |
+| `list_vaults` | Nome, caminho, padrão e se o índice daquele vault está desatualizado |
 
 ## Configuração
 
-Fica em `settings.db`, na pasta do Nix. Caminhos relativos resolvem contra essa pasta. Variáveis `NIX_SECAO__CAMPO` ganham do banco (ex.: `NIX_VAULT__PATH`). `nix init` grava o vault e o modelo. O mesmo ajuste pode ser feito com `nix config` ou com `nix ui`.
+Fica em `settings.db`, na pasta do Nix. Caminhos relativos resolvem contra essa pasta. Variáveis `NIX_SECAO__CAMPO` ganham do banco nos campos globais (ex.: `NIX_INDEX__EMBEDDING_MODEL`). O cadastro dos vaults não usa essa variável. `nix init` grava o primeiro vault e o modelo. O mesmo ajuste global pode ser feito com `nix config` ou com `nix ui`.
 
 | Chave | Padrão | Função |
 | --- | --- | --- |
-| `vault.path` | — | Pasta raiz do Obsidian |
-| `vault.exclude` | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas |
-| `vault.default_new_note_folder` | `Inbox` | Destino de notas sem pasta no caminho |
-| `vault.longterm_folder` | `Nix/Memória` | Destino da ferramenta `remember` |
-| `index.data_dir` | `.nix/data` | SQLite + Chroma (na pasta do app, fora do vault) |
+| vault (cadastro) | nome `Default` no `nix init` | Pasta de cada vault, via `nix vault`. De 1 a 5, um padrão |
+| exclusões do vault | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas daquele vault. Mude com `nix vault set NOME exclude VALOR` |
+| pasta de notas novas | `Inbox` | Destino de notas sem pasta no caminho |
+| pasta do `remember` | `Nix/Memória` | Destino da ferramenta `remember` |
+| `index.data_dir` | `.nix/data` | Base do índice; cada vault usa `.nix/data/<nome>` |
 | `logging.file` | `.nix/logs/nix.log` | Logs; consultas só entram se `log_prompts` estiver ligado |

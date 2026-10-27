@@ -11,4 +11,9 @@
   {% for item in errors %}<li class="mono wrap-any">{{ item }}</li>{% endfor %}
 </ul>
 {% endif %}
-{% if not error %}<div><a class="btn btn-sm" href="/sync">Atualizar a página</a></div>{% endif %}
+{% if not error %}<div><a class="btn btn-sm" href="/sync{% if selected_vault %}?vault={{ selected_vault | urlencode }}{% endif %}">Atualizar a página</a></div>{% endif %}
+{# O evento progress troca este HTML; o fieldset habilitado segue por hx-swap-oob. #}
+<div id="sync-alert" hx-swap-oob="innerHTML"></div>
+{% set running = false %}
+{% set oob = true %}
+{% include "sync_controls.html" %}

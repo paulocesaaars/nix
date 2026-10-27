@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Vaults</h1>
+    <p class="sub">De 1 a {{ max_vaults }} vaults neste processo. Um deles é o padrão, usado quando o nome é omitido. A conexão MCP continua uma só: o vault vai em cada chamada.</p>
+  </div>
+</div>
+
+{% if message %}{{ alert("ok", message) }}{% endif %}
+{% if error %}{{ alert("err", error) }}{% endif %}
+
+<section class="card stack">
+  <h2>Cadastrados <span class="badge b-n">{{ rows | length }}/{{ max_vaults }}</span></h2>
+  {% if not rows %}
+  <div class="empty">Nenhum vault. Rode <span class="mono">nix init</span> para cadastrar o primeiro.</div>
+  {% else %}
+  <div class="table-box">
+    <table>
+      <thead><tr><th>Nome</th><th>Pasta</th><th></th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.name }}</strong>{% if row.is_default %} <span class="badge b-a">padrão</span>{% endif %}</td>
+          <td class="mono wrap-any">{{ row.path }}</td>
+          <td>
+            <div class="stack-sm">
+              {% if not row.is_default %}
+              <form method="post" action="/vaults/default" class="inline">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="name" value="{{ row.name }}">
+                <button class="btn btn-sm" type="submit">Tornar padrão</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/vaults/rename" class="row tight">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="old" value="{{ row.name }}">
+                <input class="input" name="new" value="{{ row.name }}" aria-label="Novo nome de {{ row.name }}" required>
+                <button class="btn btn-sm" type="submit">Renomear</button>
+              </form>
+              {% if rows | length > 1 and not row.is_default %}
+              <form method="post" action="/vaults/remove" class="stack-sm">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="name" value="{{ row.name }}">
+                <label class="check">
+                  <input type="checkbox" name="confirm" value="on">
+                  <span>Confirmo a remoção de {{ row.name }}. As notas não são apagadas.</span>
+                </label>
+                <div><button class="btn btn-sm btn-danger" type="submit">Remover</button></div>
+              </form>
+              {% elif row.is_default and rows | length > 1 %}
+              <p class="muted small">Para remover, primeiro escolha outro padrão com <span class="mono">nix vault default NOME</span>.</p>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card stack">
+  <h2>Cadastrar</h2>
+  {% if rows | length >= max_vaults %}
+  <p class="muted">O limite é {{ max_vaults }} vaults. Remova um antes de cadastrar outro.</p>
+  {% else %}
+  <form method="post" action="/vaults/add" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <div class="filters">
+      <label class="field"><span class="lbl">Nome</span><input class="input" name="name" required placeholder="Trabalho" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,31}" title="De 1 a 32 caracteres: letra ou dígito, depois letras, dígitos, _ ou -"></label>
+      <label class="field"><span class="lbl">Pasta</span><input class="input" name="path" required placeholder="C:/Obsidian/Trabalho"></label>
+    </div>
+    <p class="muted small">A pasta precisa existir. O nome não diferencia maiúsculas, mas a grafia original é preservada. Renomear não move o índice nem os backups. Um nome no formato AAAAMMDDTHHMMSS não é aceito: é o carimbo das pastas de backup.</p>
+    <div><button class="btn btn-primary" type="submit">Cadastrar vault</button></div>
+  </form>
+  {% endif %}
+</section>
+
+{% if rows %}
+<section class="card stack">
+  <h2>Pasta e ajustes</h2>
+  <p class="muted">Inclusão, exclusão e as pastas padrão são de cada vault. Listas e objetos entram como JSON. Durante uma sincronização desse vault, a gravação espera o término.</p>
+  <form method="post" action="/vaults/path" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <div class="filters">
+      <label class="field"><span class="lbl">Vault</span>
+        <select class="input" name="name">{% for row in rows %}<option value="{{ row.name }}">{{ row.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="field"><span class="lbl">Nova pasta</span><input class="input" name="path" required placeholder="C:/Obsidian/Trabalho"></label>
+    </div>
+    <div><button class="btn" type="submit">Trocar pasta</button></div>
+  </form>
+  <form method="post" action="/vaults/set" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <div class="filters">
+      <label class="field"><span class="lbl">Vault</span>
+        <select class="input" name="name">{% for row in rows %}<option value="{{ row.name }}">{{ row.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="field"><span class="lbl">Ajuste</span>
+        <select class="input" name="key">
+          <option value="include">include — arquivos indexados</option>
+          <option value="exclude">exclude — arquivos ignorados</option>
+          <option value="follow_symlinks">follow_symlinks — links simbólicos</option>
+          <option value="default_new_note_folder">default_new_note_folder — pasta de notas novas</option>
+          <option value="default_frontmatter">default_frontmatter — frontmatter de notas novas</option>
+          <option value="longterm_folder">longterm_folder — pasta do remember</option>
+        </select>
+      </label>
+      <label class="field"><span class="lbl">Valor</span><input class="input" name="value" required placeholder='[".trash/**"] ou Inbox ou false'></label>
+    </div>
+    <div><button class="btn" type="submit">Gravar ajuste</button></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

@@ -3,6 +3,6 @@
 {{ alert("err", error) }}
 {% elif written %}
 {% call alert("ok", written.message ~ (" Índice atualizado." if written.indexed else " Rode uma sincronização para atualizar o índice.")) %}
-<a class="btn btn-sm" href="/notes/view?path={{ written.rel_path | urlencode }}">Abrir nota</a>
+<a class="btn btn-sm" href="{{ vault_url('/notes/view?path=' ~ (written.rel_path | urlencode)) }}">Abrir nota</a>
 {% endcall %}
 {% endif %}

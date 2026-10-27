@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from nix.config.schema import NixConfig
+from nix.config.schema import NixConfig, VaultSettings
 from nix.core.errors import NoteNotFoundError, VaultError
 from nix.core.models import FileMeta, ParsedNote
 from nix.core.vault.markdown import parse_markdown
@@ -13,20 +13,21 @@ from nix.core.vault.paths import assert_accessible, is_included, rel_to_vault, r
 
 
 class VaultReader:
-    def __init__(self, config: NixConfig) -> None:
+    def __init__(self, config: NixConfig, vault: VaultSettings) -> None:
         self._config = config
-        self._root = config.require_vault()
+        self._vault = vault
+        self._root = config.require_vault(vault.name)
 
     @property
     def root(self) -> Path:
         return self._root
 
     def iter_files(self, *, extra_globs: list[str] | None = None) -> Iterator[FileMeta]:
-        include = list(self._config.vault.include)
+        include = list(self._vault.include)
         if extra_globs:
             include.extend(extra_globs)
-        exclude = self._config.vault.exclude
-        follow = self._config.vault.follow_symlinks
+        exclude = self._vault.exclude
+        follow = self._vault.follow_symlinks
         seen: set[str] = set()
         for pattern in include:
             for path in self._root.glob(pattern):
@@ -62,7 +63,7 @@ class VaultReader:
         return resolve_in_vault(
             self._root,
             rel_path,
-            follow_symlinks=self._config.vault.follow_symlinks,
+            follow_symlinks=self._vault.follow_symlinks,
         )
 
     def exists(self, rel_path: str, *, apply_include: bool = True) -> bool:
@@ -75,8 +76,8 @@ class VaultReader:
     def _assert_accessible(self, rel_path: str, *, apply_include: bool = True) -> str:
         return assert_accessible(
             rel_path,
-            self._config.vault.include,
-            self._config.vault.exclude,
+            self._vault.include,
+            self._vault.exclude,
             apply_include=apply_include,
         )
 

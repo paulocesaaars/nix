@@ -10,6 +10,10 @@ from starlette.responses import PlainTextResponse, RedirectResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _HOST_DENIED = "A interface só atende o navegador aberto por nix ui."
+_ORIGIN_DENIED = (
+    "O formulário veio de outra origem. Abra a interface pelo link que o nix ui imprimiu "
+    "(http://127.0.0.1:PORTA/?t=...) e recarregue a página antes de enviar."
+)
 _COOKIE_DENIED = "É preciso abrir pelo link que o nix ui imprimiu."
 _CSRF_DENIED = "Recarregue a página para continuar."
 _BODY_DENIED = "O formulário passou do tamanho aceito. Reduza o conteúdo e recarregue a página."
@@ -184,7 +188,7 @@ class LocalhostGuard:
             return
         origin = _header_text(headers, b"origin")
         if origin is not None and origin.lower() not in _accepted_origins(self.port):
-            await _text(scope, receive, send, 403, _HOST_DENIED)
+            await _text(scope, receive, send, 403, _ORIGIN_DENIED)
             return
 
         method = scope.get("method", "")

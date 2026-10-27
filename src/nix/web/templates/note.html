@@ -3,7 +3,7 @@
 {% block content %}
 <div class="head">
   <div class="shrink">
-    <a class="small" href="/notes">← Notas</a>
+    <a class="small" href="{{ vault_url('/notes') }}">← Notas</a>
     <h1 class="wrap-any">{{ detail.outline.title if detail and detail.outline.title else path }}</h1>
     <p class="sub mono wrap-any">{{ path }}</p>
   </div>
@@ -30,7 +30,7 @@
       {% else %}
       <ul class="outline">
         {% for h in outline.headings %}
-        <li class="lvl-{{ h.level }}"><a href="/notes/view?path={{ path | urlencode }}&amp;heading={{ h.path | urlencode }}" {% if excerpt.heading == h.path %}aria-current="true"{% endif %}><span>{{ h.title }}</span><span class="mono muted">{{ h.start_line }}–{{ h.end_line }}</span></a></li>
+        <li class="lvl-{{ h.level }}"><a href="{{ vault_url('/notes/view?path=' ~ (path | urlencode) ~ '&heading=' ~ (h.path | urlencode)) }}" {% if excerpt.heading == h.path %}aria-current="true"{% endif %}><span>{{ h.title }}</span><span class="mono muted">{{ h.start_line }}–{{ h.end_line }}</span></a></li>
         {% endfor %}
       </ul>
       {% endif %}
@@ -47,11 +47,11 @@
       <h2>Links</h2>
       <div class="stack-sm">
         <span class="lbl">Saída</span>
-        {% for ref in detail.outgoing %}<a href="/notes/view?path={{ ref.rel_path | urlencode }}">{{ ref.title or ref.rel_path }}</a>{% else %}<span class="muted">Nenhum.</span>{% endfor %}
+        {% for ref in detail.outgoing %}<a href="{{ vault_url('/notes/view?path=' ~ (ref.rel_path | urlencode)) }}">{{ ref.title or ref.rel_path }}</a>{% else %}<span class="muted">Nenhum.</span>{% endfor %}
       </div>
       <div class="stack-sm">
         <span class="lbl">Entrada</span>
-        {% for ref in detail.incoming %}<a href="/notes/view?path={{ ref.rel_path | urlencode }}">{{ ref.title or ref.rel_path }}</a>{% else %}<span class="muted">Nenhuma nota aponta para esta.</span>{% endfor %}
+        {% for ref in detail.incoming %}<a href="{{ vault_url('/notes/view?path=' ~ (ref.rel_path | urlencode)) }}">{{ ref.title or ref.rel_path }}</a>{% else %}<span class="muted">Nenhuma nota aponta para esta.</span>{% endfor %}
       </div>
     </section>
   </div>
@@ -65,9 +65,9 @@
       {% for line in excerpt.content.split("\n") %}<div><span class="ln">{{ excerpt.start_line + loop.index0 }}</span>{{ line }}</div>{% endfor %}
     </div>
     <div class="row">
-      {% if excerpt.start_line > 1 and not excerpt.heading %}<a class="btn btn-sm" href="/notes/view?path={{ path | urlencode }}&amp;start={{ [excerpt.start_line - 60, 1] | max }}">Anteriores</a>{% endif %}
-      {% if excerpt.end_line < excerpt.line_count %}<a class="btn btn-sm" href="/notes/view?path={{ path | urlencode }}&amp;start={{ excerpt.end_line + 1 }}">Próximas</a>{% endif %}
-      {% if excerpt.heading %}<a class="btn btn-sm" href="/notes/view?path={{ path | urlencode }}">Do início</a>{% endif %}
+      {% if excerpt.start_line > 1 and not excerpt.heading %}<a class="btn btn-sm" href="{{ vault_url('/notes/view?path=' ~ (path | urlencode) ~ '&start=' ~ ([excerpt.start_line - 60, 1] | max)) }}">Anteriores</a>{% endif %}
+      {% if excerpt.end_line < excerpt.line_count %}<a class="btn btn-sm" href="{{ vault_url('/notes/view?path=' ~ (path | urlencode) ~ '&start=' ~ (excerpt.end_line + 1)) }}">Próximas</a>{% endif %}
+      {% if excerpt.heading %}<a class="btn btn-sm" href="{{ vault_url('/notes/view?path=' ~ (path | urlencode)) }}">Do início</a>{% endif %}
     </div>
     <p class="small muted">A UI só lê a nota. Para editar, use o Obsidian ou o agente.</p>
   </section>

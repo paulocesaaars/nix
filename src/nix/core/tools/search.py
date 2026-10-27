@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from nix.core.errors import NoteNotFoundError, VaultError
 from nix.core.models import Heading, LinkDirection, NoteContent, NoteLines, NoteOutline, NoteRef
 from nix.core.runtime import Runtime
+from nix.core.tools.args import MultiVaultArgs, VaultArgs
 from nix.core.vault.markdown import headings_in_file, split_frontmatter
 from nix.core.vault.paths import assert_accessible, is_included
 
 _MAX_NOTE_LINES = 400
 
 
-class SearchNotesArgs(BaseModel):
+class SearchNotesArgs(MultiVaultArgs):
     query: str = Field(description="Consulta em linguagem natural ou termos-chave")
     top_k: int = Field(default=5, ge=1, le=50)
     folder: str | None = Field(default=None, description="Pasta relativa ao vault")
@@ -24,24 +25,24 @@ class SearchNotesArgs(BaseModel):
     date_to: str | None = Field(default=None, description="ISO YYYY-MM-DD")
 
 
-class ReadNoteArgs(BaseModel):
+class ReadNoteArgs(VaultArgs):
     rel_path: str = Field(description="Caminho relativo da nota no vault")
 
 
-class ListNotesArgs(BaseModel):
+class ListNotesArgs(MultiVaultArgs):
     folder: str | None = None
     tag: str | None = None
     limit: int = Field(default=50, ge=1, le=500)
 
 
-class LinkedNotesArgs(BaseModel):
+class LinkedNotesArgs(VaultArgs):
     rel_path: str
     direction: LinkDirection = Field(
         default="both", description="outgoing, incoming ou both"
     )
 
 
-class ReadNoteLinesArgs(BaseModel):
+class ReadNoteLinesArgs(VaultArgs):
     rel_path: str = Field(description="Caminho relativo da nota no vault")
     start_line: int | None = Field(
         default=None,
@@ -59,20 +60,27 @@ class ReadNoteLinesArgs(BaseModel):
     )
 
 
-class GetNoteOutlineArgs(BaseModel):
+class GetNoteOutlineArgs(VaultArgs):
     rel_path: str = Field(description="Caminho relativo da nota no vault")
 
 
-class ListAllTagsArgs(BaseModel):
+class ListAllTagsArgs(MultiVaultArgs):
     folder: str | None = Field(default=None, description="Pasta relativa ao vault")
     limit: int = Field(default=200, ge=1, le=1000)
 
 
+# list_tags exige um teto e corta cada vault antes da soma. O limite do usuário
+# só entra na lista já somada; este teto evita que uma tag frequente no total
+# suma ou perca contagem quando um vault sozinho passa do limite pedido.
+_TAG_SCAN_LIMIT = 100_000
+
+
 def _guard_read(runtime: Runtime, rel_path: str) -> str:
+    vault = runtime.vault
     return assert_accessible(
         rel_path,
-        runtime.config.vault.include,
-        runtime.config.vault.exclude,
+        vault.include,
+        vault.exclude,
     )
 
 
@@ -106,8 +114,12 @@ def _file_line(line: int | None, offset: int) -> int | None:
     return line + offset
 
 
-def search_notes(runtime: Runtime, args: SearchNotesArgs) -> list[dict[str, object]]:
-    chunks = runtime.retrieval.search(
+def search_notes(runtimes: list[Runtime], args: SearchNotesArgs) -> dict[str, object]:
+    from nix.core.retrieval.service import search_many
+
+    by_name = {runtime.vault.name: runtime for runtime in runtimes}
+    outcome = search_many(
+        [(runtime.vault.name, runtime.retrieval) for runtime in runtimes],
         args.query,
         top_k=args.top_k,
         folder=args.folder,
@@ -115,12 +127,17 @@ def search_notes(runtime: Runtime, args: SearchNotesArgs) -> list[dict[str, obje
         date_from=args.date_from,
         date_to=args.date_to,
     )
-    offsets: dict[str, int] = {}
+    offsets: dict[tuple[str, str], int] = {}
     rows: list[dict[str, object]] = []
-    for chunk in chunks:
-        offset = _body_offset(runtime, chunk.rel_path, offsets)
+    for chunk in outcome.chunks:
+        runtime = by_name.get(chunk.vault) or runtimes[0]
+        key = (chunk.vault, chunk.rel_path)
+        if key not in offsets:
+            offsets[key] = _body_offset(runtime, chunk.rel_path, {})
+        offset = offsets[key]
         rows.append(
             {
+                "vault": chunk.vault,
                 "chunk_id": chunk.chunk_id,
                 "file_id": chunk.file_id,
                 "rel_path": chunk.rel_path,
@@ -136,7 +153,11 @@ def search_notes(runtime: Runtime, args: SearchNotesArgs) -> list[dict[str, obje
                 "folder": chunk.folder,
             }
         )
-    return rows
+    return {
+        "vault": [runtime.vault.name for runtime in runtimes],
+        "results": rows,
+        "vault_errors": outcome.vault_errors,
+    }
 
 
 def read_note(runtime: Runtime, args: ReadNoteArgs) -> dict[str, object]:
@@ -283,27 +304,47 @@ def _lines_dict(result: NoteLines) -> dict[str, object]:
     }
 
 
-def list_all_tags(runtime: Runtime, args: ListAllTagsArgs) -> list[dict[str, object]]:
-    include = runtime.config.vault.include
-    exclude = runtime.config.vault.exclude
+def list_all_tags(runtimes: list[Runtime], args: ListAllTagsArgs) -> dict[str, object]:
+    """Soma as contagens e guarda o detalhe de cada vault."""
+    totals: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    detail: dict[str, list[dict[str, object]]] = {}
+    for runtime in runtimes:
+        include = runtime.vault.include
+        exclude = runtime.vault.exclude
 
-    def path_ok(rel: str) -> bool:
-        return is_included(rel, include, exclude)
+        def path_ok(rel: str, include: list[str] = include, exclude: list[str] = exclude) -> bool:
+            return is_included(rel, include, exclude)
 
-    rows = runtime.store.list_tags(folder=args.folder, limit=args.limit, path_ok=path_ok)
-    return [{"tag": tag, "count": count} for tag, count in rows]
+        for tag, count in runtime.store.list_tags(folder=args.folder, limit=_TAG_SCAN_LIMIT, path_ok=path_ok):
+            key = tag.casefold()
+            labels.setdefault(key, tag)
+            totals[key] = totals.get(key, 0) + count
+            detail.setdefault(key, []).append({"vault": runtime.vault.name, "count": count})
+    tags = sorted(totals, key=lambda key: (-totals[key], labels[key].casefold()))
+    return {
+        "vault": [runtime.vault.name for runtime in runtimes],
+        "tags": [
+            {"tag": labels[key], "count": totals[key], "vaults": detail[key]}
+            for key in tags[: args.limit]
+        ],
+    }
 
 
-def list_notes(runtime: Runtime, args: ListNotesArgs) -> list[dict[str, object]]:
-    rows = runtime.store.list_notes(folder=args.folder, tag=args.tag, limit=args.limit)
-    refs: list[NoteRef] = []
-    for row in rows:
-        rel = str(row["rel_path"])
-        if not is_included(rel, runtime.config.vault.include, runtime.config.vault.exclude):
-            continue
-        tags = _tags_from_row(row)
-        refs.append(NoteRef(rel_path=rel, title=str(row["title"] or ""), tags=tags))
-    return [{"rel_path": r.rel_path, "title": r.title, "tags": r.tags} for r in refs]
+def list_notes(runtimes: list[Runtime], args: ListNotesArgs) -> dict[str, object]:
+    notes: list[dict[str, object]] = []
+    for runtime in runtimes:
+        rows = runtime.store.list_notes(folder=args.folder, tag=args.tag, limit=args.limit)
+        for row in rows:
+            rel = str(row["rel_path"])
+            if not is_included(rel, runtime.vault.include, runtime.vault.exclude):
+                continue
+            tags = _tags_from_row(row)
+            ref = NoteRef(rel_path=rel, title=str(row["title"] or ""), tags=tags)
+            notes.append(
+                {"vault": runtime.vault.name, "rel_path": ref.rel_path, "title": ref.title, "tags": ref.tags}
+            )
+    return {"vault": [runtime.vault.name for runtime in runtimes], "notes": notes}
 
 
 def get_linked_notes(runtime: Runtime, args: LinkedNotesArgs) -> list[dict[str, object]]:

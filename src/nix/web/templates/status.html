@@ -7,7 +7,7 @@
     <p class="sub">Visão geral do índice local e do vault.</p>
   </div>
   <div class="row">
-    <a class="btn btn-primary" href="/sync">{{ icon("sync", 16, "2") }}Sincronizar</a>
+    <a class="btn btn-primary" href="{{ vault_url('/sync') }}">{{ icon("sync", 16, "2") }}Sincronizar</a>
   </div>
 </div>
 
@@ -16,7 +16,7 @@
 {% if status %}
 {% if status.stale %}
 {% call alert("warn", (status.stale_reason or "Há mudanças no vault que ainda não estão no índice.") ~ " Nada é vetorizado sem a sua autorização.", "O índice está desatualizado.") %}
-<a class="btn btn-sm" href="/sync">Ver o que mudou</a>
+<a class="btn btn-sm" href="{{ vault_url('/sync') }}">Ver o que mudou</a>
 {% endcall %}
 {% endif %}
 
@@ -33,7 +33,7 @@
   <div class="card">
     <div class="kpi-label">Com erro</div>
     <div class="kpi-value {{ 'is-err' if status.errors else '' }}">{{ status.errors | num }}</div>
-    {% if status.errors %}<a class="kpi-note" href="/notes">Ver notas com erro</a>{% endif %}
+    {% if status.errors %}<a class="kpi-note" href="{{ vault_url('/notes') }}">Ver notas com erro</a>{% endif %}
   </div>
   <div class="card">
     <div class="kpi-label">Última sincronização</div>
@@ -90,8 +90,8 @@
 <section class="stack-md">
   <h2 class="section-title">Atalhos</h2>
   <div class="kpis">
-    <a class="card card-link stack-sm" href="/search"><strong>Testar uma busca</strong><span class="muted">Veja o que o agente receberia para uma pergunta.</span></a>
-    <a class="card card-link stack-sm" href="/insights"><strong>Revisar insights</strong><span class="muted">Notas órfãs, títulos duplicados e sugestões de link.</span></a>
+    <a class="card card-link stack-sm" href="{{ vault_url('/search') }}"><strong>Testar uma busca</strong><span class="muted">Veja o que o agente receberia para uma pergunta.</span></a>
+    <a class="card card-link stack-sm" href="{{ vault_url('/insights') }}"><strong>Revisar insights</strong><span class="muted">Notas órfãs, títulos duplicados e sugestões de link.</span></a>
     <a class="card card-link stack-sm" href="/connect"><strong>Conectar ao editor</strong><span class="muted">Gere a configuração MCP do Cursor, Claude Code ou VS Code.</span></a>
   </div>
 </section>

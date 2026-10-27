@@ -1,0 +1,3 @@
+{% macro before_swap() -%}
+if (event.detail.xhr.status === 409) { event.detail.shouldSwap = true; event.detail.isError = false; var slot = document.getElementById('sync-alert'); if (slot) event.detail.target = slot; }
+{%- endmacro %}

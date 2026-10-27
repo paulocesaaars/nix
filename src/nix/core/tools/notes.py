@@ -4,25 +4,26 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from nix.core.runtime import Runtime
+from nix.core.tools.args import VaultArgs
 from nix.core.vault.paths import to_posix
 
 
-class CreateNoteArgs(BaseModel):
+class CreateNoteArgs(VaultArgs):
     rel_path: str = Field(description="Caminho relativo da nova nota, ex. Inbox/ideia.md")
     content: str = Field(description="Corpo Markdown da nota")
     frontmatter: dict[str, Any] | None = None
 
 
-class AppendNoteArgs(BaseModel):
+class AppendNoteArgs(VaultArgs):
     rel_path: str
     content: str
     section: str | None = Field(default=None, description="Cabeçalho de seção opcional")
 
 
-class UpdateNoteArgs(BaseModel):
+class UpdateNoteArgs(VaultArgs):
     rel_path: str
     content: str
     mode: Literal["replace", "patch", "prepend"] = "replace"
@@ -32,7 +33,7 @@ class UpdateNoteArgs(BaseModel):
     )
 
 
-class UpdateFrontmatterArgs(BaseModel):
+class UpdateFrontmatterArgs(VaultArgs):
     rel_path: str
     set: dict[str, Any] | None = Field(
         default=None,
@@ -41,13 +42,13 @@ class UpdateFrontmatterArgs(BaseModel):
     remove: list[str] | None = Field(default=None, description="Chaves de topo a apagar")
 
 
-class ManageTagsArgs(BaseModel):
+class ManageTagsArgs(VaultArgs):
     rel_path: str
     add: list[str] = Field(default_factory=list, description="Tags a acrescentar (com ou sem #)")
     remove: list[str] = Field(default_factory=list, description="Tags a remover do frontmatter")
 
 
-class MoveNoteArgs(BaseModel):
+class MoveNoteArgs(VaultArgs):
     src: str = Field(description="Caminho atual da nota .md")
     dest: str = Field(description="Novo caminho relativo no vault")
     update_links: bool = Field(
@@ -61,7 +62,7 @@ class MoveNoteArgs(BaseModel):
     )
 
 
-class MoveFileArgs(BaseModel):
+class MoveFileArgs(VaultArgs):
     src: str = Field(description="Caminho atual do anexo ou arquivo que não é nota")
     dest: str = Field(description="Novo caminho relativo no vault")
     update_links: bool = Field(
@@ -75,7 +76,7 @@ class MoveFileArgs(BaseModel):
     )
 
 
-class DeleteNoteArgs(BaseModel):
+class DeleteNoteArgs(VaultArgs):
     rel_path: str
     confirm: bool = False
 
@@ -102,7 +103,7 @@ def _result_dict(result: object) -> dict[str, object]:
 
 
 def create_note(runtime: Runtime, args: CreateNoteArgs) -> dict[str, object]:
-    folder = runtime.config.vault.default_new_note_folder
+    folder = runtime.vault.default_new_note_folder
     rel = to_posix(args.rel_path)
     if "/" not in rel and folder:
         rel = f"{folder.rstrip('/')}/{rel}"

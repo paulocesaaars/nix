@@ -34,24 +34,45 @@ class Gated(Generic[T]):
     error: str | None
 
 
-def gated(gate: RuntimeGate, fn: Callable[[Runtime], T], *, busy: str = BUSY_READ) -> Gated[T]:
-    if not gate.lock.acquire(blocking=False):
-        return Gated(None, None, busy)
-    try:
-        notice = gate.host.before_call()
+def request_vault(request: Request) -> str | None:
+    """Nome em `?vault=`. Vazio ou `*` significa o vault padrão."""
+    raw = query(request, "vault")
+    if not raw or raw == "*":
+        return None
+    return raw
+
+
+def gated(
+    gate: RuntimeGate,
+    fn: Callable[[Runtime], T],
+    *,
+    vault: str | None = None,
+    busy: str = BUSY_READ,
+) -> Gated[T]:
+    with gate.borrow(vault) as borrowed:
+        if borrowed.error:
+            return Gated(None, borrowed.notice, borrowed.error)
+        if not borrowed.runtimes:
+            message = borrowed.skipped[0]["message"] if borrowed.skipped else busy
+            return Gated(None, borrowed.notice, message)
         try:
-            return Gated(fn(gate.host.runtime), notice, None)
+            return Gated(fn(borrowed.runtimes[0]), borrowed.notice, None)
         except NixError as exc:
-            return Gated(None, notice, exc.message)
+            return Gated(None, borrowed.notice, exc.message)
         except ValidationError as exc:
             message = f"Parâmetros inválidos: {_validation_text(exc)}. Corrija o formulário e tente de novo."
-            return Gated(None, notice, message)
-    finally:
-        gate.lock.release()
+            return Gated(None, borrowed.notice, message)
 
 
-async def run_gated(request: Request, fn: Callable[[Runtime], T], *, busy: str = BUSY_READ) -> Gated[T]:
-    return await asyncio.to_thread(partial(gated, web_state(request).gate, fn, busy=busy))
+async def run_gated(
+    request: Request,
+    fn: Callable[[Runtime], T],
+    *,
+    vault: str | None = None,
+    busy: str = BUSY_READ,
+) -> Gated[T]:
+    chosen = request_vault(request) if vault is None else vault
+    return await asyncio.to_thread(partial(gated, web_state(request).gate, fn, vault=chosen, busy=busy))
 
 
 async def form_data(request: Request) -> dict[str, str]:

@@ -11,7 +11,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 1. **Núcleo independente de interface.** Toda a lógica vive em `nix.core`. CLI, MCP e a interface local são adaptadores finos que chamam os mesmos serviços. Nenhuma regra de negócio é duplicada.
 2. **Local por padrão.** Embeddings e banco vetorial rodam na máquina do usuário, sem custo e sem enviar o vault para terceiros. O Nix não faz chamadas remotas.
 3. **Indexação sob consentimento.** Não existe watcher de arquivos. O vault só é varrido quando o usuário pede (`nix sync` / ferramenta `sync_index`) ou quando as próprias ferramentas escrevem (write-through).
-4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar `index.data_dir` (padrão `.nix/data` na pasta do aplicativo) e rodar `nix sync --full` reconstrói tudo.
+4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar a pasta daquele vault em `index.data_dir` (padrão `.nix/data/<nome>`) e rodar `nix sync --full --vault NOME` reconstrói tudo.
 5. **Ferramentas antes de prompts.** A capacidade exposta ao cliente é um conjunto pequeno e bem tipado de ferramentas, definido uma vez em `core/tools/registry.py`.
 6. **Falhar de forma explícita.** Erros de configuração, defasagem de índice e ausência de resultados são comunicados, nunca mascarados.
 
@@ -40,8 +40,8 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 ```mermaid
 graph TB
     subgraph Interfaces
-        Client["Cursor / Claude Code / Copilot"]
-        CLI["CLI<br/>init / config / sync / status / doctor / ui"]
+        Client["Clientes MCP<br/>stdio"]
+        CLI["CLI<br/>init / vault / config / sync / status / doctor / ui"]
         UI["Interface local<br/>nix ui"]
         MCP["Servidor MCP<br/>stdio"]
     end
@@ -55,9 +55,9 @@ graph TB
     end
 
     subgraph Infra["Infraestrutura local"]
-        CHROMA[("ChromaDB<br/>.nix/data/chroma")]
-        SQLITE[("SQLite<br/>.nix/data/index.db")]
-        EMB["FastEmbed / bge-m3<br/>CPU"]
+        CHROMA[("ChromaDB<br/>.nix/data/nome/chroma")]
+        SQLITE[("SQLite<br/>.nix/data/nome/index.db")]
+        EMB["FastEmbed / bge-m3<br/>CPU, um por processo"]
         FS[("Vault Obsidian<br/>*.md")]
     end
 
@@ -80,6 +80,22 @@ graph TB
     VAULT --> FS
     CFG -.-> Core
 ```
+
+Um processo MCP (ou `nix ui`) atende de 1 a 5 vaults. `RuntimeHost` guarda um `Runtime` por nome, criado na primeira resolução e fechado quando o vault sai do `settings.db`. `resolve(nome | None)` abre um vault (nome omitido usa o padrão). `resolve_many(nome | lista | "*")` abre vários; nome desconhecido lista os cadastrados e diz qual é o padrão. O modelo de embedding é um só (`index.embedding_model`): o `Embedder` é do processo, com `threading.RLock` no carregamento e no `embed`, para dois vaults não rodarem inferência ao mesmo tempo.
+
+### 3.1 Pastas por vault
+
+`index.data_dir` e `safety.backup_dir` continuam globais. O que é de um vault fica numa subpasta com o nome cadastrado:
+
+| Artefato | Caminho |
+| --- | --- |
+| Índice (SQLite + Chroma) | `{index.data_dir}/<nome>/` (padrão `.nix/data/<nome>/`) |
+| Backups | `{safety.backup_dir}/<nome>/` (padrão `.nix/backups/<nome>/`) |
+| Trava de sync e write-through | `{app_root}/.nix/sync-<nome>.lock` |
+
+A trava é por vault: um pode sincronizar enquanto outro é lido. Renomear o vault não move índice nem backups; a CLI avisa para rodar `nix sync --full --vault NOME` se a busca ficar vazia. Remover o vault do cadastro também deixa essas pastas no disco.
+
+O vault migrado do esquema 1 é a exceção: o índice (`index.db` e o chroma) continua na raiz de `{index.data_dir}` e os backups na raiz de `{safety.backup_dir}`, para a busca e os backups não ficarem vazios. Vaults cadastrados depois usam a subpasta do nome.
 
 ## 4. Estrutura do projeto
 
@@ -121,7 +137,7 @@ nix/
         │   ├── embedding_present.py # textos de apresentação dos modelos (CLI e interface)
         │   ├── store.py            # settings.db: valores, histórico, versão do esquema
         │   ├── editor.py           # gravação validada (CLI e interface)
-        │   ├── loader.py           # precedência env > banco > padrão
+        │   ├── loader.py           # precedência env > banco > padrão; vaults vêm da tabela
         │   └── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         ├── core/
         │   ├── vault/
@@ -134,12 +150,12 @@ nix/
         │   ├── index/
         │   │   ├── store.py        # SQLite: arquivos, chunks, metadados
         │   │   ├── chunker.py      # divisão consciente da estrutura
-        │   │   ├── embedder.py     # FastEmbed em lote; stdout capturado por padrão
+        │   │   ├── embedder.py     # FastEmbed em lote; RLock na carga e no embed
         │   │   ├── native_compat.py # mmh3 nativo ou stub (só import FastEmbed)
         │   │   ├── tokenize.py     # tiktoken, com aproximação se a DLL falhar
         │   │   ├── vectorstore.py  # adaptador Chroma
         │   │   ├── sync.py         # diff e sincronização incremental
-        │   │   ├── lock.py         # trava entre processos (.nix/sync.lock)
+        │   │   ├── lock.py         # trava entre processos (.nix/sync-<nome>.lock)
         │   │   ├── writeback.py    # reindexação write-through
         │   │   ├── attachments.py  # texto de PDFs referenciados
         │   │   ├── graph.py        # grafo de wikilinks (cache)
@@ -151,8 +167,10 @@ nix/
         │   │   ├── rerank.py       # cross-encoder opcional
         │   │   └── service.py      # fachada de recuperação
         │   ├── insights/           # órfãs, duplicatas, links, resumo
-        │   ├── admin/              # init e relatório do doctor, sem saída de terminal
+        │   ├── runtime.py          # RuntimeHost: resolve / resolve_many, Embedder compartilhado
+        │   ├── admin/              # init, doctor e VaultService (add/rename/remove/default)
         │   └── tools/
+        │       ├── args.py         # VaultArgs (um nome) e MultiVaultArgs (nome, lista ou "*")
         │       ├── registry.py     # definição canônica das ferramentas
         │       ├── search.py
         │       ├── notes.py
@@ -162,6 +180,7 @@ nix/
         │   ├── ascii-art.txt
         │   ├── commands/
         │   │   ├── setup.py        # init, doctor
+        │   │   ├── vault_cmds.py   # nix vault list/add/rename/remove/default/path/set
         │   │   ├── config_cmds.py  # config list/get/set/unset/history/undo
         │   │   ├── ui_cmd.py       # nix ui
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
@@ -170,7 +189,7 @@ nix/
         ├── mcp/
         │   ├── server.py           # FastMCP/MCPServer stdio; recarrega a config entre chamadas
         │   ├── traffic.py          # log de interações MCP (arquivo e .nix/traffic.db)
-        │   └── resources.py        # nix://note/{+rel_path}
+        │   └── resources.py        # nix://note/… no padrão; nix://vault/{name}/note/…
         ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e nix.css vendidos
         │   └── routes/             # ops, vault, integration, maintenance
         └── observability/
@@ -184,7 +203,7 @@ O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/boots
 
 ## 5. Modelo de dados
 
-### 5.1 SQLite (`index.data_dir/index.db`, padrão `.nix/data/index.db` na pasta do app)
+### 5.1 SQLite (`{index.data_dir}/<nome>/index.db`, padrão `.nix/data/<nome>/index.db`)
 
 Guarda o estado do índice: o que já foi processado, com qual conteúdo e com qual modelo. É a base do diff incremental.
 
@@ -244,7 +263,7 @@ CREATE TABLE sync_runs (
 
 ### 5.2 Coleção Chroma
 
-Uma coleção `nix_notes`, um vetor por chunk, `id` idêntico ao `chunks.id`. Metadados armazenados junto:
+Uma coleção `nix_notes` por vault, em `{index.data_dir}/<nome>/chroma`, um vetor por chunk, `id` idêntico ao `chunks.id`. Metadados armazenados junto:
 
 | Campo | Uso |
 | --- | --- |
@@ -358,35 +377,42 @@ graph LR
 - **RRF** funde os dois rankings: `score(d) = Σ 1 / (k + rank_i(d))`, com `k = 60`.
 - **Expansão de vizinhos** recupera os chunks `ordinal ± 1` dos melhores resultados.
 - **Corte de score** descarta trechos abaixo de `max(min_score, melhor × 0.65)`.
-- **Reordenação** é opcional (`retrieval.rerank`), com cross-encoder local (`index.rerank_model`), aplicada ao top-20.
+- **Reordenação** é opcional (`retrieval.rerank`), com cross-encoder local (`index.rerank_model`).
 
-Cada trecho devolvido por `search_notes` inclui `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP.
+`search_notes` sempre passa por `search_many`, com um vault ou com vários. A consulta é vetorizada uma vez. Cada vault roda a híbrida com `candidate_pool` e os filtros, sem corte final. Os trechos são juntados, ordenados pelo score, e então `min_score` e `top_k` valem para o conjunto. Com o rerank ligado, o cross-encoder roda uma vez sobre esse conjunto juntado inteiro. Falha num vault vai para `vault_errors`, com a ação corretiva, e os outros seguem. Cada trecho traz o nome do vault.
+
+`RetrievalService.search` ainda corta a janela de rerank nos primeiros 20 candidatos, mas a ferramenta e a interface não o chamam: as duas usam `search_many`.
+
+Cada trecho devolvido por `search_notes` inclui `vault`, `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP.
 
 ## 8. Ferramentas
 
-Definidas uma única vez em `core/tools/registry.py` e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso).
+Definidas uma única vez em `core/tools/registry.py` (`SPECS`, 20 ferramentas) e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso), um vault por vez.
+
+`VaultArgs` é um nome, ou o padrão se o campo vier vazio. `MultiVaultArgs` aceita um nome, uma lista ou `"*"`. A comparação ignora maiúsculas. Escrita, leitura de uma nota, links e insights recusam lista e `"*"`. Busca, `list_notes`, `list_all_tags`, `index_status` e `sync_index` aceitam vários. `list_vaults` não recebe vault: devolve todos. A resposta traz `vault` (um nome ou a lista dos consultados).
 
 | Ferramenta | Assinatura | Efeito no índice |
 | --- | --- | --- |
-| `search_notes` | `(query, top_k=5, folder?, tags?, date_from?, date_to?) -> list[Chunk]` | — |
-| `read_note` | `(rel_path) -> NoteContent` | — |
-| `get_note_outline` | `(rel_path) -> NoteOutline` (título, chaves, linhas, headings) | — |
-| `read_note_lines` | `(rel_path, start_line?, end_line?, heading?) -> NoteLines` | — |
-| `list_notes` | `(folder?, tag?, limit=50) -> list[NoteRef]` (`rel_path`, `title`, `tags`) | — |
-| `list_all_tags` | `(folder?, limit=200) -> list[{tag, count}]` | — |
-| `get_linked_notes` | `(rel_path, direction=both) -> list[NoteRef]` | — |
-| `create_note` | `(rel_path, content, frontmatter?) -> WriteResult` | write-through; pasta padrão `vault.default_new_note_folder` (`Inbox`) se o caminho não tiver `/` |
-| `append_to_note` | `(rel_path, content, section?) -> WriteResult` | write-through |
-| `update_note` | `(rel_path, content, mode=replace\|patch\|prepend, confirm) -> WriteResult` | write-through; `prepend` não exige `confirm` |
-| `update_frontmatter` | `(rel_path, set?, remove?) -> WriteResult` | write-through; só a chave alterada é reemitida |
-| `manage_tags` | `(rel_path, add?, remove?) -> WriteResult` | write-through; tags inline do corpo ficam |
-| `move_note` | `(src, dest, update_links=true, overwrite, confirm) -> WriteResult` | `after_move`: remove o id antigo, indexa o caminho novo e as notas reescritas |
-| `move_file` | `(src, dest, update_links=true, overwrite, confirm) -> WriteResult` | igual a `move_note` para o id; PDF só entra no índice com `index.index_attachments` |
-| `delete_note` | `(rel_path, confirm) -> WriteResult` | remove do índice |
-| `sync_index` | `(full=False, dry_run=False) -> SyncReport` | sincronização manual |
-| `index_status` | `() -> IndexStatus` | — |
-| `vault_insights` | `(kind, limit=20) -> insights` | — |
-| `remember` | `(content, title?) -> WriteResult` | write-through em `vault.longterm_folder` |
+| `search_notes` | `(query, top_k=5, folder?, tags?, date_from?, date_to?, vault?) -> {results, vault_errors}` | — ; junção em `search_many` |
+| `read_note` | `(rel_path, vault?) -> NoteContent` | — |
+| `get_note_outline` | `(rel_path, vault?) -> NoteOutline` (título, chaves, linhas, headings) | — |
+| `read_note_lines` | `(rel_path, start_line?, end_line?, heading?, vault?) -> NoteLines` | — |
+| `list_notes` | `(folder?, tag?, limit=50, vault?) -> {notes}` | — ; o limite vale **por vault** e as listas são juntadas |
+| `list_all_tags` | `(folder?, limit=200, vault?) -> {tags}` | — ; soma as contagens de cada vault e só então aplica o limite; o detalhe por vault permanece |
+| `get_linked_notes` | `(rel_path, direction=both, vault?) -> list[NoteRef]` | — |
+| `create_note` | `(rel_path, content, frontmatter?, vault?) -> WriteResult` | write-through; pasta padrão `default_new_note_folder` (`Inbox`) se o caminho não tiver `/` |
+| `append_to_note` | `(rel_path, content, section?, vault?) -> WriteResult` | write-through |
+| `update_note` | `(rel_path, content, mode=replace\|patch\|prepend, confirm, vault?) -> WriteResult` | write-through; `prepend` não exige `confirm` |
+| `update_frontmatter` | `(rel_path, set?, remove?, vault?) -> WriteResult` | write-through; só a chave alterada é reemitida |
+| `manage_tags` | `(rel_path, add?, remove?, vault?) -> WriteResult` | write-through; tags inline do corpo ficam |
+| `move_note` | `(src, dest, update_links=true, overwrite, confirm, vault?) -> WriteResult` | `after_move`: remove o id antigo, indexa o caminho novo e as notas reescritas |
+| `move_file` | `(src, dest, update_links=true, overwrite, confirm, vault?) -> WriteResult` | igual a `move_note` para o id; PDF só entra no índice com `index.index_attachments` |
+| `delete_note` | `(rel_path, confirm, vault?) -> WriteResult` | remove do índice |
+| `sync_index` | `(full=False, dry_run=False, vault?) -> {reports}` | um vault por vez; um relatório por vault |
+| `index_status` | `(vault?) -> {vaults}` | — ; um status por vault |
+| `vault_insights` | `(kind, limit=20, vault?) -> insights` | — |
+| `remember` | `(content, title?, vault?) -> WriteResult` | write-through em `longterm_folder` do vault |
+| `list_vaults` | `() -> {vaults}` | — ; nome, caminho, padrão e se o índice está desatualizado |
 
 Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34). `move_note` e `move_file` não levam `destructiveHint`; sobrescrever o destino ainda exige `overwrite=true` e `confirm=true`. `read_note_lines` devolve no máximo 400 linhas (`truncated`, `next_start_line`). As linhas de `search_notes`, do outline e de `read_note_lines` são do arquivo bruto, com o frontmatter incluído.
 
@@ -420,24 +446,29 @@ No binário, `app_root()` ignora o checkout (o `__file__` da extração não é 
 
 ```
 nix                           # inicia o servidor MCP stdio
-nix init [--vault PATH] [--embedding-model NOME] [--force]
-                              # pergunta (ou recebe) o vault; grava settings.db
-                              # sem --force, configuração existente só atualiza vault.path
+nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]
+                              # pergunta (ou recebe) o primeiro vault; nome padrão Default
+                              # sem --force, configuração existente só atualiza o caminho do padrão
+                              # --name com vaults já cadastrados pede `nix vault add`
+nix vault list|add|rename|remove|default|path|set
+                              # cadastro; rename não move índice nem backups
+                              # path troca a pasta; set grava include/exclude e as pastas daquele vault
 nix config list|get|set|unset|history|undo
-nix sync [--full] [--dry-run] [--json]
-nix status [--json]           # via call_tool("index_status")
-nix doctor [--json]           # relatório; --json serializa o mesmo DoctorReport
+nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]
+nix status [--json] [--vault NOME]... [--all]
+                              # status via call_tool("index_status")
+nix doctor [--json]           # relatório de todos os vaults; --json serializa o DoctorReport
 nix ui [--no-browser] [--port N]
                               # interface local; exige nix init
 ```
 
-`--json` em `sync` e `status` emite o relatório em formato estruturado. `nix doctor --json` serializa o relatório de diagnóstico (ambiente, configuração e checagens). Erros de domínio (`NixError`) saem no stderr, sem traceback. Fora de `init` e `doctor`, os comandos falham com ação corretiva se o `nix init` ainda não rodou.
+`--vault` em `sync` e `status` pode repetir. `--all` percorre todos, em sequência. Os dois juntos são recusados. Sem nenhum dos dois, vale o vault padrão. `--json` em `sync` e `status` emite o relatório em formato estruturado, com um item por vault. `nix doctor --json` serializa o relatório de diagnóstico (ambiente, configuração e checagens, entre elas uma por vault). Erros de domínio (`NixError`) saem no stderr, sem traceback. Fora de `init` e `doctor`, os comandos falham com ação corretiva se o `nix init` ainda não rodou. `nix vault remove` recusa o padrão até `nix vault default` apontar outro, e recusa o último vault. `nix vault rename` preserva a grafia nova e avisa para `nix sync --full --vault NOME` se a busca ficar vazia. `nix vault path` troca a pasta. `nix vault set` grava `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` ou `longterm_folder`; listas e objetos entram como JSON. Nome no formato `AAAAMMDDTHHMMSS` é recusado. Renomear, remover, `path` e `set` são recusados enquanto a sincronização daquele vault não termina.
 
 Se `nix` roda sem subcomando num terminal interativo, um aviso vai para stderr e o servidor stdio inicia mesmo assim — o cliente MCP (stdin não-TTY) não vê essa mensagem.
 
 ### 9.2 Servidor MCP
 
-Transporte **somente stdio**. O cliente inicia o processo (o binário em `{NIX_HOME}/bin`; no checkout de desenvolvimento, `python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP (`nix://note/{+rel_path}` — barras no caminho; `|` também é aceito), permitindo que o cliente anexe uma nota inteira ao contexto sem consumir uma chamada de ferramenta.
+Transporte **somente stdio**. O cliente inicia o processo (o binário em `{NIX_HOME}/bin`; no checkout de desenvolvimento, `python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP. `nix://note/{+rel_path}` lê no vault padrão (barras no caminho; `|` também é aceito). `nix://vault/{name}/note/{+rel_path}` lê no vault nomeado. Nome desconhecido devolve o erro que lista os vaults e o padrão. O cliente anexa a nota ao contexto sem consumir uma chamada de ferramenta.
 
 O servidor tenta `FastMCP` e, se o SDK recente expuser só `MCPServer`, usa essa classe — ambas precisam de `.tool()`, `.run()` e `transport="stdio"`. Falha de instância ou de transporte vira `ConfigError` com ação corretiva (`pip install 'mcp>=1.9.0'`). `NixError` na subida vai para stderr e encerra com código 1, sem vazar traceback no stdout.
 
@@ -473,7 +504,7 @@ Troque pelo caminho da linha `comando nix:` do `nix doctor`. `"command": "nix"` 
 
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug. Trocar `logging.file` ou o nível passa a valer quando o processo recarrega a configuração.
 
-Antes de cada ferramenta, o processo compara a data da última gravação do `settings.db`. Se mudou, recompõe o `Runtime` com a configuração nova e mantém `index.embedding_model` e `index.data_dir` deste processo (a pasta é comparada já resolvida). Enquanto esses dois divergirem, a resposta da ferramenta inclui `config_warning`. A leitura de resource registra o mesmo aviso no log e devolve só o texto da nota. Troca de modelo continua exigindo `nix sync --full`.
+Antes de cada ferramenta, o processo compara um carimbo que junta a data mais recente de `settings` e `vaults`, o maior `id` de `settings_history` e a quantidade de vaults. Assim uma remoção também recarrega. Se mudou, recarrega a configuração e mantém `index.embedding_model` e a pasta-base do índice deste processo (a pasta é comparada já resolvida). O runtime de um vault que saiu só é fechado quando a sincronização dele já soltou a trava; enquanto a trava está presa, o processo não abre um segundo cliente de índice no mesmo diretório. Enquanto modelo ou pasta-base divergirem, a resposta da ferramenta inclui `config_warning`. A leitura de resource registra o mesmo aviso no log e devolve só o texto da nota. Troca de modelo continua exigindo `nix sync --full`.
 
 ### 9.3 Interface local
 
@@ -481,19 +512,23 @@ Antes de cada ferramenta, o processo compara a data da última gravação do `se
 
 O token da URL vira cookie `HttpOnly` (`SameSite=Strict`). Pedidos seguintes exigem esse cookie. POST exige o mesmo token no formulário ou no header `X-CSRF-Token`. `Host` e `Origin` têm de ser o endereço local. Arquivos estáticos (HTMX, extensão SSE, `nix.css` e `nix.js`) estão no pacote; não há CDN nem fonte remota (a interface usa as fontes do sistema).
 
-Telas: status do índice, sincronização (prévia, progresso por SSE e confirmação extra para `--full`), diagnóstico, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. A sincronização roda numa thread e segura a trava de `.nix/sync.lock`, a mesma do `nix sync` e do write-through. Enquanto ela corre, status e diagnóstico não abrem o SQLite do índice por outra thread. O diagnóstico da interface usa o runtime deste processo; `nix doctor` no terminal abre o seu.
+Telas: status do índice, sincronização (prévia, progresso por SSE, opção de todos os vaults e confirmação extra para `--full`), diagnóstico, tela Vaults, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos globais alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. Campos `vault.*` não passam por esse formulário. Nome, caminho, padrão, pasta e ajustes (`include`, `exclude`, `follow_symlinks`, pastas) ficam no `VaultService`, o mesmo de `nix vault`. Renomear, remover, trocar a pasta ou gravar um ajuste é recusado enquanto a sincronização daquele vault não termina. A sincronização roda numa thread, um vault por vez, e segura a trava `.nix/sync-<nome>.lock` daquele vault, a mesma do `nix sync` e do write-through. Há um job por processo. O progresso cita o vault atual.
 
-Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP, numa thread com a trava do runtime (`RuntimeGate`). Se a trava estiver ocupada pela sincronização, a tela pede para esperar em vez de bloquear.
+Os controles de sincronização (prévia, incremental, reindexação e "todos os vaults") ficam num fieldset desligado enquanto o job existe. O primeiro clique desliga o fieldset inteiro antes da resposta. O POST de início devolve esse fieldset desligado fora da área do progresso, porque a resposta volta antes de o modelo terminar de carregar. O fim do job devolve o mesmo fieldset habilitado. Recarregar `/sync` no meio lê o job ainda em andamento e renderiza o fieldset desligado. Um segundo início, ou uma prévia com job ativo, recebe 409 no aviso da página e não substitui o progresso. A prévia não varre o vault nesse caso. Sem job, a prévia percorre um vault por vez e solta a trava daquele vault antes do próximo.
 
-Conectar cliente monta o trecho de Cursor, Claude Code e VS Code em `core/admin/client_config.py` com o executável de `nix_command()` (o mesmo do `nix doctor`). A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo.
+O seletor de vault fica no miolo da página (o começo de `<main>`), não na barra lateral. É um formulário GET com `?vault=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A barra lateral só mostra o caminho do vault escolhido. A Busca tem a própria escolha: um vault, vários ou todos (`vault=*`), e cada trecho exibe o vault de origem.
+
+Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP. `RuntimeGate` tem uma trava por vault, para ler um enquanto outro sincroniza. Se a trava daquele vault estiver ocupada, a tela pede para esperar em vez de bloquear. O diagnóstico da interface percorre os vaults deste processo; `nix doctor` no terminal abre o seu.
+
+Conectar cliente monta o trecho de Cursor, Claude Code, VS Code, Codex (`~/.codex/config.toml` ou `codex mcp add`) e do Devin CLI (`devin mcp add --scope user`) em `core/admin/client_config.py`, com o executável de `nix_command()` (o mesmo do `nix doctor`). O Devin na nuvem não alcança o processo local. A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo. As páginas saem com `Referrer-Policy: same-origin`, para o POST de um formulário comum levar a origem deste `nix ui`.
 
 Tráfego MCP: o middleware de `mcp/traffic.py` grava cada `tools/call` em `{app_root}/.nix/traffic.db` (`core/admin/traffic.py`), tabela `mcp_calls` com quando, cliente (do `initialize`), ferramenta, argumentos resumidos (só com `logging.log_prompts`), situação, duração e erro. Cada gravação abre e fecha a conexão em WAL (o esquema é criado uma vez por processo), porque servidor e interface são processos diferentes; a interface lê em modo somente leitura e não cria o arquivo. A tabela guarda as 5.000 chamadas mais recentes. O texto de erro só é gravado com `logging.log_prompts`; sem ele o banco guarda apenas que houve erro. Se a gravação falhar, o servidor registra um aviso e tenta de novo na chamada seguinte; depois de 3 falhas seguidas, para de gravar naquele processo. A chamada nunca é afetada.
 
-Backups (`core/admin/backups.py`): lista `safety.backup_dir/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `VaultWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
+Backups (`core/admin/backups.py`): lista `{safety.backup_dir}/<nome>/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups daquele vault. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `VaultWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
 
 ## 10. Configuração
 
-Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_VAULT__PATH`). `nix init` grava no banco. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`.
+Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência dos campos globais: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_INDEX__EMBEDDING_MODEL`). `NIX_VAULT__*` é ignorado: o cadastro vive na tabela `vaults`. `nix init` grava o primeiro vault e o modelo. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`, com subpasta por vault, exceto o vault migrado do esquema 1, que permanece na raiz (seção 3.1).
 
 ```sql
 CREATE TABLE meta (
@@ -501,7 +536,7 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 CREATE TABLE settings (
-    section    TEXT NOT NULL,
+    section    TEXT NOT NULL,  -- index, retrieval, safety, logging
     key        TEXT NOT NULL,
     value_json TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -509,18 +544,30 @@ CREATE TABLE settings (
 );
 CREATE TABLE settings_history (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    section        TEXT NOT NULL,
-    key            TEXT NOT NULL,
+    section        TEXT NOT NULL,  -- seção global, ou "vaults"
+    key            TEXT NOT NULL,  -- campo, ou o nome do vault
     old_value_json TEXT,          -- nulo se a chave não existia
     new_value_json TEXT,          -- nulo se a chave foi removida
-    source         TEXT NOT NULL, -- init | cli | ui
+    source         TEXT NOT NULL, -- init | cli | ui | vault | migration
     changed_at     TEXT NOT NULL
 );
+CREATE TABLE vaults (
+    name          TEXT PRIMARY KEY COLLATE NOCASE,
+    path          TEXT NOT NULL,
+    is_default    INTEGER NOT NULL CHECK (is_default IN (0, 1)),
+    settings_json TEXT NOT NULL,  -- include, exclude, pastas padrão daquele vault
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX vaults_one_default
+    ON vaults(is_default) WHERE is_default = 1;
 ```
 
-`schema_version` é `1`. Versão diferente da que o processo entende impede o uso e pede atualização. Só entram chaves de `vault`, `index`, `retrieval`, `safety` e `logging`. O texto de ajuda de cada campo está no schema Pydantic. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `include`, `exclude`, `follow_symlinks`, `index_attachments` ou `vault.path` avisa que é preciso `nix sync`.
+`schema_version` é `2`. Na abertura, a versão 1 migra para a 2: se `settings` tinha `vault.path` (e, quando existiam, `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder`), esse vault vira a linha `Default`, marcada como padrão. O índice e os backups desse vault continuam na raiz de `index.data_dir` e `safety.backup_dir` (seção 3.1). Sem `vault.path`, o banco fica na versão 2 sem vaults e `nix init` continua valendo. Qualquer outra versão impede o uso e pede `nix init --force`. `--force` apaga ajustes, vaults e histórico e recria o esquema; as notas do Obsidian não são alteradas. Lista vazia de vaults é o estado anterior ao init. Com vaults cadastrados, a validação exige de 1 a 5, exatamente um padrão, nomes únicos sem diferenciar maiúsculas (`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, grafia original preservada) e caminhos que não se sobrepõem. Um nome no formato `AAAAMMDDTHHMMSS` é recusado: é o carimbo das pastas de backup. `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder` nascem em `settings_json` com o padrão do schema e mudam com `nix vault set` (listas e objetos em JSON). `nix vault path` troca a pasta. O editor genérico não grava `vault.*` e aponta para esses comandos.
 
-Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, `vault.path` é gravado com `/`. O histórico permite desfazer uma alteração (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova.
+O texto de ajuda de cada campo global está no schema Pydantic. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de vaults, para uma remoção também ser percebida.
+
+Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, o caminho do vault é gravado com `/`. O histórico permite desfazer uma alteração global (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova. Mudanças de vault entram no mesmo histórico com `section="vaults"`.
 
 ## 11. Segurança
 
@@ -531,8 +578,8 @@ Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem 
 | Exposição de notas privadas | Filtros `exclude` aplicados na indexação **e** na leitura, para que uma nota excluída não seja acessível nem por `read_note` |
 | Corrupção do protocolo MCP | stdout reservado ao stdio; logs só em arquivo; `silence_progress_env` na inicialização; FastEmbed com `capture_stdout=True` por padrão (a CLI de `sync` desliga só para mostrar o download); `NixError` só no stderr |
 | Injeção via conteúdo de nota | Trechos recuperados são dados estruturados (caminho + conteúdo); ferramentas destrutivas sempre exigem confirmação humana |
-| Corrupção do índice | Transação por arquivo, verificação de compatibilidade de modelo, reconstrução completa sempre disponível; trava de sync entre processos |
-| Interface local | Escuta só em 127.0.0.1; token de uso único vira cookie HttpOnly; checagem de Host e Origin; CSRF nos POST |
+| Corrupção do índice | Transação por arquivo, verificação de compatibilidade de modelo, reconstrução completa sempre disponível; trava de sync por vault |
+| Interface local | Escuta só em 127.0.0.1; token de uso único vira cookie HttpOnly; checagem de Host e Origin; CSRF nos POST; `Referrer-Policy: same-origin` para o navegador enviar a origem nos formulários comuns |
 
 ## 12. Desempenho
 
@@ -552,7 +599,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-01 | Embeddings locais (`bge-m3` via FastEmbed) | `text-embedding-3-small` da OpenAI | Custo zero na indexação e reindexação; multilíngue e sem GPU |
 | AD-02 | ChromaDB persistente | FAISS, LanceDB, Qdrant local, pgvector | Persistência e deleção por `file_id` nativas; filtros de pasta/tag na camada de recuperação |
 | AD-03 | SQLite como estado do índice | Arquivo JSON de manifesto | Transacional, consultável, e traz FTS5 de graça para a busca léxica |
-| AD-04 | Sem LLM no Nix | LangGraph + OpenAI no processo | O raciocínio fica no cliente MCP (Cursor, Claude Code, Copilot); o Nix só entrega ferramentas |
+| AD-04 | Sem LLM no Nix | LangGraph + OpenAI no processo | O raciocínio fica no cliente MCP; o Nix só entrega ferramentas |
 | AD-05 | Sincronização manual, sem watcher | `watchdog` observando o vault | Requisito de controle do usuário; evita processo em background e reindexações em rajada durante edição |
 | AD-06 | Registry único de ferramentas | Implementações separadas para CLI e MCP | Elimina divergência de comportamento e duplicação de regras de segurança |
 | AD-07 | Busca híbrida desde a fundação | Somente densa | Notas pessoais são cheias de nomes próprios e siglas que o embedding dilui |
@@ -561,9 +608,9 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-10 | Binário único Nuitka (`install.*` baixa o artefato da release; checkout de desenvolvimento segue com `scripts/bootstrap.py`) | PyInstaller onefile, venv com o Python do sistema | Um arquivo por plataforma, sem runtime na máquina do usuário. A partida seguinte reusa o cache `{CACHE_DIR}/nix/onefile-{VERSION}`. O modo arquivo único do PyInstaller descompacta a cada processo e atrasa o stdio do MCP |
 | AD-11 | Configuração em `settings.db` na pasta da instalação | TOML, JSON, índice SQLite | A config não se perde ao apagar `.nix/data`. Histórico e desfazer ficam no mesmo arquivo. O ambiente continua ganhando do valor gravado |
 | AD-12 | Interface com Starlette, HTMX e CSS próprio vendidos no pacote | Streamlit, NiceGUI, app com Node; Pico.css; Tailwind | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP. O Pico (sem classes) não cobria menu lateral, selos, abas, diff e cartões sem sobrescrever quase tudo; Tailwind exigiria build ou CDN |
+| AD-13 | Vários vaults no mesmo processo, com um Embedder compartilhado | Uma instalação (e um processo MCP) por vault | Uma conexão MCP atende todos. O modelo de embedding é global e pesado para carregar mais de uma vez. Índice, backup e trava ficam isolados pelo nome. O limite é 5 |
 
 ## 14. Evolução prevista
 
 - Conjunto de avaliação `eval/` (harness e perguntas; ainda não está no repositório).
 - Reordenação com cross-encoder ligada por padrão e outras melhorias de qualidade.
-- Registro documentado para mais clientes MCP (Claude Code, Copilot) além do exemplo do Cursor.

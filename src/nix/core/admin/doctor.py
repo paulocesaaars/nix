@@ -58,6 +58,7 @@ def build_doctor_report(
     index_status: IndexStatus | None = None,
     index_problem: str | None = None,
     inspect_index: bool = True,
+    vault_statuses: list[tuple[str, IndexStatus | None, str | None]] | None = None,
 ) -> DoctorReport:
     from nix import __version__
 
@@ -89,23 +90,37 @@ def build_doctor_report(
     home_path = env_home()
     command, command_problem = _command(home_path is not None)
     vault_ok = False
-    if nix_config is not None:
-        try:
-            root = nix_config.require_vault()
+    if nix_config is not None and nix_config.vaults:
+        for vault in nix_config.vaults:
+            label = f"Vault {vault.name}"
+            try:
+                root = nix_config.require_vault(vault.name)
+            except ConfigError as exc:
+                checks.append(DoctorCheck(label, "warn", exc.message))
+                continue
             vault_ok = True
-            checks.append(DoctorCheck("Vault", "ok", f"{root} ok"))
-        except ConfigError as exc:
-            checks.append(DoctorCheck("Vault", "warn", exc.message))
+            mark = " (padrão)" if vault.is_default else ""
+            checks.append(DoctorCheck(label, "ok", f"{root} ok{mark}"))
+    elif nix_config is not None:
+        checks.append(
+            DoctorCheck("Vault", "warn", "Nenhum vault configurado. Rode `nix init` para cadastrar o primeiro.")
+        )
 
     _native_checks(checks)
     _import_checks(checks)
     _tokenizer_check(checks)
+    data_root: Path | None = None
     if nix_config is not None:
-        _data_dir_check(checks, nix_config.index.data_path)
+        data_root = nix_config.index.data_path
+        _data_dir_check(checks, data_root)
         if not inspect_index:
-            _index_supplied(checks, index_status, index_problem)
+            _index_supplied(checks, index_status, index_problem, vault_statuses)
         elif vault_ok:
             _index_check(checks, nix_config)
+
+    vault_path: str | None = None
+    if nix_config is not None and nix_config.vaults:
+        vault_path = nix_config.default_vault.path
 
     return DoctorReport(
         version=__version__,
@@ -116,10 +131,10 @@ def build_doctor_report(
         settings_path=str(settings_path()),
         initialized=initialized,
         config_error=config_error,
-        vault_path=nix_config.vault.path if nix_config is not None else None,
+        vault_path=vault_path,
         embedding_model=nix_config.index.embedding_model if nix_config is not None else None,
         data_dir=nix_config.index.data_dir if nix_config is not None else None,
-        data_path=str(nix_config.index.data_path) if nix_config is not None else None,
+        data_path=str(data_root) if data_root is not None else None,
         config=config,
         checks=checks,
     )
@@ -201,25 +216,45 @@ def _data_dir_check(checks: list[DoctorCheck], data: Path) -> None:
 
 
 def _index_check(checks: list[DoctorCheck], config: Any) -> None:
-    from nix.core.runtime import Runtime
+    from nix.core.runtime import RuntimeHost
 
+    host = RuntimeHost(config)
     try:
-        runtime = Runtime.from_config(config)
-        try:
-            status = runtime.status()
-        finally:
-            runtime.close()
-    except Exception as exc:  # noqa: BLE001
-        checks.append(DoctorCheck("Índice", "warn", f"ainda não utilizável: {exc}"))
-        return
-    checks.append(DoctorCheck("Índice", "ok", _index_message(status)))
+        for vault in config.vaults:
+            label = f"Índice {vault.name}"
+            try:
+                runtime = host.resolve(vault.name)
+                status = runtime.status()
+            except Exception as exc:  # noqa: BLE001
+                checks.append(DoctorCheck(label, "warn", f"ainda não utilizável: {exc}"))
+                continue
+            level: Level = "warn" if status.stale else "ok"
+            checks.append(DoctorCheck(label, level, _index_message(status)))
+    finally:
+        host.close()
 
 
 def _index_supplied(
     checks: list[DoctorCheck],
     status: IndexStatus | None,
     problem: str | None,
+    vault_statuses: list[tuple[str, IndexStatus | None, str | None]] | None,
 ) -> None:
+    if vault_statuses is not None:
+        if not vault_statuses and problem:
+            checks.append(DoctorCheck("Índice", "warn", problem))
+        for name, item, item_problem in vault_statuses:
+            label = f"Índice {name}"
+            if item_problem:
+                checks.append(DoctorCheck(label, "warn", item_problem))
+            elif item is None:
+                checks.append(
+                    DoctorCheck(label, "warn", "Não foi possível ler o índice. Atualize o diagnóstico.")
+                )
+            else:
+                level: Level = "warn" if item.stale else "ok"
+                checks.append(DoctorCheck(label, level, _index_message(item)))
+        return
     if problem:
         checks.append(DoctorCheck("Índice", "warn", problem))
         return

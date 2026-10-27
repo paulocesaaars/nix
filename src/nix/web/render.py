@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from markupsafe import Markup, escape
 from starlette.background import BackgroundTask
@@ -15,24 +16,76 @@ from starlette.templating import Jinja2Templates
 
 from nix.web.state import WebState
 
-_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "same-origin"}
 
 
 _WORD = re.compile(r"\w{3,}")
 
 
+def _vault_url(path: str, name: str) -> str:
+    if not name:
+        return path
+    joiner = "&" if "?" in path else "?"
+    return f"{path}{joiner}vault={quote(name)}"
+
+
 def _csrf(request: Request) -> dict[str, Any]:
     from nix import __version__
+    from nix.core.errors import NixError
 
     state = request.app.state.web
     token = state.token if isinstance(state, WebState) else ""
-    vault = ""
-    if isinstance(state, WebState):
+    context: dict[str, Any] = {
+        "csrf_token": token,
+        "nix_version": __version__,
+        "vault_label": "",
+        "vaults": [],
+        "selected_vault": "",
+        "vault_error": "",
+        "kept_params": [],
+        "vault_url": lambda path, vault=None: path,  # noqa: ARG005
+    }
+    if not isinstance(state, WebState):
+        return context
+    host = state.gate.host
+    try:
+        host.before_call()
+        config = host.config
+        if not config.vaults:
+            return context
+        default_name = config.default_vault.name
+    except NixError as exc:
+        context["vault_error"] = exc.message
+        return context
+    except Exception:  # noqa: BLE001
+        return context
+    raw = request.query_params.get("vault", "").strip()
+    selected = default_name
+    if raw and raw != "*":
         try:
-            vault = state.gate.host.runtime.config.vault.path
-        except Exception:  # noqa: BLE001
-            vault = ""
-    return {"csrf_token": token, "nix_version": __version__, "vault_label": vault}
+            selected = config.get_vault(raw).name
+        except NixError as exc:
+            context["vault_error"] = exc.message
+    label = ""
+    try:
+        label = config.get_vault(selected).path
+    except NixError:
+        label = ""
+    kept = [(key, value) for key, value in request.query_params.multi_items() if key != "vault"]
+
+    def vault_url(path: str, vault: str | None = None) -> str:
+        return _vault_url(path, (vault or selected).strip())
+
+    context.update(
+        vault_label=label,
+        vaults=[
+            {"name": vault.name, "path": vault.path, "is_default": vault.is_default} for vault in config.vaults
+        ],
+        selected_vault=selected,
+        kept_params=kept,
+        vault_url=vault_url,
+    )
+    return context
 
 
 def when(value: object) -> str:
@@ -119,4 +172,5 @@ def page(
 
 def fragment(name: str, **context: Any) -> str:
     """Fragmentos do SSE: sem request, então sem o context processor."""
-    return templates.get_template(name).render(**context)
+    rendered = templates.get_template(name).render(**context)
+    return str(rendered)

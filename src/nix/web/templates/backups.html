@@ -30,7 +30,7 @@
         <td class="mono wrap-any">{{ entry.rel_path }}</td>
         <td class="num">{{ entry.size_bytes | filesize }}</td>
         <td>{% if entry.current_exists %}<span class="badge b-n">existe</span>{% else %}<span class="badge b-warn">removida</span>{% endif %}</td>
-        <td class="num"><a class="btn btn-sm" href="/backups/view?stamp={{ entry.stamp }}&amp;path={{ entry.rel_path | urlencode }}">Comparar</a></td>
+        <td class="num"><a class="btn btn-sm" href="{{ vault_url('/backups/view?stamp=' ~ entry.stamp ~ '&path=' ~ (entry.rel_path | urlencode)) }}">Comparar</a></td>
       </tr>
       {% endfor %}
     </tbody>

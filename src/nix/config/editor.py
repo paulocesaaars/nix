@@ -8,10 +8,16 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from nix.config.loader import clear_config_cache, deep_merge, env_defines, env_overrides, load_config
+from nix.config.loader import (
+    clear_config_cache,
+    config_document,
+    deep_merge,
+    env_defines,
+    load_config,
+)
 from nix.config.paths import app_root
-from nix.config.schema import ConfigField, NixConfig, config_field, iter_config_fields
-from nix.config.store import SettingsChange, SettingsStore
+from nix.config.schema import VAULT_SETTING_KEYS, ConfigField, NixConfig, config_field, iter_config_fields
+from nix.config.store import VAULTS_SECTION, SettingsChange, SettingsStore
 from nix.core.errors import ConfigError
 
 Source = str
@@ -50,19 +56,47 @@ class ConfigEntry:
 def split_key(dotted: str) -> tuple[str, str]:
     if "." not in dotted:
         raise ConfigError(
-            f"Campo {dotted!r} precisa ser secao.chave, por exemplo vault.path. Rode `nix config list`."
+            f"Campo {dotted!r} precisa ser secao.chave, por exemplo logging.level. Rode `nix config list`."
         )
     section, key = dotted.split(".", 1)
     return section, key
 
 
 def require_field(section: str, key: str) -> ConfigField:
+    if section == "vault":
+        raise ConfigError(_vault_field_message(key))
     try:
         return config_field(section, key)
     except KeyError:
         raise ConfigError(
             f"Campo {section}.{key} não existe. Rode `nix config list` para ver os campos."
         ) from None
+
+
+def _vault_field_message(key: str) -> str:
+    if key == "path":
+        return (
+            "vault.path não é um campo da configuração global. "
+            "Troque a pasta com `nix vault path NOME CAMINHO`."
+        )
+    if key == "legacy_layout":
+        return (
+            "legacy_layout é gravado na migração do settings.db e não se edita. "
+            "O índice e os backups desse vault continuam na pasta de origem."
+        )
+    if key == "name":
+        return "O nome do vault muda com `nix vault rename ANTIGO NOVO`."
+    if key == "is_default":
+        return "O vault padrão muda com `nix vault default NOME`."
+    if key in VAULT_SETTING_KEYS:
+        return (
+            f"vault.{key} é um ajuste de um vault, não da configuração global. "
+            f"Rode `nix vault set NOME {key} VALOR`."
+        )
+    return (
+        f"Campo vault.{key} não existe. Os vaults não se editam com `nix config set`. "
+        "Rode `nix vault list`."
+    )
 
 
 def snapshot() -> list[ConfigEntry]:
@@ -164,6 +198,11 @@ def revert_change(change_id: int, *, source: Source) -> SetResult:
     change = SettingsStore().get_change(change_id)
     if change is None:
         raise ConfigError(f"Alteração {change_id} não está no histórico. Rode `nix config history`.")
+    if change.section == VAULTS_SECTION:
+        raise ConfigError(
+            "Mudanças de vault não se desfazem com `nix config undo`. "
+            "Use `nix vault` para renomear, remover, trocar a pasta, gravar um ajuste ou escolher o padrão."
+        )
     if change.old_value is None:
         result = unset_value(change.section, change.key, source=source)
     else:
@@ -208,9 +247,12 @@ def _reject_locked(field: ConfigField) -> None:
 
 
 def _validate_overrides(overrides: dict[str, dict[str, Any]]) -> NixConfig:
-    merged = deep_merge(overrides, env_overrides())
+    _db, env, merged = config_document(SettingsStore())
+    candidate = deep_merge(overrides, env)
+    candidate.pop("vault", None)
+    candidate["vaults"] = merged["vaults"]
     try:
-        return NixConfig.model_validate(merged, context={"path_anchor": app_root()})
+        return NixConfig.model_validate(candidate, context={"path_anchor": app_root()})
     except ValidationError as exc:
         parts = [f"{'.'.join(str(item) for item in err['loc'])}: {err['msg']}" for err in exc.errors()]
         raise ConfigError(

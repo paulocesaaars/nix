@@ -56,7 +56,9 @@ async def traffic_page(request: Request) -> Response:
     if status not in ("", "ok", "error"):
         status = ""
     view = await asyncio.to_thread(_traffic, tool, status)
-    log_prompts = web_state(request).gate.host.runtime.config.logging.log_prompts
+    host = web_state(request).gate.host
+    host.before_call()
+    log_prompts = host.config.logging.log_prompts
     return page(
         request,
         "traffic.html",

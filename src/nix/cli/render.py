@@ -71,7 +71,8 @@ def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
         description = f"Carregando {model}{size_bit}; em CPU pode demorar"
         completed = 0
     else:
-        description = f"{event.action} {event.rel_path}"
+        vault = f"{event.vault} " if event.vault else ""
+        description = f"{vault}{event.action} {event.rel_path}"
         completed = event.current
     progress.update(
         task_id,

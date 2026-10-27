@@ -3,11 +3,11 @@
 | Campo | Valor |
 | --- | --- |
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
-| Tipo | Servidor MCP que expõe um vault Obsidian a agentes de desenvolvimento |
-| Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
+| Tipo | Servidor MCP que expõe vaults Obsidian a agentes de desenvolvimento |
+| Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `vault`, `config`, `sync`, `status`, `doctor`, `ui`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (binário único, `NIX_HOME` + `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v2.1.0 |
 | Autor | Paulo |
-| Data | 2026-10-26 |
+| Data | 2026-10-27 |
 
 Especificações técnicas: [TDD.md](./TDD.md).
 
@@ -15,7 +15,7 @@ Especificações técnicas: [TDD.md](./TDD.md).
 
 ## 1. Visão
 
-Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code e Copilot. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
+Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code, Copilot, Codex e o Devin CLI. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
 
 Tudo roda na máquina do usuário. Embeddings e banco vetorial são locais e gratuitos. Não há LLM no Nix: o raciocínio fica no cliente MCP.
 
@@ -26,7 +26,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 - **Busca literal insuficiente.** A busca do Obsidian encontra palavras, não ideias. Quem não lembra o termo exato usado não acha a nota.
 - **Conhecimento fragmentado.** A resposta para uma pergunta costuma estar espalhada em várias notas, e sintetizar isso manualmente é caro.
 - **Captura com atrito.** Registrar uma nota nova no formato certo, com os links e tags corretos, exige abrir o Obsidian e lembrar das convenções.
-- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code e Copilot não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
+- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code, Copilot, Codex e o Devin CLI não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
 
 ## 3. Objetivos
 
@@ -36,7 +36,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 | O2 | Dar ao usuário controle explícito sobre quando a base é vetorizada | Nenhuma vetorização de arquivos externos ocorre sem `nix sync` ou `sync_index` |
 | O3 | Manter o índice consistente após edições feitas pelas ferramentas | 100% das escritas via MCP refletidas no índice ao final da operação |
 | O4 | Custo zero e privacidade | Embeddings e banco vetorial 100% locais e gratuitos; nenhuma chamada remota |
-| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code e Copilot |
+| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot, Codex e no Devin CLI local |
 
 ### Não-objetivos (v1)
 
@@ -63,11 +63,11 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-01 | O sistema deve guardar a configuração num SQLite na pasta da instalação (`settings.db`), com o caminho do vault e os demais parâmetros | Must |
-| RF-02 | O sistema deve oferecer um comando de inicialização que grava o vault (ou recebe `--vault`) e o modelo de embedding (ou recebe `--embedding-model`) no `settings.db` e, se a configuração já existir, só atualiza `vault.path` salvo `--force` ou `--embedding-model` | Must |
-| RF-03 | O sistema deve permitir sobrescrever qualquer configuração por variável de ambiente, e essa variável deve ganhar do valor gravado | Must |
+| RF-01 | O sistema deve guardar a configuração num SQLite na pasta da instalação (`settings.db`), com os vaults nomeados (de 1 a 5, exatamente um padrão) e os demais parâmetros | Must |
+| RF-02 | O sistema deve oferecer um comando de inicialização que grava o primeiro vault (nome `Default`, ou `--name`) e o caminho (`--vault` ou pergunta) e o modelo de embedding (`--embedding-model` ou pergunta) no `settings.db`. Se a configuração já existir, sem `--force` só atualiza o caminho do vault padrão, salvo `--embedding-model`. `--name` com vaults já cadastrados é recusado e pede `nix vault add`. Uma configuração anterior, com um único caminho de vault, passa a ser o vault `Default` e continua usando o índice e os backups já gravados. `--force` recria a configuração do zero, sem alterar as notas | Must |
+| RF-03 | O sistema deve permitir sobrescrever a configuração global (`index`, `retrieval`, `safety`, `logging`) por variável de ambiente, e essa variável deve ganhar do valor gravado. O cadastro dos vaults não entra nessa precedência | Must |
 | RF-04 | O sistema deve validar a configuração antes de gravar e apresentar mensagens de erro acionáveis (vault inexistente, modelo inválido, campo desconhecido) | Must |
-| RF-05 | O sistema deve permitir configurar padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas) | Should |
+| RF-05 | O sistema deve permitir configurar, por vault, padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas), com `nix vault set NOME include\|exclude VALOR` | Should |
 | RF-06 | O sistema deve permitir configurar modelo de embedding, tamanho de chunk e número de resultados recuperados | Should |
 
 ### 5.2 Sincronização e vetorização
@@ -107,7 +107,7 @@ Esta é a regra de negócio central do produto:
 | RF-30 | O sistema deve criar notas novas em Markdown, com frontmatter e no diretório indicado | Must |
 | RF-31 | O sistema deve anexar conteúdo a uma nota existente (ex.: adicionar item ao diário ou a uma nota de projeto) | Must |
 | RF-32 | O sistema deve editar uma nota existente preservando o restante do conteúdo | Should |
-| RF-33 | Toda escrita deve ficar restrita ao diretório do vault configurado | Must |
+| RF-33 | Toda escrita deve ficar restrita ao diretório de um único vault: o nome informado ou, se o nome for omitido, o padrão | Must |
 | RF-34 | Operações destrutivas (sobrescrever, remover) devem exigir `confirm=true` e ser sinalizadas como destrutivas no MCP | Must |
 | RF-35 | O sistema deve manter um backup da versão anterior do arquivo antes de sobrescrever | Should |
 | RF-36 | O sistema deve seguir convenções do vault (template, tags, formato de nome de arquivo) definidas na configuração | Could |
@@ -116,7 +116,7 @@ Esta é a regra de negócio central do produto:
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-40 | A CLI deve gravar a configuração inicial (`nix init [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
+| RF-40 | A CLI deve gravar a configuração inicial (`nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
 | RF-41 | A CLI deve oferecer sincronização e status do índice (`nix sync`, `nix status`) | Must |
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
@@ -129,7 +129,7 @@ Esta é a regra de negócio central do produto:
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
 | RF-50 | O sistema deve expor um servidor MCP **somente via stdio**, iniciado pelo cliente | Must |
-| RF-51 | O servidor MCP deve expor as 19 ferramentas de busca, leitura, escrita, tags, movimentação, insights e sincronização do vault (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`) | Must |
+| RF-51 | O servidor MCP deve expor as 20 ferramentas de busca, leitura, escrita, tags, movimentação, insights, sincronização e cadastro (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`, `list_vaults`) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
 | RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o binário na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.exe` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
@@ -140,23 +140,28 @@ Esta é a regra de negócio central do produto:
 | RF-59 | `move_note` (só `.md`) e `move_file` (recusa `.md`) devem mover dentro do vault. `move_note` reescreve por padrão os wikilinks e links Markdown que apontam para a nota, com backup de cada nota alterada. Links pelo título do frontmatter não mudam se o título não mudou. Notas fora de include/exclude não são alteradas e voltam como pendentes. Destino existente exige `overwrite=true` e `confirm=true`. `move_file` atualiza `![[alvo]]`, `[[alvo]]` e links Markdown relativos de PDF, imagem e outros anexos. O índice perde o id antigo e ganha o caminho novo; anexo só é reindexado com `index.index_attachments` | Must |
 | RF-60 | `update_note` com `mode=prepend` deve inserir o texto depois do frontmatter, com o YAML original intacto, uma linha em branco e o corpo antigo, sem `confirm`. A ação é atualização. `mode=replace` continua destrutivo | Must |
 | RF-61 | `nix config` deve listar, ler, gravar, remover e desfazer valores. A gravação de um ou mais campos valida o conjunto inteiro; se for inválido, nada daquela gravação entra no banco. Campo definido por variável de ambiente não é gravado por cima. `index.auto_sync_external_changes` não pode ser ligado | Must |
-| RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina | Must |
+| RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, vaults, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão Encerrar pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. A sincronização pode valer para o vault escolhido ou para todos. Os controles dessa tela seguem o RF-71 | Must |
 | RF-63 | Um servidor MCP já em execução deve passar a usar a configuração nova na chamada seguinte. Modelo de embedding e pasta do índice continuam os anteriores até o cliente reiniciar. Troca de modelo exige `nix sync --full` | Must |
-| RF-64 | A interface local deve consultar o vault só para leitura, pelas mesmas ferramentas do MCP: busca com filtros (pasta, tags, datas, quantidade), lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Com sincronização em andamento, a consulta pede para esperar | Should |
-| RF-65 | A interface deve gerar a configuração MCP de Cursor, Claude Code e VS Code com o caminho real do executável e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva | Should |
+| RF-64 | A interface local deve consultar os vaults só para leitura, pelas mesmas ferramentas do MCP. A busca aceita um vault, vários ou todos e mostra o vault de cada trecho. As demais consultas usam o vault escolhido na página (o padrão, se nenhum for escolhido): lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Enquanto o vault consultado sincroniza, a consulta pede para esperar; outro vault continua legível | Should |
+| RF-65 | A interface deve gerar a configuração MCP de Cursor, Claude Code, VS Code, Codex e do Devin CLI local, com o caminho real do executável, e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva. O Devin na nuvem não alcança o Nix desta máquina | Should |
 | RF-66 | O servidor MCP deve gravar cada chamada de ferramenta (quando, cliente, ferramenta, duração e situação) em `.nix/traffic.db`, mantendo as 5.000 mais recentes. Argumentos só entram com `logging.log_prompts`; o conteúdo das notas nunca entra. Falha ao gravar não derruba a chamada. A interface mostra esse registro com filtros por ferramenta e situação | Should |
 | RF-67 | A interface deve listar os backups de `safety.backup_dir`, comparar cada um com a nota atual, permitir baixá-lo e restaurá-lo. Restaurar exige confirmação, vale só para `.md`, grava backup do estado atual antes e reindexa a nota pelo write-through | Should |
+| RF-68 | O sistema deve cadastrar de 1 a 5 vaults nomeados, com exatamente um padrão. O `nix init` cria o primeiro com o nome `Default` (ou `--name`). O nome tem de 1 a 32 caracteres, começa com letra ou dígito e segue com letras, dígitos, `_` ou `-`. Um nome no formato de carimbo de backup (`AAAAMMDDTHHMMSS`) é recusado. A comparação ignora maiúsculas e a grafia original é preservada. Os caminhos não podem coincidir nem um ficar dentro do outro. Omitir o vault numa ferramenta usa o padrão. Remover o padrão é recusado até outro ser escolhido; remover o único vault também é recusado. Renomear troca o cadastro e não move o índice nem os backups. Inclusão, exclusão, pastas padrão e a pasta do vault mudam com `nix vault set` e `nix vault path`. Renomear, remover, trocar a pasta ou gravar um ajuste enquanto aquele vault sincroniza é recusado até o término | Must |
+| RF-69 | A busca e as operações que aceitam vários vaults (`search_notes`, `list_notes`, `list_all_tags`, `index_status`, `sync_index`) devem consultar um nome, uma lista de nomes ou todos os vaults quando o valor é `"*"` | Must |
+| RF-70 | Toda escrita deve ocorrer num único vault. Lista de nomes ou `"*"` é recusado, com mensagem que pede um nome só ou o padrão | Must |
+| RF-71 | Na interface, os controles de sincronização ficam desligados desde o início do job até o fim, também quando a página de sincronizar é recarregada no meio. Há no máximo um job por processo. Um segundo pedido pede para esperar, sem substituir o progresso. A prévia, com job ativo, pede para esperar e não varre o vault | Must |
 
 ## 6. Histórias de usuário e critérios de aceite
 
 **HU-01 — Primeira configuração**
 > Como usuário, quero apontar o caminho do meu vault e indexá-lo, para o editor passar a consultá-lo.
 
-- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `settings.db` é criado na pasta do Nix com `vault.path` e `index.embedding_model` preenchidos (barras `/` no Windows).
-- Dado `--vault CAMINHO` e `--embedding-model NOME`, quando executo `nix init`, então não há prompt e os valores são gravados.
-- Dado que a configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só `vault.path` é atualizado e o restante permanece.
-- Dado que o caminho informado no prompt ainda não existe, quando confirmo a criação, então o diretório é criado e gravado em `vault.path`.
-- Dado que o caminho do vault não existe, quando valido com `nix doctor`, então recebo um erro apontando o caminho inválido.
+- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `settings.db` é criado na pasta do Nix com o vault `Default` (caminho com barras `/` no Windows) e `index.embedding_model`.
+- Dado `--name NOME`, `--vault CAMINHO` e `--embedding-model MODELO`, quando executo `nix init`, então não há prompt e o primeiro vault usa esse nome e esse caminho.
+- Dado que a configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só o caminho do vault padrão é atualizado e o restante permanece.
+- Dado que já existem vaults e passo `--name`, quando executo `nix init`, então o comando recusa e pede `nix vault add`.
+- Dado que o caminho informado no prompt ainda não existe, quando confirmo a criação, então o diretório é criado e gravado no vault.
+- Dado que o caminho de um vault não existe, quando valido com `nix doctor`, então recebo um erro apontando esse vault e o caminho.
 
 **HU-02 — Indexar um vault existente**
 > Como usuário com um vault de anos, quero indexar tudo de uma vez, para poder consultar meu histórico.
@@ -221,6 +226,48 @@ Esta é a regra de negócio central do produto:
 - Dado um cliente MCP que chamou ferramentas, quando abro Tráfego MCP, então vejo cada chamada com cliente, duração e situação, sem os argumentos se `logging.log_prompts` estiver desligado.
 - Dado um backup de uma nota, quando marco a confirmação e restauro, então a nota volta ao conteúdo do backup, o estado anterior ganha backup e o índice é atualizado.
 
+**HU-09 — Ferramenta sem vault**
+> Como usuário, quero que o agente use o vault padrão quando a chamada não disser qual.
+
+- Dado mais de um vault e um padrão, quando uma ferramenta é chamada sem `vault`, então a operação usa o padrão.
+- Dado `list_vaults`, quando o agente a chama, então recebe nome, caminho, qual é o padrão e se o índice daquele vault está desatualizado.
+
+**HU-10 — Vault inexistente**
+> Como usuário, quero um erro que mostre os vaults que existem quando o nome estiver errado.
+
+- Dado um nome que não está cadastrado, quando uma ferramenta, um recurso ou um comando pede esse vault, então o erro lista os vaults existentes e diz qual é o padrão.
+- Dado a comparação de nomes, quando informo `default` e o cadastrado é `Default`, então o vault encontrado é o `Default`.
+
+**HU-11 — Escrita recebendo lista**
+> Como usuário, quero que uma escrita não se espalhe por vários vaults numa chamada só.
+
+- Dado `create_note` (ou outra ferramenta de escrita) com `vault` em lista ou `"*"`, quando a chamada chega, então ela é recusada e pede um único nome, ou omitir para usar o padrão.
+- Dado a mesma escrita com um nome só, quando a chamada chega, então o arquivo fica só naquele vault.
+
+**HU-12 — Busca em todos**
+> Como usuário, quero uma busca que olhe todos os vaults de uma vez.
+
+- Dado vários vaults indexados, quando `search_notes` recebe `vault` igual a `"*"`, então os trechos vêm do conjunto, cada um com o vault de origem.
+- Dado que um desses vaults falha, quando a busca termina, então os outros trechos continuam na resposta e a falha vem à parte, com a ação corretiva.
+- Dado `list_notes` com um limite e mais de um vault, quando a ferramenta responde, então o limite vale em cada vault e a resposta junta as listas.
+- Dado `list_all_tags` com um limite e tags em mais de um vault, quando a ferramenta responde, então as contagens são somadas e o limite vale só na lista já somada.
+
+**HU-13 — Remover o padrão**
+> Como usuário, quero que sempre exista um vault padrão.
+
+- Dado dois ou mais vaults, quando tento remover o padrão, então a operação é recusada até eu escolher outro com `nix vault default`.
+- Dado o único vault, quando tento removê-lo, então a operação é recusada.
+- Dado `nix vault rename ANTIGO NOVO`, quando o nome muda, então o índice e os backups permanecem na pasta do nome anterior e a CLI pede `nix sync --full --vault NOVO` se a busca ficar vazia.
+- Dado uma sincronização daquele vault em andamento, quando tento renomear, remover, trocar a pasta ou gravar um ajuste, então a operação é recusada e pede para esperar o término.
+
+**HU-14 — Botões desligados durante o sync**
+> Como usuário, quero que a sincronização da interface não seja disparada de novo enquanto a anterior não termina.
+
+- Dado que inicio a sincronização na interface, quando o pedido é aceito, então prévia, incremental, reindexação completa e a opção de todos os vaults ficam desligados até o job terminar.
+- Dado o job ainda em andamento, quando recarrego a página de sincronizar, então esses controles continuam desligados.
+- Dado que o job terminou, quando a página mostra o resultado, então os controles voltam a funcionar.
+- Dado um job já em andamento, quando peço outro ou uma prévia, então a interface pede para esperar, o progresso continua na tela e a prévia não varre o vault.
+
 ## 7. Requisitos não funcionais
 
 | ID | Categoria | Requisito |
@@ -240,7 +287,7 @@ Esta é a regra de negócio central do produto:
 
 - **RN-01 — Consentimento de indexação.** O Nix nunca varre nem vetoriza o vault por iniciativa própria. Não há watcher de arquivos nem indexação em background na v1. A indexação ocorre só por `nix sync` ou pela ferramenta `sync_index`.
 - **RN-02 — Coerência write-through.** Toda escrita originada nas ferramentas tenta atualizar o índice na mesma operação. Se a vetorização falhar, o arquivo no vault é preservado (fonte da verdade), o arquivo é marcado com `status = error` e o usuário é instruído a rodar `nix sync` ou `sync_index`.
-- **RN-03 — Confinamento ao vault.** Nenhuma leitura ou escrita ocorre fora do diretório configurado, incluindo tentativas via caminho relativo ou link simbólico.
+- **RN-03 — Confinamento ao vault.** Nenhuma leitura ou escrita ocorre fora do diretório do vault da operação, incluindo tentativas via caminho relativo ou link simbólico.
 - **RN-04 — Proveniência da fonte.** Toda resposta de ferramenta que devolve conteúdo do vault inclui caminho relativo e o trecho (ou o corpo da nota). A fidelidade da resposta em linguagem natural é responsabilidade do cliente LLM.
 - **RN-05 — Não destruição silenciosa.** Sobrescrita e remoção exigem confirmação e geram backup.
 - **RN-06 — Respeito aos filtros.** Notas excluídas pela configuração não são indexadas, lidas nem citadas.
@@ -260,24 +307,24 @@ Esta é a regra de negócio central do produto:
 **Entregue**
 
 - Configuração em `settings.db` na pasta do aplicativo (ambiente ganha do banco; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
-- Servidor MCP stdio com 19 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend), recursos `nix://note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
-- CLI de bootstrap: `init [--vault] [--embedding-model] [--force]`, `sync`, `status`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor.
+- Servidor MCP stdio com 20 ferramentas (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend, `list_vaults`), recursos `nix://note/{+rel_path}` (vault padrão) e `nix://vault/{name}/note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
+- CLI de bootstrap: `init [--name] [--vault] [--embedding-model] [--force]` (o primeiro vault chama-se `Default` se `--name` for omitido), `vault` (listar, cadastrar, renomear, remover, padrão, pasta e ajustes), `sync` e `status` com `--vault` repetível e `--all`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor. Uma configuração anterior, de um vault só, vira o `Default` e conserva o índice e os backups já gravados.
+- Vários vaults nomeados (de 1 a 5, exatamente um padrão) no mesmo processo. Ferramenta sem `vault` usa o padrão. Busca em um, em vários ou em todos. Escrita num único vault.
 - Instalador `install.bat` / `install.ps1` / `install.sh` (binário único da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
 - Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `settings.db`; não toca no vault).
-- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, configuração e histórico).
+- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em um ou mais vaults, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, tela Vaults, configuração e histórico).
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
-- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). Exemplos em `.cursor/mcp.json`.
+- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code, Codex e do Devin CLI local.
 - Escrita com write-through, confirmação e backup.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
-- Seções de configuração fora de `vault`, `index`, `retrieval`, `safety` e `logging` não são gravadas. Um campo definido por `NIX_SECAO__CAMPO` ganha do banco.
+- Seções globais graváveis: `index`, `retrieval`, `safety` e `logging`. O cadastro dos vaults fica à parte (`nix vault`). Um campo global definido por `NIX_SECAO__CAMPO` ganha do banco.
 
 **Próximo**
 
 - Conjunto de avaliação `eval/` (harness e 30 perguntas; ainda não está no repositório).
 - Reordenação ligada por padrão e outras melhorias de qualidade de recuperação.
-- Registro documentado para mais clientes MCP (Claude Code, Copilot) além do Cursor.
 
 ## 11. Riscos
 
@@ -296,7 +343,7 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 
 ## 13. Glossário
 
-- **Vault** — diretório do Obsidian contendo as notas em Markdown.
+- **Vault** — diretório do Obsidian contendo as notas em Markdown. O Nix guarda de 1 a 5, cada um com nome. O padrão é o usado quando o nome é omitido.
 - **Chunk** — trecho de uma nota, unidade indexada e recuperada.
 - **Embedding** — representação vetorial de um chunk, usada para busca por similaridade.
 - **MCP** — Model Context Protocol. O Nix expõe ferramentas exclusivamente via stdio.

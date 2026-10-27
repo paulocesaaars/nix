@@ -6,7 +6,7 @@ import json
 
 import typer
 
-from nix.cli.deps import get_runtime, with_errors
+from nix.cli.deps import get_host, with_errors
 from nix.cli.render import (
     apply_sync_progress,
     console,
@@ -15,8 +15,9 @@ from nix.cli.render import (
     sync_progress,
 )
 from nix.config.embedding_present import sync_model_hint
-from nix.core.index.sync import json_safe
-from nix.core.models import IndexStatus
+from nix.core.errors import ConfigError, NixError
+from nix.core.index.sync import combine_sync_reports, json_safe
+from nix.core.models import IndexStatus, SyncReport
 from nix.core.models import SyncProgress as SyncProgressEvent
 from nix.core.tools.registry import call_tool
 
@@ -36,40 +37,98 @@ def _status_from_payload(payload: object) -> IndexStatus:
     )
 
 
+def _vault_spec(vault: list[str] | None, all_vaults: bool) -> str | list[str] | None:
+    names = [item.strip() for item in (vault or []) if item.strip()]
+    if all_vaults and names:
+        raise ConfigError(
+            "Use `--all` ou `--vault NOME`, não os dois. Omita os dois para usar só o vault padrão."
+        )
+    if all_vaults:
+        return "*"
+    if names:
+        return names
+    return None
+
+
 @with_errors
 def cmd_sync(
     full: bool = typer.Option(False, "--full", help="Reconstrói o índice inteiro"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Só mostra o que mudaria"),
     as_json: bool = typer.Option(False, "--json", help="Saída JSON"),
+    vault: list[str] | None = typer.Option(None, "--vault", help="Nome do vault. Repita para vários."),
+    all_vaults: bool = typer.Option(False, "--all", help="Sincroniza todos os vaults, em sequência."),
 ) -> None:
-    runtime = get_runtime(capture_embedder_stdout=as_json)
+    host = get_host(capture_embedder_stdout=as_json)
+    spec = _vault_spec(vault, all_vaults)
     events: list[SyncProgressEvent] = []
+    reports: list[tuple[str, SyncReport]] = []
+    failures: list[str] = []
+    try:
+        opened = host.resolve_many(spec)
+        for failure in opened.errors:
+            failures.append(f"{failure.name}: {failure.message}")
+        runtimes = opened.runtimes
+        if not dry_run and not as_json and runtimes:
+            console.print(f"[dim]{sync_model_hint(runtimes[0].config.index.embedding_model)}[/dim]")
+        with sync_progress() as progress:
+            progress.add_task("Sincronizando", total=1)
+            for runtime in runtimes:
+                events.clear()
 
-    def on_progress(event: SyncProgressEvent) -> None:
-        events.append(event)
-        apply_sync_progress(progress, event)
+                def on_progress(event: SyncProgressEvent) -> None:
+                    events.append(event)
+                    apply_sync_progress(progress, event)
 
-    if not dry_run and not as_json:
-        console.print(f"[dim]{sync_model_hint(runtime.config.index.embedding_model)}[/dim]")
-
-    with sync_progress() as progress:
-        progress.add_task("Sincronizando", total=1)
-        report = runtime.indexer.sync(full=full, dry_run=dry_run, progress=on_progress)
-    vault_root = runtime.config.vault.root
-    excludes = list(runtime.config.vault.exclude)
-    runtime.close()
+                try:
+                    report = runtime.indexer.sync(full=full, dry_run=dry_run, progress=on_progress)
+                except NixError as exc:
+                    failures.append(f"{runtime.vault.name}: {exc.message}")
+                    continue
+                report.vault_name = runtime.vault.name
+                reports.append((runtime.vault.name, report))
+                if not as_json:
+                    _print_sync(
+                        runtime.vault.name,
+                        runtime.vault.root,
+                        list(runtime.vault.exclude),
+                        report,
+                        events,
+                        dry_run,
+                    )
+    finally:
+        host.close()
+    combined = combine_sync_reports(reports)
     if as_json:
-        console.print_json(json.dumps(json_safe(report), ensure_ascii=False))
-        return
+        payload = {
+            "vault": [name for name, _report in reports],
+            "reports": [{**json_safe(report), "vault": name} for name, report in reports],
+            "vault_errors": failures,
+            "summary": combined.summary_pt() if reports else "",
+        }
+        console.print_json(json.dumps(payload, ensure_ascii=False))
+    if failures:
+        detail = " ".join(failures)
+        raise ConfigError(f"A sincronização falhou em algum vault. {detail}")
+
+
+def _print_sync(
+    name: str,
+    root: object,
+    excludes: list[str],
+    report: SyncReport,
+    events: list[SyncProgressEvent],
+    dry_run: bool,
+) -> None:
     prefix = "Pré-visualização: " if dry_run else ""
     console.print(prefix + report.summary_pt())
     print_tokenizer_warning(approximate=report.tokenizer_approximate)
-    console.print(f"Vault: {vault_root}")
-    processed = [e for e in events if e.action != "load_model"]
+    console.print(f"Vault {name}: {root}")
+    processed = [event for event in events if event.action != "load_model"]
     if processed:
         console.print("Arquivos:")
         for event in processed:
-            console.print(f"  {event.action} {event.rel_path}")
+            label = f"{event.vault} " if event.vault else ""
+            console.print(f"  {label}{event.action} {event.rel_path}")
     if excludes:
         console.print(f"[dim]Pastas ignoradas (vault.exclude): {', '.join(excludes)}[/dim]")
     for err in report.errors:
@@ -79,11 +138,25 @@ def cmd_sync(
 @with_errors
 def cmd_status(
     as_json: bool = typer.Option(False, "--json"),
+    vault: list[str] | None = typer.Option(None, "--vault", help="Nome do vault. Repita para vários."),
+    all_vaults: bool = typer.Option(False, "--all", help="Mostra o estado de todos os vaults."),
 ) -> None:
-    runtime = get_runtime()
-    payload = call_tool(runtime, "index_status", {})
-    runtime.close()
+    host = get_host()
+    spec = _vault_spec(vault, all_vaults)
+    try:
+        payload = call_tool(host, "index_status", {"vault": spec} if spec is not None else {})
+    finally:
+        host.close()
     if as_json:
         console.print_json(json.dumps(payload, ensure_ascii=False))
         return
-    print_status(_status_from_payload(payload))
+    rows = payload.get("vaults") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        print_status(_status_from_payload(payload))
+        return
+    for item in rows:
+        if isinstance(item, dict):
+            title = str(item.get("vault") or "")
+            if title:
+                console.print(f"[bold]{title}[/bold]")
+            print_status(_status_from_payload(item))

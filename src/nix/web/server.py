@@ -15,7 +15,7 @@ from starlette.middleware import Middleware
 
 from nix.config.loader import load_config
 from nix.core.errors import NixError
-from nix.core.runtime import Runtime, RuntimeHost
+from nix.core.runtime import RuntimeHost
 from nix.web.jobs import RuntimeGate, SyncJobs
 from nix.web.routes import build_routes
 from nix.web.security import LocalhostGuard
@@ -39,7 +39,7 @@ def serve(*, port: int | None, open_browser: bool) -> None:
     try:
         chosen = int(listener.getsockname()[1])
         token = secrets.token_urlsafe(32)
-        host = RuntimeHost(Runtime.from_config(load_config()))
+        host = RuntimeHost(load_config())
         state = WebState(token=token, port=chosen, gate=RuntimeGate(host), jobs=SyncJobs())
         app = create_app(state)
         config = uvicorn.Config(

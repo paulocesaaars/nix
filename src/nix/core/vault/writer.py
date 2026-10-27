@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import unquote
 
-from nix.config.schema import NixConfig
+from nix.config.schema import NixConfig, VaultSettings
 from nix.core.errors import ConfirmationRequiredError, NoteNotFoundError, PathEscapeError, VaultError
 from nix.core.index.graph import stem_owner
 from nix.core.models import WriteResult, utc_now_iso
@@ -147,23 +147,26 @@ def _append_in_section(current: str, heading: str, addition: str) -> str:
 
 
 class VaultWriter:
-    def __init__(self, config: NixConfig, reader: VaultReader | None = None) -> None:
+    def __init__(
+        self, config: NixConfig, vault: VaultSettings, reader: VaultReader | None = None
+    ) -> None:
         self._config = config
-        self._root = config.require_vault()
-        self._reader = reader or VaultReader(config)
+        self._vault = vault
+        self._root = config.require_vault(vault.name)
+        self._reader = reader or VaultReader(config, vault)
 
     def resolve(self, rel_path: str) -> Path:
         return resolve_in_vault(
             self._root,
             rel_path,
-            follow_symlinks=self._config.vault.follow_symlinks,
+            follow_symlinks=self._vault.follow_symlinks,
         )
 
     def _assert_accessible(self, rel_path: str, *, apply_include: bool = True) -> str:
         return assert_accessible(
             rel_path,
-            self._config.vault.include,
-            self._config.vault.exclude,
+            self._vault.include,
+            self._vault.exclude,
             apply_include=apply_include,
         )
 
@@ -186,7 +189,7 @@ class VaultWriter:
         if not self._config.safety.backup_before_overwrite or not path.is_file():
             return None
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-        dest = self._config.safety.backup_path / stamp / to_posix(rel_path)
+        dest = self._config.vault_backup_dir(self._vault) / stamp / to_posix(rel_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copy2(path, dest)
@@ -199,7 +202,7 @@ class VaultWriter:
         return str(dest)
 
     def _prune_backups(self) -> None:
-        root = self._config.safety.backup_path
+        root = self._config.vault_backup_dir(self._vault)
         if not root.is_dir():
             return
         cutoff = datetime.now(UTC) - timedelta(
@@ -218,7 +221,7 @@ class VaultWriter:
                 shutil.rmtree(child, ignore_errors=True)
 
     def _compose_new(self, content: str, frontmatter: dict[str, object] | None) -> str:
-        meta: dict[str, object] = dict(self._config.vault.default_frontmatter)
+        meta: dict[str, object] = dict(self._vault.default_frontmatter)
         if frontmatter:
             meta.update(frontmatter)
         if meta.get("created") == "auto":

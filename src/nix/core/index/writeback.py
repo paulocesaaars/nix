@@ -19,13 +19,13 @@ class Writeback:
     def after_write(self, result: WriteResult) -> WriteResult:
         if not result.written or not self._indexer.config.index.auto_index_agent_writes:
             return result
-        with index_lock():
+        with index_lock(self._indexer.vault.name):
             return self._after_write(result)
 
     def after_move(self, result: WriteResult) -> WriteResult:
         if not self._indexer.config.index.auto_index_agent_writes:
             return result
-        with index_lock():
+        with index_lock(self._indexer.vault.name):
             return self._after_move(result)
 
     def _after_write(self, result: WriteResult) -> WriteResult:
@@ -56,7 +56,8 @@ class Writeback:
                 indexed=False,
                 message=(
                     f"{result.message} A nota foi salva, mas não indexada ({error}). "
-                    "Rode `nix sync` ou a ferramenta MCP `sync_index` para corrigir o índice."
+                    f"Rode `nix sync --vault {self._indexer.vault.name}` ou a ferramenta MCP "
+                    "`sync_index` para corrigir o índice."
                 ),
             )
         return self._finish(
@@ -102,7 +103,8 @@ class Writeback:
                 indexed=False,
                 message=(
                     f"{result.message} A movimentação foi salva, mas parte do índice falhou ({detail}). "
-                    "Rode `nix sync` ou a ferramenta MCP `sync_index` para corrigir o índice."
+                    f"Rode `nix sync --vault {self._indexer.vault.name}` ou a ferramenta MCP "
+                    "`sync_index` para corrigir o índice."
                 ),
             )
         return self._finish(
@@ -125,7 +127,8 @@ class Writeback:
             if not path.is_file():
                 raise VaultError(
                     f"{rel} não está no vault após a operação. "
-                    "Verifique permissões ou antivírus no vault e rode `nix sync` "
+                    "Verifique permissões ou antivírus no vault e rode "
+                    f"`nix sync --vault {self._indexer.vault.name}` "
                     "ou a ferramenta MCP `sync_index`."
                 )
             stat = path.stat()

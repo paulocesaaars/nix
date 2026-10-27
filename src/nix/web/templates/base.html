@@ -3,14 +3,14 @@
   ("Operação", [("status", "/", "Status"), ("sync", "/sync", "Sincronizar"), ("doctor", "/doctor", "Diagnóstico")]),
   ("Vault", [("search", "/search", "Busca"), ("notes", "/notes", "Notas"), ("tags", "/tags", "Tags"), ("insights", "/insights", "Insights")]),
   ("Integração", [("connect", "/connect", "Conectar cliente"), ("traffic", "/traffic", "Tráfego MCP")]),
-  ("Manutenção", [("backups", "/backups", "Backups"), ("settings", "/settings", "Configuração"), ("history", "/history", "Histórico")]),
+  ("Manutenção", [("backups", "/backups", "Backups"), ("vaults", "/vaults", "Vaults"), ("settings", "/settings", "Configuração"), ("history", "/history", "Histórico")]),
 ] %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="no-referrer">
+  <meta name="referrer" content="same-origin">
   <meta name="csrf" content="{{ csrf_token }}">
   <title>{{ title }} — Nix</title>
   <link rel="stylesheet" href="/static/nix.css">
@@ -28,7 +28,7 @@
         <div class="group">
           <span class="nav-label">{{ label }}</span>
           {% for key, href, text in items %}
-          <a class="nav" href="{{ href }}" {% if active == key %}aria-current="page"{% endif %}>{{ icon(key) }}{{ text }}</a>
+          <a class="nav" href="{{ vault_url(href) }}" {% if active == key %}aria-current="page"{% endif %}>{{ icon(key) }}{{ text }}</a>
           {% endfor %}
         </div>
         {% endfor %}
@@ -48,6 +48,21 @@
     </aside>
     <main class="main">
       <div class="wrap">
+        {% if vaults %}
+        <form class="vault-switch" method="get" action="{{ request.url.path }}">
+          {% for key, value in kept_params %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endfor %}
+          <label class="lbl" for="vault-select">Vault</label>
+          <select class="input" id="vault-select" name="vault" onchange="this.form.submit()">
+            {% for item in vaults %}
+            <option value="{{ item.name }}" {% if item.name == selected_vault %}selected{% endif %}>{{ item.name }}{% if item.is_default %} (padrão){% endif %}</option>
+            {% endfor %}
+          </select>
+          {% if vault_label %}<span class="muted mono wrap-any">{{ vault_label }}</span>{% endif %}
+        </form>
+        {% endif %}
+        {% if vault_error %}<div class="alert alert-err" role="alert">{{ vault_error }}</div>{% endif %}
         {% block content %}{% endblock %}
       </div>
     </main>

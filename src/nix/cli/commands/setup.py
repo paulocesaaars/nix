@@ -14,6 +14,7 @@ from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embe
 from nix.config.store import SettingsStore
 from nix.core.admin.doctor import DoctorCheck, build_doctor_report
 from nix.core.admin.setup import initialize
+from nix.core.admin.vaults import DEFAULT_VAULT_NAME
 from nix.core.errors import ConfigError
 
 _DEFAULT_EMBEDDING = default_embedding_model()
@@ -128,6 +129,12 @@ def cmd_init(
         "--embedding-model",
         help="Modelo de embedding (nome ou número da lista do init)",
     ),
+    name: str | None = typer.Option(
+        None,
+        "--name",
+        help=f"Nome do primeiro vault (sem --name, usa {DEFAULT_VAULT_NAME}). "
+        "Se a configuração já tem vaults, use `nix vault add`.",
+    ),
 ) -> None:
     print_banner(
         "[bold]Olá. Eu sou o Nix[/bold] — ponte MCP entre o vault e os agentes de desenvolvimento.\n"
@@ -142,9 +149,10 @@ def cmd_init(
         embedding_model=model,
         force=force,
         update_embedding=creating or explicit_model,
+        name=name,
     )
     console.print(f"Configuração em [bold]{result.settings_path}[/bold].")
-    console.print(f"[cyan]vault.path[/cyan] = {result.vault_path}")
+    console.print(f"Vault [cyan]{result.vault_name}[/cyan] = {result.vault_path}")
     if result.embedding_written:
         console.print(f"[cyan]index.embedding_model[/cyan] = {json.dumps(result.embedding_model)}")
     if result.embedding_written and result.previously_initialized:
@@ -175,7 +183,15 @@ def cmd_doctor(
         console.print(f"[red]Falha ao carregar config: {report.config_error}[/red]")
     elif report.initialized and report.config is not None:
         console.print("Config carregada: ok")
-        console.print(f"vault.path: {report.vault_path or '(vazio)'}")
+        listed = (report.config or {}).get("vaults") if isinstance(report.config, dict) else None
+        if isinstance(listed, list) and listed:
+            for item in listed:
+                if not isinstance(item, dict):
+                    continue
+                mark = " (padrão)" if item.get("is_default") else ""
+                console.print(f"vault {item.get('name')}: {item.get('path')}{mark}")
+        else:
+            console.print(f"vault.path: {report.vault_path or '(vazio)'}")
         console.print(f"index.embedding_model: {report.embedding_model}")
         console.print(f"index.data_dir: {report.data_dir} → {report.data_path}")
     for check in report.checks:

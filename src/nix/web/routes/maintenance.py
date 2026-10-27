@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from starlette.requests import Request
 from starlette.responses import FileResponse, Response
 
 from nix.config.editor import history, revert_change
+from nix.config.schema import MAX_VAULTS, NixConfig, VaultSettings
 from nix.core.admin.backups import BackupDiff, BackupEntry, backup_file, diff_backup, list_backups, restore_backup
+from nix.core.admin.vaults import VaultService
 from nix.core.errors import NixError, VaultError
 from nix.core.models import WriteResult
 from nix.core.runtime import Runtime
@@ -34,12 +37,14 @@ class HistoryView:
 
 
 async def backups_page(request: Request) -> Response:
-    config = web_state(request).gate.host.runtime.config
-    try:
-        entries: list[BackupEntry] = await asyncio.to_thread(list_backups, config)
-        error = None
-    except OSError as exc:
-        entries, error = [], f"Não foi possível ler {config.safety.backup_path}: {exc}. Verifique safety.backup_dir."
+    config, vault, error = _page_vault(request)
+    backup_root = config.vault_backup_dir(vault) if vault is not None else config.safety.backup_path
+    entries: list[BackupEntry] = []
+    if error is None:
+        try:
+            entries = await asyncio.to_thread(list_backups, config, vault=vault)
+        except OSError as exc:
+            entries, error = [], f"Não foi possível ler {backup_root}: {exc}. Verifique safety.backup_dir."
     return page(
         request,
         "backups.html",
@@ -48,7 +53,7 @@ async def backups_page(request: Request) -> Response:
             "active": "backups",
             "entries": entries,
             "error": error,
-            "backup_dir": str(config.safety.backup_path),
+            "backup_dir": str(backup_root),
             "retention": config.safety.backup_retention_days,
             "enabled": config.safety.backup_before_overwrite,
         },
@@ -58,13 +63,14 @@ async def backups_page(request: Request) -> Response:
 async def backup_view(request: Request) -> Response:
     stamp = query(request, "stamp")
     path = query(request, "path")
-    config = web_state(request).gate.host.runtime.config
+    config, vault, vault_error = _page_vault(request)
     diff: BackupDiff | None = None
-    error: str | None = None
-    try:
-        diff = await asyncio.to_thread(diff_backup, config, stamp, path)
-    except NixError as exc:
-        error = exc.message
+    error: str | None = vault_error
+    if error is None:
+        try:
+            diff = await asyncio.to_thread(diff_backup, config, stamp, path, vault=vault)
+        except NixError as exc:
+            error = exc.message
     return page(
         request,
         "backup.html",
@@ -75,9 +81,16 @@ async def backup_view(request: Request) -> Response:
 async def backup_download(request: Request) -> Response:
     stamp = query(request, "stamp")
     path = query(request, "path")
-    config = web_state(request).gate.host.runtime.config
+    config, vault, vault_error = _page_vault(request)
+    if vault_error is not None:
+        return page(
+            request,
+            "message.html",
+            {"title": "Backups", "active": "backups", "message": vault_error},
+            status_code=404,
+        )
     try:
-        source = await asyncio.to_thread(backup_file, config, stamp, path)
+        source = await asyncio.to_thread(backup_file, config, stamp, path, vault=vault)
     except NixError as exc:
         return page(
             request,
@@ -98,7 +111,10 @@ async def backup_restore(request: Request) -> Response:
     if web_state(request).jobs.running():
         return _restore_result(request, None, _RESTORE_BUSY)
     result = await run_gated(
-        request, lambda runtime: _restore(runtime, stamp, path), busy=_RESTORE_BUSY
+        request,
+        lambda runtime: _restore(runtime, stamp, path),
+        vault=form.get("vault") or None,
+        busy=_RESTORE_BUSY,
     )
     return _restore_result(request, result.value, result.error)
 
@@ -197,6 +213,128 @@ def _undo(change_id: int) -> tuple[str | None, str | None, list[HistoryView]]:
     except NixError as exc:
         return exc.message, None, _history_views()
     return result.warning, f"Alteração #{change_id} desfeita.", _history_views()
+
+
+def _page_vault(request: Request) -> tuple[NixConfig, VaultSettings | None, str | None]:
+    """Configuração atual e o vault de `?vault=`. O terceiro valor é o erro, se houver."""
+    host = web_state(request).gate.host
+    host.before_call()
+    config = host.config
+    if not config.vaults:
+        return config, None, "Nenhum vault configurado. Rode `nix init` para cadastrar o primeiro."
+    try:
+        raw = query(request, "vault")
+        vault = config.default_vault if not raw else config.get_vault(raw)
+    except NixError as exc:
+        return config, None, exc.message
+    return config, vault, None
+
+
+async def vaults_page(request: Request) -> Response:
+    return await _vaults_response(request, message=None, error=None)
+
+
+async def vaults_add(request: Request) -> Response:
+    form = await form_data(request)
+    return await _vault_action(
+        request,
+        lambda: VaultService().add(form.get("name", ""), form.get("path", ""), source="ui"),
+        "Vault cadastrado.",
+    )
+
+
+async def vaults_rename(request: Request) -> Response:
+    form = await form_data(request)
+    return await _vault_action(
+        request,
+        lambda: VaultService().rename(form.get("old", ""), form.get("new", ""), source="ui"),
+        "Nome atualizado. O índice e os backups não foram movidos.",
+    )
+
+
+async def vaults_remove(request: Request) -> Response:
+    form = await form_data(request)
+    if form.get("confirm", "") != "on":
+        return await _vaults_response(
+            request,
+            message=None,
+            error='Marque "Confirmo a remoção" para tirar o vault da configuração. As notas não são apagadas.',
+        )
+    return await _vault_action(
+        request,
+        lambda: VaultService().remove(form.get("name", ""), source="ui"),
+        "Vault removido da configuração. As notas e o índice em disco continuam onde estavam.",
+    )
+
+
+async def vaults_default(request: Request) -> Response:
+    form = await form_data(request)
+    return await _vault_action(
+        request,
+        lambda: VaultService().set_default(form.get("name", ""), source="ui"),
+        "Vault padrão atualizado.",
+    )
+
+
+async def vaults_path(request: Request) -> Response:
+    form = await form_data(request)
+    return await _vault_action(
+        request,
+        lambda: VaultService().set_path(form.get("name", ""), form.get("path", ""), source="ui"),
+        "Pasta do vault atualizada. Rode a sincronização desse vault para alinhar o índice.",
+    )
+
+
+async def vaults_set(request: Request) -> Response:
+    form = await form_data(request)
+
+    def _apply() -> str | None:
+        _vault, warning = VaultService().set_setting(
+            form.get("name", ""),
+            form.get("key", ""),
+            form.get("value", ""),
+            source="ui",
+        )
+        return warning
+
+    try:
+        warning = await asyncio.to_thread(_apply)
+    except NixError as exc:
+        return await _vaults_response(request, message=None, error=exc.message)
+    message = "Ajuste gravado."
+    if warning:
+        message = f"{message} {warning}"
+    return await _vaults_response(request, message=message, error=None)
+
+
+async def _vault_action(request: Request, action: Callable[[], object], success: str) -> Response:
+    try:
+        await asyncio.to_thread(action)
+    except NixError as exc:
+        return await _vaults_response(request, message=None, error=exc.message)
+    return await _vaults_response(request, message=success, error=None)
+
+
+async def _vaults_response(request: Request, *, message: str | None, error: str | None) -> Response:
+    host = web_state(request).gate.host
+    host.before_call()
+    try:
+        rows = await asyncio.to_thread(lambda: VaultService().list_vaults())
+    except NixError as exc:
+        rows = []
+        error = exc.message if error is None else f"{error} {exc.message}"
+    return page(
+        request,
+        "vaults.html",
+        {
+            "title": "Vaults",
+            "active": "vaults",
+            "rows": rows,
+            "max_vaults": MAX_VAULTS,
+            "message": message,
+            "error": error,
+        },
+    )
 
 
 def _show(value: object) -> str:

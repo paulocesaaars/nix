@@ -1,6 +1,9 @@
-{% from "_ui.html" import notices %}
+{% from "_ui.html" import notices, alert %}
 <div class="stack">
   {{ notices(notice, error) }}
+  {% for item in vault_errors or [] %}
+  {{ alert("warn", item.message, item.vault) }}
+  {% endfor %}
   {% if form.q and not error %}
   {% if not results %}
   <div class="card empty">Nenhum trecho encontrado para <strong>{{ form.q }}</strong>. Tire filtros ou rode uma sincronização.</div>
@@ -12,8 +15,8 @@
       <div class="row nowrap shrink">
         <span class="rank">{{ loop.index }}</span>
         <div class="shrink">
-          <a class="hit-title" href="/notes/view?path={{ hit.rel_path | urlencode }}&amp;start={{ hit.start_line or 1 }}">{{ hit.title or hit.rel_path }}</a>
-          <div class="mono muted wrap-any">{{ hit.rel_path }}{% if hit.heading_path %} › {{ hit.heading_path }}{% endif %}</div>
+          <a class="hit-title" href="{{ vault_url('/notes/view?path=' ~ (hit.rel_path | urlencode) ~ '&start=' ~ (hit.start_line or 1), hit.vault) }}">{{ hit.title or hit.rel_path }}</a>
+          <div class="mono muted wrap-any">{% if hit.vault %}<span class="badge b-n">{{ hit.vault }}</span> {% endif %}{{ hit.rel_path }}{% if hit.heading_path %} › {{ hit.heading_path }}{% endif %}</div>
         </div>
       </div>
       <div class="row tight">
@@ -23,7 +26,7 @@
     </div>
     <div class="snippet">{{ hit.content | truncate(700) | highlight(form.q) }}</div>
     {% if hit.tags %}
-    <div class="chips">{% for tag in hit.tags %}<a class="chip" href="/notes?tag={{ tag | urlencode }}">#{{ tag }}</a>{% endfor %}</div>
+    <div class="chips">{% for tag in hit.tags %}<a class="chip" href="{{ vault_url('/notes?tag=' ~ (tag | urlencode), hit.vault) }}">#{{ tag }}</a>{% endfor %}</div>
     {% endif %}
   </article>
   {% endfor %}

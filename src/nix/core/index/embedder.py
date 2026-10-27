@@ -1,11 +1,12 @@
 """Embeddings locais via FastEmbed, com carregamento preguiçoso.
 
 Stdout fica capturado por padrão (MCP stdio). A CLI de `sync` interativa
-pede `capture_embedder_stdout=False` em `Runtime.from_config`.
+pede `capture_stdout=False` ao criar o Embedder do processo.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 import warnings
 from collections.abc import Sequence
@@ -70,6 +71,8 @@ class Embedder:
         self.capture_stdout = capture_stdout
         self._model: object | None = None
         self._dim: int | None = None
+        # Um processo, vários vaults: carrega o ONNX uma vez e não roda duas inferências juntas.
+        self._lock = threading.RLock()
 
     def ensure_loaded(self) -> None:
         """Carrega o modelo (e baixa o ONNX na primeira vez)."""
@@ -81,7 +84,9 @@ class Embedder:
         return nullcontext()
 
     def _ensure(self) -> object:
-        if self._model is None:
+        with self._lock:
+            if self._model is not None:
+                return self._model
             logger.info(
                 "Carregando modelo de embedding %s. "
                 "Na primeira vez o FastEmbed baixa o ONNX; em CPU isso pode levar muitos minutos.",
@@ -122,19 +127,20 @@ class Embedder:
                 self.model_name,
                 time.perf_counter() - started,
             )
-        return self._model
+            return self._model
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
-        model = self._ensure()
-        vectors: list[list[float]] = []
-        with self._load_context():
-            for vec in model.embed(list(texts), batch_size=self.batch_size):  # type: ignore[attr-defined]
-                vectors.append([float(x) for x in vec])
-        if vectors and self._dim is None:
-            self._dim = len(vectors[0])
-        return vectors
+        with self._lock:
+            model = self._ensure()
+            vectors: list[list[float]] = []
+            with self._load_context():
+                for vec in model.embed(list(texts), batch_size=self.batch_size):  # type: ignore[attr-defined]
+                    vectors.append([float(x) for x in vec])
+            if vectors and self._dim is None:
+                self._dim = len(vectors[0])
+            return vectors
 
     def embed_query(self, text: str) -> list[float]:
         result = self.embed([text])

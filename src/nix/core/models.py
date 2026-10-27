@@ -89,6 +89,7 @@ class RetrievedChunk:
     tags: list[str] = field(default_factory=list)
     folder: str = ""
     mtime: float = 0.0
+    vault: str = ""
 
     def citation(self) -> str:
         if self.heading_path:
@@ -125,15 +126,23 @@ class SyncReport:
     dry_run: bool = False
     trigger: SyncTrigger = "manual"
     tokenizer_approximate: bool = False
+    vault_name: str = ""
+    # Quando vários vaults entram num relatório só, o resumo já vem pronto.
+    headline: str = ""
 
     def summary_pt(self) -> str:
+        if self.headline:
+            return self.headline
         verb = "seriam processados" if self.dry_run else "processados"
-        return (
+        text = (
             f"{self.added} adicionados, {self.updated} atualizados, "
             f"{self.removed} removidos, {self.skipped} inalterados, "
             f"{self.failed} com erro, {self.chunks_created} chunks {verb} "
             f"em {self.elapsed_seconds:.1f}s"
         )
+        if self.vault_name:
+            return f"{self.vault_name}: {text}"
+        return text
 
 
 @dataclass(frozen=True)
@@ -199,6 +208,7 @@ class SyncProgress:
     rel_path: str
     action: str
     detail: str = ""
+    vault: str = ""
 
 
 @dataclass(frozen=True)

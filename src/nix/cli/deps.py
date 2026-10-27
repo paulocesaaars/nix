@@ -10,15 +10,15 @@ import typer
 
 from nix.config.loader import load_config, require_initialized
 from nix.core.errors import NixError
-from nix.core.runtime import Runtime
+from nix.core.runtime import RuntimeHost
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def get_runtime(*, capture_embedder_stdout: bool = True) -> Runtime:
+def get_host(*, capture_embedder_stdout: bool = True) -> RuntimeHost:
     require_initialized()
     config = load_config()
-    return Runtime.from_config(config, capture_embedder_stdout=capture_embedder_stdout)
+    return RuntimeHost(config, capture_embedder_stdout=capture_embedder_stdout)
 
 
 def with_errors(fn: F) -> F:

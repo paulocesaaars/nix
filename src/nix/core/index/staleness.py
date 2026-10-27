@@ -28,6 +28,7 @@ def compute_status(
     *,
     data_dir: str = "",
     warn_when_stale: bool = True,
+    vault_name: str = "",
 ) -> IndexStatus:
     last_sync = store.get_meta("last_sync_at")
     embedding = store.get_meta("embedding_model")
@@ -39,21 +40,22 @@ def compute_status(
     stale = False
     reason: str | None = None
     sync_dt = parse_iso(last_sync)
+    sync_hint = f"`nix sync --vault {vault_name}`" if vault_name else "`nix sync`"
     if last_sync is None:
         stale = True
-        reason = "O índice nunca foi sincronizado. Rode `nix sync` ou a ferramenta `sync_index`."
+        reason = f"O índice nunca foi sincronizado. Rode {sync_hint} ou a ferramenta `sync_index`."
     elif vault_count != indexed_files:
         stale = True
         reason = (
             f"O vault tem {vault_count} notas Markdown visíveis e o índice tem {indexed_files}. "
-            "Rode `nix sync` ou a ferramenta `sync_index` para alinhar "
+            f"Rode {sync_hint} ou a ferramenta `sync_index` para alinhar "
             "(nenhuma indexação automática será feita)."
         )
     elif sync_dt is not None and max_mtime > sync_dt.timestamp() + 1:
         stale = True
         reason = (
             "Há arquivos no vault mais recentes que o último sync. "
-            "Rode `nix sync` ou a ferramenta `sync_index` se quiser incluir "
+            f"Rode {sync_hint} ou a ferramenta `sync_index` se quiser incluir "
             "as edições feitas no Obsidian."
         )
     if not warn_when_stale:

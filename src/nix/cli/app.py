@@ -12,6 +12,7 @@ from nix.cli.commands.config_cmds import config_app
 from nix.cli.commands.index_cmds import cmd_status, cmd_sync
 from nix.cli.commands.setup import cmd_doctor, cmd_init
 from nix.cli.commands.ui_cmd import cmd_ui
+from nix.cli.commands.vault_cmds import vault_app
 from nix.cli.render import print_banner
 
 app = typer.Typer(
@@ -50,6 +51,7 @@ app.command("status", help="Mostra o estado do índice")(cmd_status)
 app.command("doctor", help="Diagnóstico de ambiente, config e índice")(cmd_doctor)
 app.command("ui", help="Abre a interface local de configuração e operação")(cmd_ui)
 app.add_typer(config_app, name="config")
+app.add_typer(vault_app, name="vault")
 
 
 @app.command("banner", hidden=True)

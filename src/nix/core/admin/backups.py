@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import difflib
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from nix.config.schema import NixConfig
+from nix.config.schema import BACKUP_STAMP_PATTERN, NixConfig, VaultSettings
 from nix.core.errors import PathEscapeError, VaultError
 from nix.core.models import WriteResult
 from nix.core.runtime import Runtime
 from nix.core.vault.paths import to_posix
 
-_STAMP = re.compile(r"^\d{8}T\d{6}$")
 _MAX_DIFF_LINES = 2000
 _MAX_DIFF_BYTES = 512 * 1024
 
@@ -45,13 +43,18 @@ class BackupDiff:
     too_large: bool = False
 
 
-def list_backups(config: NixConfig, limit: int = 200) -> list[BackupEntry]:
-    root = config.safety.backup_path
+def list_backups(
+    config: NixConfig, limit: int = 200, *, vault: VaultSettings | None = None
+) -> list[BackupEntry]:
+    root = _backup_root(config, vault)
     if not root.is_dir():
         return []
-    vault = _vault_root(config)
+    vault_root = _vault_root(config, vault)
     entries: list[BackupEntry] = []
-    stamps = sorted((child for child in root.iterdir() if child.is_dir() and _STAMP.match(child.name)), reverse=True)
+    stamps = sorted(
+        (child for child in root.iterdir() if child.is_dir() and BACKUP_STAMP_PATTERN.fullmatch(child.name)),
+        reverse=True,
+    )
     for folder in stamps:
         for file in sorted(folder.rglob("*")):
             if not file.is_file():
@@ -63,7 +66,7 @@ def list_backups(config: NixConfig, limit: int = 200) -> list[BackupEntry]:
                     rel_path=rel,
                     created_at=_stamp_iso(folder.name),
                     size_bytes=file.stat().st_size,
-                    current_exists=vault is not None and (vault / rel).is_file(),
+                    current_exists=vault_root is not None and (vault_root / rel).is_file(),
                 )
             )
             if len(entries) >= limit:
@@ -71,11 +74,13 @@ def list_backups(config: NixConfig, limit: int = 200) -> list[BackupEntry]:
     return entries
 
 
-def backup_file(config: NixConfig, stamp: str, rel_path: str) -> Path:
-    """Resolve o arquivo de backup sem sair de safety.backup_dir."""
-    if not _STAMP.match(stamp):
+def backup_file(
+    config: NixConfig, stamp: str, rel_path: str, *, vault: VaultSettings | None = None
+) -> Path:
+    """Resolve o arquivo sem sair da pasta de backups do vault."""
+    if not BACKUP_STAMP_PATTERN.fullmatch(stamp):
         raise VaultError(f"Backup {stamp!r} inválido. Abra a lista de backups de novo.")
-    root = config.safety.backup_path.resolve()
+    root = _backup_root(config, vault).resolve()
     posix = to_posix(rel_path)
     candidate = (root / stamp / posix).resolve()
     if not candidate.is_relative_to(root / stamp):
@@ -88,11 +93,13 @@ def backup_file(config: NixConfig, stamp: str, rel_path: str) -> Path:
     return candidate
 
 
-def diff_backup(config: NixConfig, stamp: str, rel_path: str) -> BackupDiff:
-    source = backup_file(config, stamp, rel_path)
+def diff_backup(
+    config: NixConfig, stamp: str, rel_path: str, *, vault: VaultSettings | None = None
+) -> BackupDiff:
+    source = backup_file(config, stamp, rel_path, vault=vault)
     posix = to_posix(rel_path)
-    vault = _vault_root(config)
-    current_path = vault / posix if vault is not None else None
+    vault_root = _vault_root(config, vault)
+    current_path = vault_root / posix if vault_root is not None else None
     exists = current_path is not None and current_path.is_file()
     size = source.stat().st_size
     entry = BackupEntry(
@@ -147,7 +154,7 @@ def restore_backup(runtime: Runtime, stamp: str, rel_path: str) -> WriteResult:
     posix = to_posix(rel_path)
     if not posix.lower().endswith(".md"):
         raise VaultError(f"Só notas .md podem ser restauradas pela UI. Copie {posix} à mão.")
-    content = _read(backup_file(runtime.config, stamp, posix))
+    content = _read(backup_file(runtime.config, stamp, posix, vault=runtime.vault))
     writer = runtime.writer
     if writer.resolve(posix).is_file():
         written = writer.update_note(posix, content, mode="replace", confirm=True)
@@ -156,8 +163,17 @@ def restore_backup(runtime: Runtime, stamp: str, rel_path: str) -> WriteResult:
     return runtime.writeback.after_write(written)
 
 
-def _vault_root(config: NixConfig) -> Path | None:
-    return config.vault.root if config.vault.path.strip() else None
+def _backup_root(config: NixConfig, vault: VaultSettings | None = None) -> Path:
+    if not config.vaults:
+        return config.safety.backup_path
+    return config.vault_backup_dir(vault)
+
+
+def _vault_root(config: NixConfig, vault: VaultSettings | None = None) -> Path | None:
+    if not config.vaults:
+        return None
+    chosen = vault if vault is not None else config.default_vault
+    return chosen.root
 
 
 def _read(path: Path) -> str:

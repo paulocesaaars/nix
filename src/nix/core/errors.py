@@ -13,6 +13,10 @@ class ConfigError(NixError):
     """Configuração inválida, ausente ou incompleta."""
 
 
+class SchemaVersionError(ConfigError):
+    """`settings.db` foi gravado por um esquema que este processo não abre."""
+
+
 class VaultError(NixError):
     """Falha de leitura, escrita ou varredura do vault."""
 

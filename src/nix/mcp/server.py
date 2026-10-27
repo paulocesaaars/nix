@@ -9,7 +9,7 @@ from typing import Any
 from nix import __version__
 from nix.config.loader import load_config, require_initialized
 from nix.core.errors import ConfigError, NixError
-from nix.core.runtime import Runtime, RuntimeHost
+from nix.core.runtime import RuntimeHost
 from nix.core.tools.registry import register_tools
 from nix.mcp.resources import register_resources
 from nix.mcp.traffic import install_traffic_logging
@@ -67,7 +67,7 @@ def run_server() -> None:
 def _serve() -> None:
     require_initialized()
     config = load_config()
-    host = RuntimeHost(Runtime.from_config(config))
+    host = RuntimeHost(config)
     log = get_logger("nix.mcp")
     cls = _server_class()
     try:

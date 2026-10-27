@@ -18,9 +18,12 @@ _cached: NixConfig | None = None
 def require_initialized() -> SettingsStore:
     """Falha com ação corretiva quando `nix init` ainda não rodou."""
     store = SettingsStore()
+    mismatch = store.schema_mismatch()
+    if mismatch is not None:
+        raise mismatch
     if not store.is_initialized():
         raise ConfigError(
-            f"O Nix ainda não foi configurado ({store.path}). Rode `nix init` para apontar o vault."
+            f"O Nix ainda não foi configurado ({store.path}). Rode `nix init` para cadastrar o vault."
         )
     return store
 
@@ -41,7 +44,10 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 
 
 def env_overrides() -> dict[str, Any]:
-    """Lê NIX_SECTION__FIELD. O ambiente ganha do settings.db."""
+    """Lê NIX_SECTION__FIELD dos campos globais. O ambiente ganha do settings.db.
+
+    Vaults ficam na tabela `vaults`. `NIX_VAULT__*` não entra nessa precedência.
+    """
     nested: dict[str, dict[str, Any]] = {}
     prefix = "NIX_"
     for raw_key, raw_value in os.environ.items():
@@ -95,6 +101,21 @@ def _sources(db: dict[str, dict[str, Any]], env: dict[str, Any]) -> dict[str, st
     return found
 
 
+def config_document(store: SettingsStore) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """`(db, env, merged)` com os vaults da tabela.
+
+    A seção `vault` antiga e `NIX_VAULT__*` ficam de fora: o cadastro vive em `vaults`.
+    """
+    db = store.load_overrides()
+    db.pop("vault", None)
+    env = env_overrides()
+    env.pop("vault", None)
+    merged = deep_merge(db, env)
+    merged.pop("vault", None)
+    merged["vaults"] = [record.payload() for record in store.list_vaults()]
+    return db, env, merged
+
+
 def load_config(*, use_cache: bool = True) -> NixConfig:
     """Carrega e valida a configuração. Precedência: ambiente > settings.db > padrão."""
     global _cached
@@ -102,9 +123,7 @@ def load_config(*, use_cache: bool = True) -> NixConfig:
         return _cached
 
     store = SettingsStore()
-    db = store.load_overrides()
-    env = env_overrides()
-    merged = deep_merge(db, env)
+    db, env, merged = config_document(store)
     try:
         config = NixConfig.model_validate(merged, context={"path_anchor": app_root()})
     except ValidationError as exc:

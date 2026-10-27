@@ -4,7 +4,7 @@
 <div class="head">
   <div>
     <h1>Configuração</h1>
-    <p class="sub">Valores gravados no <span class="mono">settings.db</span>. Variáveis de ambiente ganham do banco e aparecem travadas.</p>
+    <p class="sub">Valores gravados no <span class="mono">settings.db</span>. Variáveis de ambiente ganham do banco e aparecem travadas. Os vaults ficam em <a href="{{ vault_url('/vaults') }}">Vaults</a>.</p>
   </div>
 </div>
 
@@ -67,7 +67,7 @@
   </section>
   {% endfor %}
   <div class="save-bar">
-    <a class="btn" href="/settings">Descartar</a>
+    <a class="btn" href="{{ vault_url('/settings') }}">Descartar</a>
     <button class="btn btn-primary" type="submit">Salvar alterações</button>
   </div>
 </form>

@@ -11,7 +11,7 @@ from nix.core.vault.paths import to_posix
 def persist_memory(
     runtime: Runtime, content: str, *, title: str | None = None
 ) -> dict[str, object]:
-    folder = runtime.config.vault.longterm_folder.strip("/")
+    folder = runtime.vault.longterm_folder.strip("/")
     day = datetime.now(UTC).strftime("%Y-%m-%d")
     rel = to_posix(f"{folder}/{day}.md")
     heading = title.strip() if title else "Memória"

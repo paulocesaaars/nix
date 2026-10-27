@@ -9,11 +9,12 @@
 </div>
 
 <form class="card filters" method="get" action="/notes">
+  <input type="hidden" name="vault" value="{{ selected_vault }}">
   <label class="field"><span class="lbl">Pasta</span><input class="input" name="folder" value="{{ folder }}" placeholder="Projetos"></label>
   <label class="field"><span class="lbl">Tag</span><input class="input" name="tag" value="{{ tag }}" placeholder="arquitetura"></label>
   <div class="row end">
     <button class="btn btn-primary" type="submit">Filtrar</button>
-    {% if folder or tag %}<a class="btn" href="/notes">Limpar</a>{% endif %}
+    {% if folder or tag %}<a class="btn" href="{{ vault_url('/notes') }}">Limpar</a>{% endif %}
   </div>
 </form>
 
@@ -22,7 +23,7 @@
 {% if index %}
 {% if index.errors %}
 {% call alert("err", (index.errors | length) ~ " arquivo(s) falharam na última indexação: " ~ (index.errors | join(", ")) ~ ". Veja o motivo no resumo da sincronização.") %}
-<a class="btn btn-sm" href="/sync">Abrir sincronização</a>
+<a class="btn btn-sm" href="{{ vault_url('/sync') }}">Abrir sincronização</a>
 {% endcall %}
 {% endif %}
 
@@ -36,9 +37,9 @@
     <tbody>
       {% for item in index.notes %}
       <tr>
-        <td><a href="/notes/view?path={{ item.rel_path | urlencode }}"><strong>{{ item.title or item.rel_path }}</strong></a></td>
+        <td><a href="{{ vault_url('/notes/view?path=' ~ (item.rel_path | urlencode)) }}"><strong>{{ item.title or item.rel_path }}</strong></a></td>
         <td class="mono muted wrap-any">{{ item.rel_path }}</td>
-        <td><div class="chips">{% for t in item.tags[:4] %}<a class="chip" href="/notes?tag={{ t | urlencode }}">#{{ t }}</a>{% endfor %}{% if item.tags | length > 4 %}<span class="muted small">+{{ item.tags | length - 4 }}</span>{% endif %}</div></td>
+        <td><div class="chips">{% for t in item.tags[:4] %}<a class="chip" href="{{ vault_url('/notes?tag=' ~ (t | urlencode)) }}">#{{ t }}</a>{% endfor %}{% if item.tags | length > 4 %}<span class="muted small">+{{ item.tags | length - 4 }}</span>{% endif %}</div></td>
       </tr>
       {% endfor %}
     </tbody>

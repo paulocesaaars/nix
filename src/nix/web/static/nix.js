@@ -24,6 +24,14 @@
     );
   });
 
+  document.addEventListener("change", function (event) {
+    var box = event.target;
+    if (!box || box.id !== "sync-all-vaults") return;
+    document.querySelectorAll("[data-all-vaults]").forEach(function (input) {
+      input.checked = box.checked;
+    });
+  });
+
   document.addEventListener("click", function (event) {
     var tab = event.target.closest("[role='tab']");
     if (!tab) return;

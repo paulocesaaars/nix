@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, get_args, get_origin
@@ -19,6 +21,21 @@ SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 Widget = Literal["bool", "int", "float", "text", "lines", "json", "choice"]
+
+# Primeiro vault sugerido pelo init. A CLI reutiliza esta constante.
+DEFAULT_VAULT_NAME = "Default"
+MAX_VAULTS = 5
+VAULT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+# Pasta de backup usa esse carimbo. Um vault com o mesmo formato seria lido como backup.
+BACKUP_STAMP_PATTERN = re.compile(r"^\d{8}T\d{6}$")
+VAULT_SETTING_KEYS: tuple[str, ...] = (
+    "include",
+    "exclude",
+    "follow_symlinks",
+    "default_new_note_folder",
+    "default_frontmatter",
+    "longterm_folder",
+)
 
 
 def _impact(**flags: bool) -> dict[str, Any]:
@@ -97,10 +114,17 @@ class AnchoredSettings(BaseModel):
 
 
 class VaultSettings(AnchoredSettings):
+    """Um vault nomeado. `include` e os demais ajustes valem só para ele."""
+
+    name: str = Field(
+        description="Nome exibido do vault. A comparação ignora maiúsculas; a grafia original é preservada.",
+    )
+    is_default: bool = Field(
+        default=False,
+        description="Vault usado quando o nome é omitido. Com vaults cadastrados, exatamente um é o padrão.",
+    )
     path: str = Field(
-        default="",
         description="Diretório raiz do vault do Obsidian. No Windows use barras / (C:/Obsidian/MeuVault).",
-        json_schema_extra=_impact(requires_sync=True),
     )
     include: list[str] = Field(
         default_factory=lambda: ["**/*.md"],
@@ -129,6 +153,29 @@ class VaultSettings(AnchoredSettings):
         default="Nix/Memória",
         description="Pasta da ferramenta remember.",
     )
+    legacy_layout: bool = Field(
+        default=False,
+        description=(
+            "Definido na migração do esquema 1. O índice e os backups ficam na raiz de "
+            "index.data_dir e safety.backup_dir, sem a subpasta do nome."
+        ),
+    )
+
+    @field_validator("name")
+    @classmethod
+    def name_is_identifier(cls, value: str) -> str:
+        return validate_vault_name(value)
+
+    @field_validator("path")
+    @classmethod
+    def path_is_present(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ConfigError(
+                "O caminho do vault está vazio. Informe a pasta com `nix vault add NOME CAMINHO` "
+                "ou rode `nix init`."
+            )
+        return text
 
     @property
     def root(self) -> Path:
@@ -319,9 +366,13 @@ class LoggingSettings(AnchoredSettings):
 
 
 class NixConfig(AnchoredSettings):
-    """Configuração validada. Carregada exclusivamente por `nix.config.loader`."""
+    """Configuração validada. Carregada exclusivamente por `nix.config.loader`.
 
-    vault: VaultSettings = Field(default_factory=VaultSettings)
+    A lista `vaults` pode estar vazia antes do `nix init`. Com vaults cadastrados,
+    vale de 1 a 5, com exatamente um padrão.
+    """
+
+    vaults: list[VaultSettings] = Field(default_factory=list)
     index: IndexSettings = Field(default_factory=IndexSettings)
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
     safety: SafetySettings = Field(default_factory=SafetySettings)
@@ -340,35 +391,180 @@ class NixConfig(AnchoredSettings):
         else:
             anchor = app_root()
         self.path_anchor = anchor
-        self.vault.path_anchor = anchor
+        for vault in self.vaults:
+            vault.path_anchor = anchor
         self.index.path_anchor = anchor
         self.safety.path_anchor = anchor
         self.logging.path_anchor = anchor
+        validate_vault_collection(self.vaults)
         return self
 
-    def require_vault(self) -> Path:
-        if not self.vault.path.strip():
+    @property
+    def default_vault(self) -> VaultSettings:
+        """Vault usado quando o nome é omitido."""
+        if not self.vaults:
             raise ConfigError(
-                "vault.path não está definido. Rode `nix init` para apontar o vault "
-                f"({settings_path()})."
+                f"Nenhum vault configurado ({settings_path()}). Rode `nix init` para cadastrar o primeiro."
             )
-        root = self.vault.root
-        if not root.exists():
+        for vault in self.vaults:
+            if vault.is_default:
+                return vault
+        raise ConfigError("Nenhum vault está marcado como padrão. Use `nix vault default NOME`.")
+
+    def get_vault(self, name: str) -> VaultSettings:
+        """Acha o vault pelo nome, sem diferenciar maiúsculas."""
+        folded = name.strip().casefold()
+        for vault in self.vaults:
+            if vault.name.casefold() == folded:
+                return vault
+        raise ConfigError(unknown_vault_message(name, [(vault.name, vault.is_default) for vault in self.vaults]))
+
+    def require_vault(self, name: str | None = None) -> Path:
+        """Garante que o vault pedido (ou o padrão) existe e é um diretório."""
+        if not self.vaults:
             raise ConfigError(
-                f"O vault {root} não existe. Crie o diretório ou rode `nix init --vault CAMINHO`."
+                f"Nenhum vault configurado ({settings_path()}). Rode `nix init` para cadastrar o primeiro."
+            )
+        vault = self.default_vault if name is None else self.get_vault(name)
+        root = vault.root
+        if not root.exists():
+            shown = root.as_posix()
+            raise ConfigError(
+                f"O vault {vault.name} aponta para {shown}, que não existe. "
+                f"Crie a pasta (mkdir \"{shown}\") ou ajuste o caminho com `nix vault`."
             )
         if not root.is_dir():
-            raise ConfigError(f"vault.path={root} não é um diretório. Aponte para a pasta do vault do Obsidian.")
+            raise ConfigError(
+                f"O vault {vault.name} aponta para {root.as_posix()}, que não é um diretório. "
+                "Aponte para a pasta do vault do Obsidian com `nix vault`."
+            )
         return root
+
+    def _named_vault(self, vault: VaultSettings | None) -> VaultSettings:
+        if vault is not None:
+            return vault
+        return self.default_vault
+
+    def vault_index_dir(self, vault: VaultSettings | None = None) -> Path:
+        """Índice do vault: `{index.data_dir}/{nome}`.
+
+        O vault migrado do esquema 1 (`legacy_layout`) continua na raiz de
+        `index.data_dir`, onde já estavam `index.db` e o chroma.
+        """
+        chosen = self._named_vault(vault)
+        if chosen.legacy_layout:
+            return self.index.data_path
+        return self.index.data_path / chosen.name
+
+    def vault_backup_dir(self, vault: VaultSettings | None = None) -> Path:
+        """Backups do vault: `{safety.backup_dir}/{nome}`. A base continua global.
+
+        O vault migrado do esquema 1 usa a raiz de `safety.backup_dir`.
+        """
+        chosen = self._named_vault(vault)
+        if chosen.legacy_layout:
+            return self.safety.backup_path
+        return self.safety.backup_path / chosen.name
+
+    def vault_sync_lock_path(self, vault: VaultSettings | None = None) -> Path:
+        """Trava do vault: `{app_root}/.nix/sync-{nome}.lock`."""
+        chosen = self._named_vault(vault)
+        anchor = self.path_anchor or app_root()
+        return anchor / ".nix" / f"sync-{chosen.name}.lock"
 
 
 _SECTION_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
-    ("vault", VaultSettings),
     ("index", IndexSettings),
     ("retrieval", RetrievalSettings),
     ("safety", SafetySettings),
     ("logging", LoggingSettings),
 )
+
+
+def validate_vault_name(name: str) -> str:
+    """Aceita o identificador e devolve a grafia original, sem espaços nas pontas."""
+    cleaned = name.strip()
+    if VAULT_NAME_PATTERN.fullmatch(cleaned) is None:
+        raise ConfigError(
+            f"Nome de vault {name!r} inválido. Use de 1 a 32 caracteres, começando com letra ou dígito, "
+            "e depois apenas letras, dígitos, _ ou -. Exemplo: Default."
+        )
+    if BACKUP_STAMP_PATTERN.fullmatch(cleaned):
+        raise ConfigError(
+            f"Nome de vault {cleaned!r} tem o formato de um carimbo de backup (AAAAMMDDTHHMMSS). "
+            "Escolha outro nome, por exemplo Trabalho."
+        )
+    return cleaned
+
+
+def unknown_vault_message(name: str, vaults: list[tuple[str, bool]]) -> str:
+    known = ", ".join(item[0] for item in vaults) or "(nenhum)"
+    default = next((item[0] for item in vaults if item[1]), None)
+    hint = f" O padrão é {default}." if default else ""
+    return (
+        f"Vault {name!r} não existe. Vaults cadastrados: {known}.{hint} "
+        "Veja os nomes com `nix vault list`."
+    )
+
+
+def vault_paths_overlap(left: Path, right: Path) -> bool:
+    """True se os caminhos resolvidos são o mesmo ou um está dentro do outro."""
+    a = os.path.normcase(str(left.resolve()))
+    b = os.path.normcase(str(right.resolve()))
+    if a == b:
+        return True
+    sep = os.sep
+    a_prefix = a.rstrip(sep) + sep
+    b_prefix = b.rstrip(sep) + sep
+    return a.startswith(b_prefix) or b.startswith(a_prefix)
+
+
+def validate_vault_collection(vaults: list[VaultSettings]) -> None:
+    """Regras do conjunto. Lista vazia é o estado anterior ao init."""
+    if not vaults:
+        return
+    if len(vaults) > MAX_VAULTS:
+        raise ConfigError(
+            f"O Nix aceita no máximo {MAX_VAULTS} vaults e encontrou {len(vaults)}. "
+            "Remova um com `nix vault remove NOME`."
+        )
+    defaults = [vault.name for vault in vaults if vault.is_default]
+    if len(defaults) != 1:
+        raise ConfigError(
+            "É preciso haver exatamente um vault padrão. Escolha com `nix vault default NOME`."
+        )
+    seen: dict[str, str] = {}
+    for vault in vaults:
+        folded = vault.name.casefold()
+        previous = seen.get(folded)
+        if previous is not None:
+            raise ConfigError(
+                f"Os nomes {previous!r} e {vault.name!r} coincidem (a comparação ignora maiúsculas). "
+                "Renomeie um com `nix vault rename ANTIGO NOVO`."
+            )
+        seen[folded] = vault.name
+    for index, left in enumerate(vaults):
+        for right in vaults[index + 1 :]:
+            if vault_paths_overlap(left.root, right.root):
+                raise ConfigError(
+                    f"Os vaults {left.name!r} ({left.path}) e {right.name!r} ({right.path}) "
+                    "têm caminhos iguais ou um dentro do outro. "
+                    "Separe as pastas com `nix vault`."
+                )
+
+
+def default_vault_settings() -> dict[str, Any]:
+    """Ajustes iniciais gravados em `vaults.settings_json`."""
+    found: dict[str, Any] = {}
+    for key in VAULT_SETTING_KEYS:
+        field = VaultSettings.model_fields[key]
+        value = field.get_default(call_default_factory=True)
+        if isinstance(value, list):
+            value = list(value)
+        elif isinstance(value, dict):
+            value = dict(value)
+        found[key] = value
+    return found
 
 
 def _impact_of(field: Any) -> FieldImpact:

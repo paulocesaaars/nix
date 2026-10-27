@@ -95,6 +95,13 @@ ul { margin: 0; padding-left: 20px; }
 details > .filters { margin-top: 12px; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
 .vault-card { padding: 12px; }
+.vault-switch {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+}
+.vault-switch select { width: auto; min-width: 12rem; }
+.vault-picks { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.vault-picks legend { margin-right: 4px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .stack-sm { display: flex; flex-direction: column; gap: 6px; }
 .stack-md { display: flex; flex-direction: column; gap: 12px; }
@@ -134,7 +141,11 @@ a.kpi-note { color: var(--accent); }
 .btn-danger { color: var(--err); border-color: var(--err-line); }
 .btn-danger:hover { background: var(--err-soft); color: var(--err); }
 .btn-sm { min-height: 32px; padding: 0 10px; font-size: 13px; }
-.btn[disabled], .btn.htmx-request { opacity: .6; cursor: progress; }
+.btn[disabled], .btn.htmx-request, #sync-controls:disabled .btn { opacity: .6; cursor: progress; }
+#sync-controls { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+#sync-controls:disabled { cursor: progress; }
+#sync-controls:disabled .btn,
+#sync-controls:disabled .check { pointer-events: none; }
 form.inline { display: inline; margin: 0; }
 
 /* Selos e avisos */

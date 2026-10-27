@@ -7,6 +7,7 @@
     <p class="sub">Tags indexadas e quantas notas usam cada uma. Use-as no filtro da busca.</p>
   </div>
   <form class="row" method="get" action="/tags">
+    <input type="hidden" name="vault" value="{{ selected_vault }}">
     <input class="input" name="folder" value="{{ folder }}" placeholder="Filtrar por pasta" aria-label="Pasta">
     <button class="btn" type="submit">Filtrar</button>
   </form>
@@ -27,7 +28,7 @@
 <section class="card stack">
   <h2>Nuvem</h2>
   <div class="chips">
-    {% for item in tags[:60] %}<a class="chip" href="/notes?tag={{ item.tag | urlencode }}">#{{ item.tag }} <span class="count">{{ item.count }}</span></a>{% endfor %}
+    {% for item in tags[:60] %}<a class="chip" href="{{ vault_url('/notes?tag=' ~ (item.tag | urlencode)) }}">#{{ item.tag }} <span class="count">{{ item.count }}</span></a>{% endfor %}
   </div>
 </section>
 
@@ -40,7 +41,7 @@
         <td class="mono">#{{ item.tag }}</td>
         <td class="num">{{ item.count }}</td>
         <td><div class="meter"><div class="bar"><span style="width: {{ (item.count * 100 / top) | round(1) }}%"></span></div></div></td>
-        <td class="num"><a class="btn btn-sm" href="/search?tags={{ item.tag | urlencode }}">Buscar</a> <a class="btn btn-sm" href="/notes?tag={{ item.tag | urlencode }}">Notas</a></td>
+        <td class="num"><a class="btn btn-sm" href="{{ vault_url('/search?tags=' ~ (item.tag | urlencode)) }}">Buscar</a> <a class="btn btn-sm" href="{{ vault_url('/notes?tag=' ~ (item.tag | urlencode)) }}">Notas</a></td>
       </tr>
       {% endfor %}
     </tbody>

@@ -31,20 +31,24 @@ class VectorSearch:
         self._vectors = vectors
         self._embedder = embedder
 
+    def embed_query(self, query: str) -> list[float]:
+        return self._embedder.embed_query(query)
+
     def search(
         self,
         query: str,
         k: int,
         *,
+        embedding: list[float] | None = None,
         folder: str | None = None,
         tags: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> list[RetrievedChunk]:
-        embedding = self._embedder.embed_query(query)
+        vector = embedding if embedding is not None else self._embedder.embed_query(query)
         extra = bool(folder or tags or date_from or date_to)
         pool = max(k, k * 4 if extra else k)
-        hits = self._vectors.query(embedding, pool, where=None)
+        hits = self._vectors.query(vector, pool, where=None)
         start = _parse_date(date_from)
         end = _parse_date(date_to)
         wanted = {t.lower() for t in (tags or [])}
