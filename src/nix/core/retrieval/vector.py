@@ -44,9 +44,10 @@ class VectorSearch:
         tags: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        hide_folder: str | None = None,
     ) -> list[RetrievedChunk]:
         vector = embedding if embedding is not None else self._embedder.embed_query(query)
-        extra = bool(folder or tags or date_from or date_to)
+        extra = bool(folder or tags or date_from or date_to or hide_folder)
         pool = max(k, k * 4 if extra else k)
         hits = self._vectors.query(vector, pool, where=None)
         start = _parse_date(date_from)
@@ -55,6 +56,8 @@ class VectorSearch:
         filtered: list[RetrievedChunk] = []
         for hit in hits:
             if not matches_folder(hit.rel_path, folder):
+                continue
+            if hide_folder and matches_folder(hit.rel_path, hide_folder):
                 continue
             if wanted and not wanted.intersection({t.lower() for t in hit.tags}):
                 continue

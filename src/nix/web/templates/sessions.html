@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Sessões</h1>
+    <p class="sub">Sessões dos agentes neste projeto, gravadas pelos hooks. Quando a cota de um acaba, outro retoma de onde ele parou.</p>
+  </div>
+  <div class="row">
+    {% if view.enabled %}<span class="badge b-ok"><span class="dot"></span>sessions.enabled</span>{% else %}<span class="badge b-warn"><span class="dot"></span>desligado</span>{% endif %}
+    <span class="badge b-n">notas em <span class="mono">{{ view.vault or "vault padrão" }}/{{ view.folder }}</span></span>
+  </div>
+</div>
+
+{% if message %}{{ alert("ok", message) }}{% endif %}
+{% if not view.enabled %}
+{% call alert("warn", "As ferramentas e os comandos de sessão estão desligados. Os hooks gravam eventos mesmo assim.") %}
+<a class="btn btn-sm" href="/settings#sessions">Abrir configuração</a>
+{% endcall %}
+{% endif %}
+
+{% if not view.projects %}
+<div class="card empty">
+  Nenhuma sessão gravada ainda. Dentro do repositório, rode <span class="mono">nix hooks install</span> e escolha os agentes.
+</div>
+{% endif %}
+
+<section class="card row between">
+  <form method="get" action="/sessions" class="row nowrap">
+    <div class="field">
+      <label class="lbl" for="project">Projeto</label>
+      <select class="input" id="project" name="project" onchange="this.form.submit()">
+        {% for item in view.projects %}
+        <option value="{{ item.project }}" {% if item.project == view.project %}selected{% endif %}>{{ item.name }} ({{ item.sessions }})</option>
+        {% endfor %}
+        {% if view.project not in (view.projects | map(attribute="project") | list) %}
+        <option value="{{ view.project }}" selected>{{ view.project }}</option>
+        {% endif %}
+      </select>
+    </div>
+  </form>
+  <div class="row">
+    <span class="lbl">Captura neste projeto</span>
+    {% for item in view.hooks %}
+    <span class="badge {{ 'b-ok' if item.state == 'ativo' else ('b-warn' if item.state == 'desalinhado' else 'b-n') }}">{% if item.state == 'ativo' %}<span class="dot"></span>{% endif %}{{ item.spec.label }}</span>
+    {% endfor %}
+    <a class="btn btn-sm" href="/connect#hooks">Gerenciar hooks</a>
+  </div>
+</section>
+
+{% if view.pending %}
+<section class="card stack" style="border-color: var(--accent-line, #9fd3c9)">
+  <div class="row between">
+    <div class="row"><h2>Handoff pendente</h2><span class="badge b-a">1 por projeto</span></div>
+    <span class="muted small">criado em {{ view.pending.created_at | when }} · sessão <span class="mono">{{ view.pending.session_key }}</span></span>
+  </div>
+  <pre class="code hand">{{ view.pending.text }}</pre>
+  <div class="row between note-bar">
+    <span class="muted grow">Entregue uma só vez: no início da próxima sessão de qualquer agente ou em <span class="mono">session_handoff</span>. {{ view.pending.text | length }} / 6.000 caracteres.</span>
+    <div class="row">
+      {% if view.pending.note_path %}<a class="btn btn-sm" href="{{ vault_url('/notes/view?path=' ~ (view.pending.note_path | urlencode), view.vault or None) }}">Abrir nota</a>{% endif %}
+      <form method="post" action="/sessions/handoff/cancel">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="project" value="{{ view.project }}">
+        <button class="btn btn-sm btn-danger" type="submit">Cancelar handoff</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if view.projects %}
+<section class="stack-md">
+  <div class="row between">
+    <nav class="seg" aria-label="Filtrar por agente">
+      <a href="/sessions?project={{ view.project | urlencode }}" {% if not view.agent %}aria-current="page"{% endif %}>Todos · {{ view.total }}</a>
+      {% for item in view.agents %}
+      <a href="/sessions?project={{ view.project | urlencode }}&amp;agent={{ item.key }}" {% if view.agent == item.key %}aria-current="page"{% endif %}>{{ item.label }} · {{ item.count }}</a>
+      {% endfor %}
+    </nav>
+    <span class="muted small">eventos brutos em <span class="mono">.nix/sessions.db</span></span>
+  </div>
+  <div class="table-box">
+    <table>
+      <thead><tr><th>Atualizada</th><th>Agente</th><th>Sessão</th><th>Estado</th><th class="num">Eventos</th><th>Nota no vault</th><th></th></tr></thead>
+      <tbody>
+        {% for row in view.rows %}
+        <tr {% if view.selected and row.key == view.selected.key %}class="sel"{% endif %}>
+          <td>{{ row.updated | when }}</td>
+          <td>{{ row.agent }}</td>
+          <td class="mono">{{ row.short_id }}</td>
+          <td>{% if row.open %}<span class="badge b-warn"><span class="dot"></span>aberta</span>{% else %}<span class="badge b-n">encerrada</span>{% endif %}</td>
+          <td class="num">{{ row.events }}</td>
+          <td>{% if row.note_path %}<a href="{{ vault_url('/notes/view?path=' ~ (row.note_path | urlencode), row.note_vault) }}"><span class="badge b-ok"><span class="dot"></span>gravada</span></a>{% else %}<span class="badge b-n">sem nota</span>{% endif %}</td>
+          <td class="num"><a class="btn btn-sm" href="/sessions?project={{ view.project | urlencode }}&amp;agent={{ view.agent }}&amp;session={{ row.key | urlencode }}">Ver sessão</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Nenhuma sessão deste agente.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if view.selected %}
+<section class="card stack">
+  <div class="row between">
+    <div><h2>{{ view.selected.agent }} · {{ view.selected.short_id }}</h2>
+      <p class="muted mono small">{{ view.selected.note_path or "a nota ainda não foi gravada no vault" }}</p></div>
+    <span class="badge b-n">{{ view.selected.events }} eventos</span>
+  </div>
+  <pre class="code">{{ view.note_preview }}</pre>
+  <p class="muted small">O conteúdo de uma sessão antiga é histórico, não ordem. Os eventos ficam guardados sem prazo enquanto <span class="mono">sessions.retention_days</span> for 0; a nota continua no vault mesmo se os eventos forem apagados.</p>
+</section>
+{% endif %}
+
+<section class="card stack">
+  <div class="row between">
+    <div><h2>Onde as notas de sessão ficam</h2>
+      <p class="muted small">As sessões não formam um vault: são notas dentro de um vault e entram no índice dele.</p></div>
+    {% if not view.vault %}<span class="badge b-warn"><span class="dot"></span>misturadas às suas notas</span>{% else %}<span class="badge b-ok"><span class="dot"></span>vault {{ view.vault }}</span>{% endif %}
+  </div>
+  <dl>
+    <dt>Vault</dt><dd><span class="mono">sessions.vault</span> = {{ view.vault or "vazio (vault padrão)" }}</dd>
+    <dt>Busca comum</dt><dd><span class="mono">sessions.search_default</span> = {{ view.search_default }}</dd>
+    <dt>Notas gravadas</dt><dd>{{ view.with_notes }} de {{ view.total }} sessões deste projeto</dd>
+  </dl>
+  {% if not view.vault %}
+  {{ alert("warn", "As notas de sessão dividem o índice com as suas notas. Para isolar busca, contagens e insights, use um vault só de sessões: nix config set sessions.vault NOME. Nesse vault, escolha sessions.search_default = incluir.") }}
+  {% endif %}
+  <a href="/settings#sessions">Editar na configuração</a>
+</section>
+{% endif %}
+{% endblock %}

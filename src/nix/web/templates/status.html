@@ -24,6 +24,7 @@
   <div class="card">
     <div class="kpi-label">Notas indexadas</div>
     <div class="kpi-value">{{ status.files | num }}</div>
+    {% if status.sessions %}<div class="kpi-note">+ {{ status.sessions | num }} notas de sessão à parte</div>{% endif %}
   </div>
   <div class="card">
     <div class="kpi-label">Trechos</div>

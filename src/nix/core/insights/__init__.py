@@ -11,9 +11,14 @@ from nix.core.models import InsightDuplicate, LinkSuggestion, NoteRef
 
 
 class InsightsService:
-    def __init__(self, store: IndexStore, graph: WikiGraph) -> None:
+    def __init__(self, store: IndexStore, graph: WikiGraph, *, ignore_folder: str | None = None) -> None:
         self._store = store
         self._graph = graph
+        # Notas de sessão não geram órfãs nem sugestões de link (RF-108).
+        self._ignore = (ignore_folder or "").strip("/")
+
+    def _skipped(self, rel_path: str) -> bool:
+        return bool(self._ignore) and (rel_path == self._ignore or rel_path.startswith(self._ignore + "/"))
 
     def orphans(self) -> list[NoteRef]:
         self._graph.rebuild()
@@ -34,6 +39,8 @@ class InsightsService:
                 continue
             title = str(row["title"] or "")
             rel = str(row["rel_path"])
+            if self._skipped(rel):
+                continue
             neighbors = self._graph.neighbors(rel, "both")
             if not neighbors and title.lower() not in linked_targets:
                 orphans.append(NoteRef(rel_path=rel, title=title, tags=_tags(row["tags"])))
@@ -45,7 +52,7 @@ class InsightsService:
             if row["status"] != "indexed":
                 continue
             title = str(row["title"] or "").strip()
-            if title:
+            if title and not self._skipped(str(row["rel_path"])):
                 by_title[title.lower()].append(str(row["rel_path"]))
         return [
             InsightDuplicate(title=key, paths=paths)
@@ -58,7 +65,7 @@ class InsightsService:
         titles = [
             (rel, title, body)
             for rel, title, body in self._store.indexed_bodies()
-            if title
+            if title and not self._skipped(rel)
         ]
         suggestions: list[LinkSuggestion] = []
         for rel, title, body in titles:

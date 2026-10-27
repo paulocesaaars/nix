@@ -26,6 +26,7 @@ def _status_from_payload(payload: object) -> IndexStatus:
     data = payload if isinstance(payload, dict) else {}
     return IndexStatus(
         files=int(data.get("files") or 0),
+        sessions=int(data.get("sessions") or 0),
         chunks=int(data.get("chunks") or 0),
         errors=int(data.get("errors") or 0),
         last_sync_at=data.get("last_sync_at") if isinstance(data.get("last_sync_at"), str) else None,

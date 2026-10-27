@@ -338,3 +338,8 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   .bar > span { transition: none; }
 }
+
+/* Sessões dos agentes */
+.code.hand { white-space: pre-wrap; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line); }
+tr.sel td { background: var(--accent-soft); }
+.note-bar { background: var(--soft); border-radius: 8px; padding: 12px 14px; }

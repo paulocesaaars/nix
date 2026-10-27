@@ -36,6 +36,8 @@ def print_status(status: IndexStatus) -> None:
     table.add_column("Campo")
     table.add_column("Valor")
     table.add_row("Notas indexadas", str(status.files))
+    if status.sessions:
+        table.add_row("Notas de sessão", str(status.sessions))
     table.add_row("Chunks", str(status.chunks))
     table.add_row("Erros", str(status.errors))
     table.add_row("Último sync", status.last_sync_at or "nunca")

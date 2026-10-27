@@ -98,6 +98,7 @@ class RetrievalService:
         """Híbrida com o pool de candidatos e os filtros. Sem corte final nem rerank."""
         settings = self.config.retrieval
         pool = max(top_k, settings.candidate_pool)
+        hidden = self._hidden_folder(folder)
         dense: list[RetrievedChunk] = []
         lexical: list[RetrievedChunk] = []
 
@@ -110,17 +111,19 @@ class RetrievalService:
                 tags=tags,
                 date_from=date_from,
                 date_to=date_to,
+                hide_folder=hidden,
             )
 
         def _lex() -> list[RetrievedChunk]:
-            return self.lexical.search(query, pool, expand=settings.expand_query)
+            # Com a pasta de sessões escondida, busca mais candidatos para o corte não perder vagas (RF-107).
+            return self.lexical.search(query, pool * 4 if hidden else pool, expand=settings.expand_query)
 
         if settings.hybrid:
             with ThreadPoolExecutor(max_workers=2) as pool_exec:
                 f_dense = pool_exec.submit(_dense)
                 f_lex = pool_exec.submit(_lex)
                 dense = f_dense.result()
-                lexical = self._filter(f_lex.result(), folder=folder, tags=tags)
+                lexical = self._filter(f_lex.result(), folder=folder, tags=tags, hide=hidden)[:pool]
             fused = reciprocal_rank_fusion(
                 [dense, lexical],
                 k=settings.rrf_k,
@@ -129,7 +132,7 @@ class RetrievalService:
         else:
             fused = _dense()
 
-        fused = self._filter(fused, folder=folder, tags=tags)
+        fused = self._filter(fused, folder=folder, tags=tags, hide=hidden)
         expand = settings.neighbor_expansion > 0 if expand_neighbors is None else expand_neighbors
         if expand:
             fused = self._expand(fused, settings.neighbor_expansion)
@@ -162,12 +165,25 @@ class RetrievalService:
         floor = max(settings.min_score, best * 0.65)
         return [chunk for chunk in fused if chunk.score >= floor]
 
+    def _hidden_folder(self, folder: str | None) -> str | None:
+        """Pasta de sessões a esconder da busca comum (RF-107). Pedir a pasta explicitamente a inclui."""
+        sessions = self.config.sessions
+        if not sessions.enabled or sessions.search_default != "excluir":
+            return None
+        if folder and folder.strip():
+            return None
+        target = sessions.vault.strip() or self.config.default_vault.name
+        if target.casefold() != self._vault.name.casefold():
+            return None
+        return sessions.folder
+
     def _filter(
         self,
         chunks: list[RetrievedChunk],
         *,
         folder: str | None,
         tags: list[str] | None,
+        hide: str | None = None,
     ) -> list[RetrievedChunk]:
         wanted = {t.lower() for t in (tags or [])}
         include = self._vault.include
@@ -182,6 +198,8 @@ class RetrievalService:
             ):
                 continue
             if not matches_folder(chunk.rel_path, folder):
+                continue
+            if hide and matches_folder(chunk.rel_path, hide):
                 continue
             if wanted and not wanted.intersection({t.lower() for t in chunk.tags}):
                 continue

@@ -116,7 +116,17 @@ def _same_python(candidate: Path) -> bool:
     return _resolved(Path(sys.executable)) == _resolved(candidate)
 
 
+def _run_hook(args: list[str]) -> None:
+    """`nix hook ...` não passa pela CLI: só a biblioteca padrão e `core/sessions` (RF-130)."""
+    from nix.core.sessions.hook_entry import main as hook_main
+
+    raise SystemExit(hook_main(args))
+
+
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "hook":
+        unshadow()
+        _run_hook(sys.argv[2:])
     python = venv_python()
     if python is not None and not _same_python(python):
         cmd = [str(python), "-P", "-m", "nix", *sys.argv[1:]]

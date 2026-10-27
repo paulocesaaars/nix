@@ -161,6 +161,8 @@ class IndexStatus:
     stale: bool
     stale_reason: str | None = None
     data_dir: str = ""
+    # Notas de sessão indexadas, contadas à parte: `files` não as inclui (RF-108).
+    sessions: int = 0
 
 
 @dataclass(frozen=True)

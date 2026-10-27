@@ -7,7 +7,7 @@ from pathlib import Path
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from nix.web.routes import integration, maintenance, ops, vault
+from nix.web.routes import integration, maintenance, ops, sessions, vault
 
 
 def build_routes() -> list[BaseRoute]:
@@ -26,6 +26,8 @@ def build_routes() -> list[BaseRoute]:
         Route("/insights", vault.insights_page, methods=["GET"]),
         Route("/connect", integration.connect_page, methods=["GET"]),
         Route("/traffic", integration.traffic_page, methods=["GET"]),
+        Route("/sessions", sessions.sessions_page, methods=["GET"]),
+        Route("/sessions/handoff/cancel", sessions.handoff_cancel, methods=["POST"]),
         Route("/backups", maintenance.backups_page, methods=["GET"]),
         Route("/backups/view", maintenance.backup_view, methods=["GET"]),
         Route("/backups/download", maintenance.backup_download, methods=["GET"]),

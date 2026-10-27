@@ -49,6 +49,39 @@
 </section>
 {% endif %}
 
+<section class="card stack" id="hooks">
+  <div class="row between">
+    <div>
+      <h2>Hooks de sessão</h2>
+      <p class="muted small">Opcional e por projeto. Gravam as sessões para outro agente retomar quando a cota acabar. Mostra o projeto da pasta onde o <span class="mono">nix ui</span> roda; para outro projeto com sessões, use <span class="mono">?project=CAMINHO</span>.</p>
+    </div>
+    <span class="badge b-n">projeto <span class="mono">{{ hooks_project }}</span></span>
+  </div>
+  <div class="table-box">
+    <table>
+      <thead><tr><th>Agente</th><th>Arquivo de hook criado no projeto</th><th>Neste projeto</th></tr></thead>
+      <tbody>
+        {% for item in hooks %}
+        <tr>
+          <td>{{ item.label }}</td>
+          <td class="mono">{{ item.file }}</td>
+          <td>{% if item.state == "ativo" %}<span class="badge b-ok"><span class="dot"></span>ativo</span>{% elif item.state == "desalinhado" %}<span class="badge b-warn">desalinhado</span>{% else %}<span class="badge b-n">inativo</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="row between">
+    <span class="lbl">Dentro do repositório · nada é escrito antes de você confirmar</span>
+    <button class="btn btn-sm" type="button" data-copy="code-hooks">{{ icon("copy", 14, "2") }}<span data-label>Copiar</span></button>
+  </div>
+  <pre class="code" id="code-hooks">nix hooks install --agent claude --agent cursor
+nix hooks install --dry-run --agent devin-desktop
+nix hooks status</pre>
+  {% for item in hooks if item.note %}<p class="small muted"><strong>{{ item.label }}.</strong> {{ item.note }}</p>{% endfor %}
+  {{ alert("info", "Os hooks ficam só no projeto, nunca na pasta da conta. nix hooks remove apaga apenas o que a Nix marcou. Este comando não escreve skill.") }}
+</section>
+
 <section class="card stack">
   <div class="row between">
     <h2>Ferramentas expostas</h2>

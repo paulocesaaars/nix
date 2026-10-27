@@ -183,6 +183,19 @@ class IndexStore:
         ).fetchone()
         return int(row["n"]) if row else 0
 
+    def count_markdown_under(self, folder: str, status: str = "indexed") -> int:
+        """Notas Markdown de uma pasta (e subpastas), pelo prefixo do caminho relativo."""
+        prefix = folder.strip("/").replace("\\", "/")
+        if not prefix:
+            return 0
+        head = prefix + "/"
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM files WHERE status = ? AND lower(rel_path) LIKE '%.md' "
+            "AND substr(rel_path, 1, ?) = ?",
+            (status, len(head), head),
+        ).fetchone()
+        return int(row["n"]) if row else 0
+
     def indexed_bodies(self) -> list[tuple[str, str, str]]:
         """Título e corpo concatenado dos chunks, sem ler o vault."""
         parts: dict[str, list[str]] = {}
@@ -275,6 +288,7 @@ class IndexStore:
                         c["token_count"],
                         c.get("start_line"),
                         c.get("end_line"),
+                        c.get("embed_hash"),
                     )
                     for c in chunks
                 ],
@@ -288,7 +302,6 @@ class IndexStore:
                     id, rel_path, title, content_hash, mtime, size_bytes,
                     frontmatter, tags, links, chunk_count, indexed_at, status
                 ) VALUES (?, ?, '', '', ?, ?, 'null', '[]', '[]', 0, ?, 'error')
-                        c.get("embed_hash"),
                 ON CONFLICT(id) DO UPDATE SET
                     status = 'error',
                     mtime = excluded.mtime,

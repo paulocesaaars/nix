@@ -102,6 +102,7 @@ class Runtime:
             data_dir=str(self.config.vault_index_dir(self.vault)),
             warn_when_stale=self.config.index.warn_when_stale,
             vault_name=self.vault.name,
+            sessions_folder=self.config.sessions.folder if self.config.sessions.enabled else None,
         )
 
     def close(self) -> None:

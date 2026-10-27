@@ -29,11 +29,13 @@ def compute_status(
     data_dir: str = "",
     warn_when_stale: bool = True,
     vault_name: str = "",
+    sessions_folder: str | None = None,
 ) -> IndexStatus:
     last_sync = store.get_meta("last_sync_at")
     embedding = store.get_meta("embedding_model")
     vault_path = store.get_meta("vault_path")
     indexed_files = store.count_markdown("indexed")
+    sessions = store.count_markdown_under(sessions_folder) if sessions_folder else 0
     errors = store.count_files("error")
     chunks = store.count_chunks()
     max_mtime, vault_count = reader.max_mtime_and_count()
@@ -61,7 +63,7 @@ def compute_status(
     if not warn_when_stale:
         reason = None
     return IndexStatus(
-        files=indexed_files,
+        files=indexed_files - sessions,
         chunks=chunks,
         errors=errors,
         last_sync_at=last_sync,
@@ -70,4 +72,5 @@ def compute_status(
         stale=stale,
         stale_reason=reason,
         data_dir=data_dir,
+        sessions=sessions,
     )

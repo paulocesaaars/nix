@@ -12,6 +12,13 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 
 from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
 from nix.config.paths import app_root, resolve_app_path, settings_path
+from nix.config.session_defaults import (
+    DEFAULT_FOLDER,
+    DEFAULT_MAX_NOTE_BYTES,
+    DEFAULT_MAX_PROMPT_BYTES,
+    DEFAULT_MAX_TOOL_BYTES,
+    clean_folder,
+)
 from nix.core.errors import ConfigError
 
 SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
@@ -365,6 +372,83 @@ class LoggingSettings(AnchoredSettings):
         return self.resolve_path(self.file)
 
 
+SearchDefault = Literal["excluir", "incluir"]
+
+
+class SessionsSettings(BaseModel):
+    """Sessões dos agentes: eventos em `sessions.db`, nota legível no vault."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Liga as ferramentas e os comandos de sessão.",
+        json_schema_extra=_impact(requires_restart=True),
+    )
+    vault: str = Field(
+        default="",
+        description="Vault que recebe as notas de sessão. Vazio usa o vault padrão.",
+    )
+    folder: str = Field(
+        default=DEFAULT_FOLDER,
+        description="Pasta das notas de sessão, dentro do vault.",
+    )
+    search_default: SearchDefault = Field(
+        default="excluir",
+        description="excluir tira a pasta de sessões do search_notes sem filtro de pasta; incluir mantém.",
+    )
+    retention_days: int = Field(
+        default=0,
+        ge=0,
+        le=3650,
+        description="Dias até apagar eventos de sessões encerradas. 0 nunca apaga.",
+    )
+    max_prompt_bytes: int = Field(
+        default=DEFAULT_MAX_PROMPT_BYTES,
+        ge=256,
+        le=262144,
+        description="Limite de bytes por pedido e por resumo de compactação.",
+    )
+    max_tool_bytes: int = Field(
+        default=DEFAULT_MAX_TOOL_BYTES,
+        ge=64,
+        le=65536,
+        description="Limite de bytes por trecho de ferramenta.",
+    )
+    max_note_bytes: int = Field(
+        default=DEFAULT_MAX_NOTE_BYTES,
+        ge=16384,
+        le=1048576,
+        description="Tamanho máximo da nota de sessão no vault. Os turnos mais antigos saem da nota.",
+    )
+    extra_redact_patterns: list[str] = Field(
+        default_factory=list,
+        description="Expressões regulares extras que o sanitizador remove antes de gravar.",
+    )
+
+    @field_validator("folder")
+    @classmethod
+    def folder_inside_vault(cls, value: str) -> str:
+        cleaned = clean_folder(value)
+        if cleaned is None:
+            raise ConfigError(
+                f"sessions.folder={value!r} é inválida. Use um caminho relativo ao vault, "
+                "como Nix/Sessões, sem '..' e sem unidade."
+            )
+        return cleaned
+
+    @field_validator("extra_redact_patterns")
+    @classmethod
+    def patterns_compile(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ConfigError(
+                    f"sessions.extra_redact_patterns tem uma expressão inválida ({pattern!r}: {exc}). "
+                    "Corrija a expressão regular ou remova-a."
+                ) from exc
+        return value
+
+
 class NixConfig(AnchoredSettings):
     """Configuração validada. Carregada exclusivamente por `nix.config.loader`.
 
@@ -377,6 +461,7 @@ class NixConfig(AnchoredSettings):
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
     safety: SafetySettings = Field(default_factory=SafetySettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    sessions: SessionsSettings = Field(default_factory=SessionsSettings)
     settings_path: Path | None = Field(default=None, exclude=True)
     sources: dict[str, str] = Field(default_factory=dict, exclude=True)
 
@@ -478,6 +563,7 @@ _SECTION_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("retrieval", RetrievalSettings),
     ("safety", SafetySettings),
     ("logging", LoggingSettings),
+    ("sessions", SessionsSettings),
 )
 
 

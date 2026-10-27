@@ -58,6 +58,7 @@ def index_status(runtimes: list[Runtime], args: IndexStatusArgs) -> dict[str, ob
             {
                 "vault": runtime.vault.name,
                 "files": status.files,
+                "sessions": status.sessions,
                 "chunks": status.chunks,
                 "errors": status.errors,
                 "last_sync_at": status.last_sync_at,
@@ -100,7 +101,12 @@ def list_vaults(runtimes: list[Runtime], args: ListVaultsArgs) -> dict[str, obje
 
 
 def vault_insights(runtime: Runtime, args: InsightsArgs) -> dict[str, object]:
-    svc = InsightsService(runtime.store, runtime.graph)
+    sessions = runtime.config.sessions
+    svc = InsightsService(
+        runtime.store,
+        runtime.graph,
+        ignore_folder=sessions.folder if sessions.enabled else None,
+    )
     if args.kind == "orphans":
         return {"kind": "orphans", "items": [i.__dict__ for i in svc.orphans()[: args.limit]]}
     if args.kind == "duplicates":
