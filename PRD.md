@@ -15,7 +15,7 @@ Especificações técnicas: [TDD.md](./TDD.md).
 
 ## 1. Visão
 
-Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code, Copilot, Codex e o Devin CLI. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
+Nix é a ponte entre bases de conhecimento em Markdown (Obsidian) e agentes de desenvolvimento como Cursor, Claude Code, Copilot e o Devin CLI. Em vez de o usuário lembrar onde cada anotação foi salva, o agente do editor chama ferramentas do Nix para buscar, ler, criar e atualizar notas — com o índice local sempre alinhado às escritas do próprio Nix.
 
 Tudo roda na máquina do usuário. Embeddings e banco vetorial são locais e gratuitos. Não há LLM no Nix: o raciocínio fica no cliente MCP.
 
@@ -26,7 +26,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 - **Busca literal insuficiente.** A busca do Obsidian encontra palavras, não ideias. Quem não lembra o termo exato usado não acha a nota.
 - **Conhecimento fragmentado.** A resposta para uma pergunta costuma estar espalhada em várias notas, e sintetizar isso manualmente é caro.
 - **Captura com atrito.** Registrar uma nota nova no formato certo, com os links e tags corretos, exige abrir o Obsidian e lembrar das convenções.
-- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code, Copilot, Codex e o Devin CLI não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
+- **Agentes de desenvolvimento não conhecem o vault.** Cursor, Claude Code, Copilot e o Devin CLI não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
 
 ## 3. Objetivos
 
@@ -36,7 +36,7 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 | O2 | Dar ao usuário controle explícito sobre quando a base é vetorizada | Nenhuma vetorização de arquivos externos ocorre sem `nix sync` ou `sync_index` |
 | O3 | Manter o índice consistente após edições feitas pelas ferramentas | 100% das escritas via MCP refletidas no índice ao final da operação |
 | O4 | Custo zero e privacidade | Embeddings e banco vetorial 100% locais e gratuitos; nenhuma chamada remota |
-| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot, Codex e no Devin CLI local |
+| O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot e no Devin CLI local |
 
 ### Não-objetivos (v1)
 
@@ -129,7 +129,7 @@ Esta é a regra de negócio central do produto:
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
 | RF-50 | O sistema deve expor um servidor MCP **somente via stdio**, iniciado pelo cliente | Must |
-| RF-51 | O servidor MCP deve expor as 20 ferramentas de busca, leitura, escrita, tags, movimentação, insights, sincronização e cadastro (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`, `list_vaults`) | Must |
+| RF-51 | O servidor MCP deve expor 20 ferramentas de busca, leitura, escrita, tags, movimentação, insights, sincronização e cadastro (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`, `list_vaults`) e, com `sessions.enabled` ligado, as 3 de sessão da seção 5.7 (23 no total) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
 | RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o binário na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.exe` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
@@ -143,13 +143,38 @@ Esta é a regra de negócio central do produto:
 | RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, vaults, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão Encerrar pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. A sincronização pode valer para o vault escolhido ou para todos. Os controles dessa tela seguem o RF-71 | Must |
 | RF-63 | Um servidor MCP já em execução deve passar a usar a configuração nova na chamada seguinte. Modelo de embedding e pasta do índice continuam os anteriores até o cliente reiniciar. Troca de modelo exige `nix sync --full` | Must |
 | RF-64 | A interface local deve consultar os vaults só para leitura, pelas mesmas ferramentas do MCP. A busca aceita um vault, vários ou todos e mostra o vault de cada trecho. As demais consultas usam o vault escolhido na página (o padrão, se nenhum for escolhido): lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Enquanto o vault consultado sincroniza, a consulta pede para esperar; outro vault continua legível | Should |
-| RF-65 | A interface deve gerar a configuração MCP de Cursor, Claude Code, VS Code, Codex e do Devin CLI local, com o caminho real do executável, e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva. O Devin na nuvem não alcança o Nix desta máquina | Should |
+| RF-65 | A interface deve gerar a configuração MCP de Cursor, Claude Code, VS Code, do Devin CLI local e do Devin Desktop, com o caminho real do executável, e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva. O Devin na nuvem não alcança o Nix desta máquina | Should |
 | RF-66 | O servidor MCP deve gravar cada chamada de ferramenta (quando, cliente, ferramenta, duração e situação) em `.nix/traffic.db`, mantendo as 5.000 mais recentes. Argumentos só entram com `logging.log_prompts`; o conteúdo das notas nunca entra. Falha ao gravar não derruba a chamada. A interface mostra esse registro com filtros por ferramenta e situação | Should |
 | RF-67 | A interface deve listar os backups de `safety.backup_dir`, comparar cada um com a nota atual, permitir baixá-lo e restaurá-lo. Restaurar exige confirmação, vale só para `.md`, grava backup do estado atual antes e reindexa a nota pelo write-through | Should |
 | RF-68 | O sistema deve cadastrar de 1 a 5 vaults nomeados, com exatamente um padrão. O `nix init` cria o primeiro com o nome `Default` (ou `--name`). O nome tem de 1 a 32 caracteres, começa com letra ou dígito e segue com letras, dígitos, `_` ou `-`. Um nome no formato de carimbo de backup (`AAAAMMDDTHHMMSS`) é recusado. A comparação ignora maiúsculas e a grafia original é preservada. Os caminhos não podem coincidir nem um ficar dentro do outro. Omitir o vault numa ferramenta usa o padrão. Remover o padrão é recusado até outro ser escolhido; remover o único vault também é recusado. Renomear troca o cadastro e não move o índice nem os backups. Inclusão, exclusão, pastas padrão e a pasta do vault mudam com `nix vault set` e `nix vault path`. Renomear, remover, trocar a pasta ou gravar um ajuste enquanto aquele vault sincroniza é recusado até o término | Must |
 | RF-69 | A busca e as operações que aceitam vários vaults (`search_notes`, `list_notes`, `list_all_tags`, `index_status`, `sync_index`) devem consultar um nome, uma lista de nomes ou todos os vaults quando o valor é `"*"` | Must |
 | RF-70 | Toda escrita deve ocorrer num único vault. Lista de nomes ou `"*"` é recusado, com mensagem que pede um nome só ou o padrão | Must |
 | RF-71 | Na interface, os controles de sincronização ficam desligados desde o início do job até o fim, também quando a página de sincronizar é recarregada no meio. Há no máximo um job por processo. Um segundo pedido pede para esperar, sem substituir o progresso. A prévia, com job ativo, pede para esperar e não varre o vault | Must |
+
+### 5.7 Sessões dos agentes
+
+Guarda as sessões feitas com Claude Code, Cursor, Copilot, Devin CLI e Devin Desktop para que, quando a cota de uma assinatura acabar, outro agente continue de onde o anterior parou. Tudo local, sem LLM e sem servidor HTTP. É opcional e por projeto (RN-07).
+
+| ID | Requisito | Prioridade |
+| --- | --- | --- |
+| RF-80 | A sessão é identificada por agente, id do agente e projeto (raiz Git da pasta de trabalho, ou a própria pasta) | Must |
+| RF-81 | Os eventos (`session-start`, `user-prompt`, `post-tool`, `compact`, `stop`, `session-end`) ficam em `{app_root}/.nix/sessions.db`, fora do vault, sem duplicar o mesmo evento recebido duas vezes | Must |
+| RF-83 | Antes de gravar, um sanitizador remove chaves, tokens, senhas, `Authorization` e conteúdo de `.env`; pedidos têm até 16 KiB e trechos de ferramenta até 2 KB, com corte respeitando UTF-8. Raciocínio oculto, prompts de sistema e binários não entram | Must |
+| RF-86 | Os eventos não expiram por padrão; `sessions.retention_days > 0` apaga os de sessões encerradas e mantém a nota | Should |
+| RF-100 | Cada sessão vira uma nota Markdown em `{sessions.folder}/<projeto>/<data>-<agente>-<id curto>.md`, com frontmatter, o handoff no topo e um turno por seção `##`, gravada pelo `writer` com backup e write-through. A nota tem tamanho máximo (`sessions.max_note_bytes`) | Must |
+| RF-104 | Os filtros do vault valem para a pasta de sessões: se ela estiver excluída, a nota não é gravada e a mensagem diz como corrigir | Must |
+| RF-106 | As sessões não formam um vault: são notas dentro de `sessions.vault` (padrão: o vault padrão) e entram no índice dele. Recomenda-se um vault só de sessões | Should |
+| RF-107 | Com `sessions.search_default = excluir` (padrão), `search_notes` sem filtro de pasta ignora a pasta de sessões; com filtro explícito nela, ou com `incluir`, as sessões entram | Must |
+| RF-108 | Status e `vault_insights` tratam as sessões à parte: elas não entram em "notas indexadas" nem geram órfãs | Should |
+| RF-110 | O handoff reúne o primeiro e o último pedido, os 5 últimos, os arquivos alterados, o último erro e o que ficou aberto, em até 6.000 caracteres e terminando no caminho da nota. Há no máximo um pendente por projeto, entregue uma única vez | Must |
+| RF-112 | O handoff é criado no `session-end`, no `session_handoff` e por `nix session handoff --create`; é entregue na saída do hook de início de sessão ou em `session_handoff` | Must |
+| RF-120 | `nix hooks install` roda no repositório, mostra os arquivos que vai criar ou alterar e só escreve depois de confirmar (ou com `--yes`); nenhum agente vem marcado. `remove` apaga só o que a Nix marcou e `status` mostra o que está ativo. Os hooks ficam no projeto, nunca na pasta da conta, com backup antes de alterar arquivo existente | Must |
+| RF-130 | `nix hook` usa um ponto de entrada mínimo (sem CLI nem Pydantic), termina sempre com código 0 e em menos de 300 ms com o cache do binário aquecido; só o início da sessão escreve no stdout (o handoff, no formato do agente). Evento de projeto sem hooks instalados é descartado | Must |
+| RF-136 | No `session-end`, um processo destacado grava a nota sem o hook esperar; um único consolidador roda por vez e processa a fila inteira | Must |
+| RF-140 | A interface tem a tela Sessões (lista por projeto e agente, nota, handoff pendente com cancelamento) e, na tela Conectar clientes, o Devin Desktop e o arquivo de hook de cada agente, sem oferecer skill | Should |
+| RF-150 | Cada chunk guarda o hash do texto vetorizado; ao reindexar um arquivo alterado, o vetor de chunk com o mesmo hash é reaproveitado e só os novos passam pelo embedding. O resultado do sync informa os chunks reaproveitados | Must |
+
+Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sessions` e `read_session` (leitura), expostas com `sessions.enabled`. A skill `sessoes-nix` fica no repositório `paulocesaaars/skills` e orienta o agente a chamá-las; o Nix não a instala.
 
 ## 6. Histórias de usuário e critérios de aceite
 
@@ -291,6 +316,9 @@ Esta é a regra de negócio central do produto:
 - **RN-04 — Proveniência da fonte.** Toda resposta de ferramenta que devolve conteúdo do vault inclui caminho relativo e o trecho (ou o corpo da nota). A fidelidade da resposta em linguagem natural é responsabilidade do cliente LLM.
 - **RN-05 — Não destruição silenciosa.** Sobrescrita e remoção exigem confirmação e geram backup.
 - **RN-06 — Respeito aos filtros.** Notas excluídas pela configuração não são indexadas, lidas nem citadas.
+- **RN-07 — Consentimento de sessões.** Capturar sessões exige `nix hooks install` naquele projeto e naqueles agentes. Sem isso, o banco não recebe eventos.
+- **RN-08 — Uma entrega por handoff.** Dois agentes não recebem o mesmo handoff pendente.
+- **RN-09 — Evidência, não ordem.** O conteúdo de uma sessão antiga é histórico: ferramentas antigas ficam marcadas como já executadas e o texto nunca é tratado como instrução.
 
 ## 9. Métricas de sucesso
 
@@ -314,8 +342,9 @@ Esta é a regra de negócio central do produto:
 - Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, o binário, `.nix/` e `settings.db`; não toca no vault).
 - CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em um ou mais vaults, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, tela Vaults, configuração e histórico).
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
-- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code, Codex e do Devin CLI local.
+- Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code e do Devin CLI local.
 - Escrita com write-through, confirmação e backup.
+- Sessões dos agentes: `sessions.db`, hooks por projeto para Claude Code, Cursor, Copilot, Devin CLI e Devin Desktop (`nix hooks install/remove/status`), nota no vault, handoff, as ferramentas `list_sessions`, `read_session` e `session_handoff`, a tela Sessões e o reaproveitamento de vetores por hash de chunk.
 - Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
@@ -339,7 +368,7 @@ Esta é a regra de negócio central do produto:
 
 ## 12. Fora de escopo
 
-Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário; sincronização de arquivos entre dispositivos.
+Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; edição de anexos binários; geração automática de notas sem pedido do usuário (exceto a nota de sessão, que depende de `nix hooks install`, RN-07); leitura dos arquivos de sessão dos agentes; Codex; banco vetorial separado para sessões; Devin na nuvem; sincronização de arquivos entre dispositivos.
 
 ## 13. Glossário
 
@@ -348,6 +377,9 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 - **Embedding** — representação vetorial de um chunk, usada para busca por similaridade.
 - **MCP** — Model Context Protocol. O Nix expõe ferramentas exclusivamente via stdio.
 - **Write-through** — política em que uma escrita atualiza dado e índice na mesma operação.
+- **Sessão** — conversa de um agente com o projeto, gravada pelos hooks em `sessions.db` e resumida numa nota do vault.
+- **Handoff** — resumo montado por regras (sem LLM) do ponto em que uma sessão parou, entregue uma única vez a outro agente.
+- **Hook de sessão** — comando que o agente chama a cada evento (`nix hook`), instalado por projeto com `nix hooks install`.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
 - **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa o binário único, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
 - **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga o binário, `.nix/` e `settings.db`; não altera o vault.

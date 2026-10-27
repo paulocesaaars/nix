@@ -113,7 +113,7 @@ nix/
 ├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
 ├── nix.jpeg                # foto da Nix (mascote no README)
 ├── settings.db            # config local (não versionado; criado por `nix init`)
-├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs
+├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs, sessions.db
 ├── pyproject.toml          # metadados do pacote e entry point do comando `nix`
 ├── requirements.txt        # dependências de runtime
 ├── requirements-dev.txt    # dependências de desenvolvimento
@@ -126,7 +126,7 @@ nix/
 ├── .cursor/
 │   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
-    ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/
+    ├── nix_launch.py           # relança o venv, desfaz sombreamento da pasta nix/; `nix hook` segue direto para sessions/hook_entry
     ├── nix_frozen.py           # entrada do binário; não relança o .venv
     └── nix/
         ├── __init__.py
@@ -138,6 +138,7 @@ nix/
         │   ├── store.py            # settings.db: valores, histórico, versão do esquema
         │   ├── editor.py           # gravação validada (CLI e interface)
         │   ├── loader.py           # precedência env > banco > padrão; vaults vêm da tabela
+        │   ├── session_defaults.py # padrões de `sessions.*` e validação da pasta; sem dependências, o hook e o schema importam daqui
         │   └── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         ├── core/
         │   ├── vault/
@@ -167,14 +168,27 @@ nix/
         │   │   ├── rerank.py       # cross-encoder opcional
         │   │   └── service.py      # fachada de recuperação
         │   ├── insights/           # órfãs, duplicatas, links, resumo
+        │   ├── sessions/           # sessões dos agentes (só stdlib nos módulos do hook)
+        │   │   ├── hook_entry.py   # `nix hook`: stdin → evento → sessions.db; handoff no stdout do início
+        │   │   ├── agents.py       # lista única dos agentes, rótulos e formato do contexto de início de sessão
+        │   │   ├── events.py       # normaliza o JSON de cada agente; id determinístico; raiz Git do projeto
+        │   │   ├── sanitize.py     # segredos e corte UTF-8
+        │   │   ├── limits.py       # limites e padrões extras lidos do settings.db sem Pydantic
+        │   │   ├── store.py        # sessions.db: sessions, events, handoffs, hook_projects
+        │   │   ├── handoff.py      # texto do handoff, criação, escolha da sessão de origem
+        │   │   ├── service.py      # gravar a nota da sessão e consolidar a fila; CLI, MCP e interface delegam a ele
+        │   │   ├── drain.py        # fila do session-end, consolidador destacado e trava
+        │   │   ├── render.py       # nota Markdown da sessão no vault
+        │   │   └── paths.py        # caminho da nota e URI somente leitura do SQLite
         │   ├── runtime.py          # RuntimeHost: resolve / resolve_many, Embedder compartilhado
-        │   ├── admin/              # init, doctor e VaultService (add/rename/remove/default)
+        │   ├── admin/              # init, doctor, VaultService e agent_hooks (hooks por projeto dos 5 agentes)
         │   └── tools/
         │       ├── args.py         # VaultArgs (um nome) e MultiVaultArgs (nome, lista ou "*")
         │       ├── registry.py     # definição canônica das ferramentas
         │       ├── search.py
         │       ├── notes.py
-        │       └── maintenance.py
+        │       ├── maintenance.py
+        │       └── sessions.py     # list_sessions, read_session, session_handoff
         ├── cli/
         │   ├── app.py              # entrypoint Typer (sem args → servidor stdio)
         │   ├── ascii-art.txt
@@ -183,6 +197,8 @@ nix/
         │   │   ├── vault_cmds.py   # nix vault list/add/rename/remove/default/path/set
         │   │   ├── config_cmds.py  # config list/get/set/unset/history/undo
         │   │   ├── ui_cmd.py       # nix ui
+        │   │   ├── session_cmds.py # nix session list/show/render/handoff
+        │   │   ├── hooks_cmds.py   # nix hooks install/remove/status
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
         │   ├── embedding_copy.py   # tabela do nix init; textos em config/embedding_present.py
         │   └── render.py           # banner, tabelas de sync/status, erros em stderr
@@ -191,7 +207,7 @@ nix/
         │   ├── traffic.py          # log de interações MCP (arquivo e .nix/traffic.db)
         │   └── resources.py        # nix://note/… no padrão; nix://vault/{name}/note/…
         ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e nix.css vendidos
-        │   └── routes/             # ops, vault, integration, maintenance
+        │   └── routes/             # ops, vault, integration, maintenance, sessions
         └── observability/
             ├── logging.py
             └── stdio.py            # isola stdout de bibliotecas
@@ -275,6 +291,42 @@ Uma coleção `nix_notes` por vault, em `{index.data_dir}/<nome>/chroma`, um vet
 | `mtime` | Filtro por recência e desempate |
 | `ordinal` | Reconstrução da ordem e expansão de vizinhos |
 
+### 5.3 Sessões (`{app_root}/.nix/sessions.db`)
+
+SQLite em WAL, fora do vault e fora do índice. Cada operação abre e fecha a conexão, com transação curta, para vários hooks gravarem ao mesmo tempo.
+
+```sql
+CREATE TABLE sessions (
+    key TEXT PRIMARY KEY,            -- agente:id da sessão
+    agent TEXT NOT NULL, session_id TEXT NOT NULL,
+    project TEXT NOT NULL, project_name TEXT NOT NULL, cwd TEXT NOT NULL DEFAULT '',
+    started TEXT NOT NULL, updated TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'aberta',   -- aberta | encerrada
+    note_path TEXT, note_vault TEXT, rendered_at TEXT
+);
+CREATE TABLE events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,         -- sha256 de agente, sessão, tipo, alvo, texto e segundo: o mesmo evento não duplica
+    session_key TEXT NOT NULL REFERENCES sessions(key) ON DELETE CASCADE,
+    ts TEXT NOT NULL, type TEXT NOT NULL,    -- session-start | user-prompt | pre-tool | post-tool | compact | stop | session-end | other
+    tool TEXT NOT NULL DEFAULT '', target TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '',
+    is_error INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE handoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL, session_key TEXT NOT NULL,
+    state TEXT NOT NULL,             -- pendente | consumido | cancelado
+    text TEXT NOT NULL, note_path TEXT, created_at TEXT NOT NULL,
+    consumed_at TEXT, consumed_by TEXT
+);
+CREATE TABLE hook_projects (         -- RN-07: só projetos com hooks instalados gravam
+    project TEXT NOT NULL, agent TEXT NOT NULL, hook_file TEXT NOT NULL DEFAULT '', installed_at TEXT NOT NULL,
+    PRIMARY KEY (project, agent)
+);
+```
+
+O handoff pendente é entregue por um único `UPDATE ... RETURNING`: dois agentes não levam o mesmo. A coluna `chunks.embed_hash` do índice (5.1) guarda o hash do texto vetorizado de cada chunk (RF-150); índices criados antes dela ganham a coluna por `ALTER TABLE`, sem trocar o `schema_version`.
+
 ## 6. Pipeline de indexação
 
 ### 6.1 Detecção de mudanças
@@ -357,6 +409,10 @@ O reprocessamento é de um único arquivo. Se a indexação falhar após a escri
 
 `index_status` compara a **contagem de notas Markdown** visíveis no vault com a de arquivos `.md` indexados, e o `mtime` máximo com `index_meta.last_sync_at`. PDFs anexos no índice não entram nessa conta (evita aviso falso de defasagem). Se houver divergência, devolve `stale=true`. A mensagem `stale_reason` só é preenchida quando `index.warn_when_stale=true`. Não há indexação implícita (RN-01).
 
+### 6.5 Reaproveitamento de vetores (RF-150)
+
+O id do chunk é `arquivo:ordinal` e se desloca com qualquer inserção no meio da nota, então o reaproveitamento casa **só pelo hash** do `embed_text` (texto com o prefixo `título > cabeçalhos`). Em `Indexer._commit_index`: lê os hashes e os vetores antigos do arquivo (`VectorStore.embeddings_for_file`, `get(where={"file_id": ...}, include=["embeddings"])`), calcula o embedding só dos chunks sem hash correspondente, apaga os chunks do arquivo e faz o `upsert` com os vetores reaproveitados e os novos. O `SyncReport` informa `chunks_reused` e `chunks_embedded`. `nix sync --full` zera os hashes junto com o índice.
+
 ## 7. Recuperação
 
 ```mermaid
@@ -385,9 +441,11 @@ graph LR
 
 Cada trecho devolvido por `search_notes` inclui `vault`, `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP.
 
+Notas de sessão e busca (RF-107): com `sessions.enabled`, `sessions.search_default = excluir` e sem `folder` explícito, `RetrievalService` descarta a pasta de sessões no vault que as recebe, **antes** do corte do top-k: o pool denso e o léxico buscam mais candidatos (4×) e o filtro roda antes de `finish`. Com `folder` na pasta de sessões, ou com `incluir`, elas entram.
+
 ## 8. Ferramentas
 
-Definidas uma única vez em `core/tools/registry.py` (`SPECS`, 20 ferramentas) e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso), um vault por vez.
+Definidas uma única vez em `core/tools/registry.py` (`SPECS`, 20 ferramentas, mais 3 de sessão que só são expostas com `sessions.enabled`: 23 no total) e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso), um vault por vez.
 
 `VaultArgs` é um nome, ou o padrão se o campo vier vazio. `MultiVaultArgs` aceita um nome, uma lista ou `"*"`. A comparação ignora maiúsculas. Escrita, leitura de uma nota, links e insights recusam lista e `"*"`. Busca, `list_notes`, `list_all_tags`, `index_status` e `sync_index` aceitam vários. `list_vaults` não recebe vault: devolve todos. A resposta traz `vault` (um nome ou a lista dos consultados).
 
@@ -413,6 +471,9 @@ Definidas uma única vez em `core/tools/registry.py` (`SPECS`, 20 ferramentas) e
 | `vault_insights` | `(kind, limit=20, vault?) -> insights` | — |
 | `remember` | `(content, title?, vault?) -> WriteResult` | write-through em `longterm_folder` do vault |
 | `list_vaults` | `() -> {vaults}` | — ; nome, caminho, padrão e se o índice está desatualizado |
+| `list_sessions` | `(project?, agent?, status?, limit=20) -> {project, sessions}` | — ; lê `sessions.db`, não abre vault; só com `sessions.enabled` |
+| `read_session` | `(session, project?, max_chars=8000) -> {session, events, truncated}` | — ; eventos do fim para o começo, ferramentas marcadas como já executadas |
+| `session_handoff` | `(accept=true, agent?, project?) -> {handoff, state, note_path}` | com `accept=true`, grava a nota da sessão no vault (write-through) e entrega o handoff uma única vez; com `accept=false` só mostra, sem gravar nem consumir; `agent` tira a sessão em curso do chamador da escolha |
 
 Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34). `move_note` e `move_file` não levam `destructiveHint`; sobrescrever o destino ainda exige `overwrite=true` e `confirm=true`. `read_note_lines` devolve no máximo 400 linhas (`truncated`, `next_start_line`). As linhas de `search_notes`, do outline e de `read_note_lines` são do arquivo bruto, com o frontmatter incluído.
 
@@ -520,11 +581,19 @@ O seletor de vault fica no topo da barra lateral ("Vault ativo", com o caminho d
 
 Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP. `RuntimeGate` tem uma trava por vault, para ler um enquanto outro sincroniza. Se a trava daquele vault estiver ocupada, a tela pede para esperar em vez de bloquear. O diagnóstico da interface percorre os vaults deste processo; `nix doctor` no terminal abre o seu.
 
-Conectar cliente monta o trecho de Cursor, Claude Code, VS Code, Codex (`~/.codex/config.toml` ou `codex mcp add`) e do Devin CLI (`devin mcp add --scope user`) em `core/admin/client_config.py`, com o executável de `nix_command()` (o mesmo do `nix doctor`). O Devin na nuvem não alcança o processo local. A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo. As páginas saem com `Referrer-Policy: same-origin`, para o POST de um formulário comum levar a origem deste `nix ui`.
+Conectar cliente mostra também o estado dos hooks de sessão do projeto da pasta onde o `nix ui` roda (ou de outro projeto que já tenha sessões, com `?project=`). Monta o trecho de Cursor, Claude Code, VS Code e do Devin CLI (`devin mcp add --scope user`) em `core/admin/client_config.py`, com o executável de `nix_command()` (o mesmo do `nix doctor`). O Devin na nuvem não alcança o processo local. A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo. As páginas saem com `Referrer-Policy: same-origin`, para o POST de um formulário comum levar a origem deste `nix ui`.
 
 Tráfego MCP: o middleware de `mcp/traffic.py` grava cada `tools/call` em `{app_root}/.nix/traffic.db` (`core/admin/traffic.py`), tabela `mcp_calls` com quando, cliente (do `initialize`), ferramenta, argumentos resumidos (só com `logging.log_prompts`), situação, duração e erro. Cada gravação abre e fecha a conexão em WAL (o esquema é criado uma vez por processo), porque servidor e interface são processos diferentes; a interface lê em modo somente leitura e não cria o arquivo. A tabela guarda as 5.000 chamadas mais recentes. O texto de erro só é gravado com `logging.log_prompts`; sem ele o banco guarda apenas que houve erro. Se a gravação falhar, o servidor registra um aviso e tenta de novo na chamada seguinte; depois de 3 falhas seguidas, para de gravar naquele processo. A chamada nunca é afetada.
 
 Backups (`core/admin/backups.py`): lista `{safety.backup_dir}/<nome>/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups daquele vault. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `VaultWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
+
+### 9.4 Hooks de sessão
+
+`nix hooks install` escreve, **no repositório**, o arquivo de hook de cada agente escolhido: `.claude/settings.local.json`, `.cursor/hooks.json`, `.github/hooks/nix.json`, `.devin/hooks.v1.json` e `.devin/hooks.json` (Devin Desktop). Os nomes de evento e os formatos vêm da documentação de cada agente; a tabela `AgentSpec` de `core/admin/agent_hooks.py` os reúne. O `PreToolUse` não é assinado: dobraria o custo por ferramenta. A marca da Nix é o comando `nix hook --event E --agent A`, que `remove` reconhece sem tocar nos hooks do usuário. Antes de alterar um arquivo existente há backup em `safety.backup_dir/hooks/`; rodar de novo troca as entradas da Nix sem duplicar. Copilot e Devin Desktop têm campos por sistema (`bash` com `[ -x ] && ... || true`, `powershell` com `Test-Path`) para terminar em silêncio onde o binário não existe.
+
+`nix hook` não passa pela CLI: `nix_launch.main` o despacha para `core/sessions/hook_entry.py` antes do relançamento do venv e do import do Typer. O módulo usa só a biblioteca padrão: o import de `nix.cli.app` custa cerca de 380 ms e o Pydantic da configuração, 90 a 150 ms. Por isso `nix/__init__.py` e `nix/config/__init__.py` carregam sob demanda, e os limites (`sessions.max_prompt_bytes` etc.) vêm de uma leitura direta do `settings.db` (`limits.py`). Fluxo: stdin → `normalize` (tolerante a cada agente, com sanitização) → descarta se o projeto não tem hooks (`hook_projects`) → `SessionStore.record` → no `session-start`, entrega o handoff pendente no stdout (Cursor `additional_context`; Claude Code e Devin CLI `hookSpecificOutput.additionalContext`; Copilot `additionalContext`; Devin Desktop nada) → no `session-end`, cria o handoff, enfileira a sessão em `.nix/sessions-render.queue` e dispara `nix session render --drain` destacado. Sai sempre com código 0 e o erro vai para `.nix/logs/hook.log`.
+
+O consolidador (`service.consolidate`, com a fila e a trava em `drain.py`) pega uma trava em arquivo (`sessions-drain.lock`, não bloqueante): se outro já roda, sai. Se um consolidador anterior morreu no meio, a fila que ele tomou (`.taking`) volta a ser processada. Quem roda esvazia a fila em lote, com um só Embedder, grava as notas pelo `VaultWriter` e aplica `sessions.retention_days`. Sessões que terminam sem `session-end` (cota esgotada) só ganham nota em `session_handoff` ou `nix session render`.
 
 ## 10. Configuração
 
@@ -536,7 +605,7 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 CREATE TABLE settings (
-    section    TEXT NOT NULL,  -- index, retrieval, safety, logging
+    section    TEXT NOT NULL,  -- index, retrieval, safety, logging, sessions
     key        TEXT NOT NULL,
     value_json TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -564,6 +633,8 @@ CREATE UNIQUE INDEX vaults_one_default
 ```
 
 `schema_version` é `2`. Na abertura, a versão 1 migra para a 2: se `settings` tinha `vault.path` (e, quando existiam, `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder`), esse vault vira a linha `Default`, marcada como padrão. O índice e os backups desse vault continuam na raiz de `index.data_dir` e `safety.backup_dir` (seção 3.1). Sem `vault.path`, o banco fica na versão 2 sem vaults e `nix init` continua valendo. Qualquer outra versão impede o uso e pede `nix init --force`. `--force` apaga ajustes, vaults e histórico e recria o esquema; as notas do Obsidian não são alteradas. Lista vazia de vaults é o estado anterior ao init. Com vaults cadastrados, a validação exige de 1 a 5, exatamente um padrão, nomes únicos sem diferenciar maiúsculas (`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, grafia original preservada) e caminhos que não se sobrepõem. Um nome no formato `AAAAMMDDTHHMMSS` é recusado: é o carimbo das pastas de backup. `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder` nascem em `settings_json` com o padrão do schema e mudam com `nix vault set` (listas e objetos em JSON). `nix vault path` troca a pasta. O editor genérico não grava `vault.*` e aponta para esses comandos.
+
+A seção `sessions` (`enabled`, `vault`, `folder`, `search_default`, `retention_days`, `max_prompt_bytes`, `max_tool_bytes`, `max_note_bytes`, `extra_redact_patterns`) vem desligada (`enabled = false`) e aceita `NIX_SESSIONS__CAMPO`. Só `sessions.enabled` exige reinício do cliente MCP.
 
 O texto de ajuda de cada campo global está no schema Pydantic. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de vaults, para uma remoção também ser percebida.
 
@@ -609,6 +680,10 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-11 | Configuração em `settings.db` na pasta da instalação | TOML, JSON, índice SQLite | A config não se perde ao apagar `.nix/data`. Histórico e desfazer ficam no mesmo arquivo. O ambiente continua ganhando do valor gravado |
 | AD-12 | Interface com Starlette, HTMX e CSS próprio vendidos no pacote | Streamlit, NiceGUI, app com Node; Pico.css; Tailwind | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP. O Pico (sem classes) não cobria menu lateral, selos, abas, diff e cartões sem sobrescrever quase tudo; Tailwind exigiria build ou CDN |
 | AD-13 | Vários vaults no mesmo processo, com um Embedder compartilhado | Uma instalação (e um processo MCP) por vault | Uma conexão MCP atende todos. O modelo de embedding é global e pesado para carregar mais de uma vez. Índice, backup e trava ficam isolados pelo nome. O limite é 5 |
+| AD-14 | `nix hook` com ponto de entrada mínimo, só biblioteca padrão | Chamar a CLI do Typer; fila em arquivo como caminho normal | A CLI custa cerca de 380 ms só de import e estoura o orçamento de 300 ms do hook; a fila fica como exceção |
+| AD-15 | Reaproveitar vetor por hash do texto do chunk | Casar por id (`arquivo:ordinal`); reindexar o arquivo inteiro | O id se desloca a cada inserção no meio da nota; reindexar tudo a cada regravação da nota de sessão custa CPU |
+| AD-16 | Sessões como notas no vault escolhido, sem índice próprio; busca comum as esconde por padrão | Banco vetorial separado para sessões | Reaproveita backup, filtros e índice; `sessions.vault` permite isolá-las num vault só delas |
+| AD-17 | Um consolidador por vez, destacado, para gerar a nota no `session-end` | Gravar a nota dentro do hook; um processo por sessão | O hook não pode carregar o índice; um só processo carrega o modelo uma vez para a fila inteira |
 
 ## 14. Evolução prevista
 

@@ -1,6 +1,6 @@
 # Instalar o Nix
 
-Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot, Codex e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Estas instruções são para **usar** o Nix no seu projeto. Se você vai desenvolver o código, veja o [README.md](README.md).
 
@@ -232,7 +232,7 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
-O mesmo padrão vale para Claude Code, Copilot, Codex (`~/.codex/config.toml` ou `codex mcp add`) e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 

@@ -9,7 +9,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B%20%2F%203.14-blue?style=for-the-badge" alt="Python 3.11+ / 3.14"></a>
 </p>
 
-Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot, Codex e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot e o Devin CLI). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
@@ -80,7 +80,7 @@ O mesmo fluxo, com registro de PATH, é `python scripts/bootstrap.py`. Para desf
 
 ### Skills de agente (desenvolvedor)
 
-As skills usadas no desenvolvimento (revisão de código, atualização da documentação, release e configuração do `AGENTS.md`/`CLAUDE.md`) vêm de [paulocesaaars/skills](https://github.com/paulocesaaars/skills) e ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Codex e Cursor). O `skills-lock.json` registra a origem de cada uma. Não edite as cópias daqui: altere no repositório de skills e atualize, na raiz deste projeto:
+As skills usadas no desenvolvimento (revisão de código, atualização da documentação, release e configuração do `AGENTS.md`/`CLAUDE.md`) vêm de [paulocesaaars/skills](https://github.com/paulocesaaars/skills) e ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor). O `skills-lock.json` registra a origem de cada uma. Não edite as cópias daqui: altere no repositório de skills e atualize, na raiz deste projeto:
 
 ```bash
 npx skills update -y
@@ -89,7 +89,7 @@ npx skills update -y
 Para reinstalar do zero:
 
 ```bash
-npx skills add paulocesaaars/skills -a claude-code -a codex -a cursor --copy -y
+npx skills add paulocesaaars/skills -a claude-code -a cursor --copy -y
 ```
 
 ## Desinstalar
@@ -132,7 +132,7 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
-O mesmo padrão vale para Claude Code, Copilot, Codex (`~/.codex/config.toml` ou `codex mcp add`) e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 ## Primeiros passos
 
@@ -216,7 +216,7 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 
 - **Operação:** status, sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
 - **Vault (somente leitura):** busca em um, em vários ou em todos, notas (com outline e trechos), tags e insights. O seletor "Vault ativo", no topo da barra lateral, usa `?vault=`; sem ele, vale o padrão.
-- **Integração:** trechos prontos para conectar Cursor, Claude Code, VS Code, Codex e Devin CLI; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
+- **Integração:** trechos prontos para conectar Cursor, Claude Code, VS Code e Devin CLI; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita no vault feita pela interface, com confirmação; tela Vaults; formulário de configuração e histórico.
 
 O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.
