@@ -5,7 +5,6 @@ description: >-
   última revisão desses documentos, comparando o código atual com o que está
   documentado. Use quando o usuário pedir para atualizar, sincronizar ou revisar
   a documentação, o PRD, o TDD ou o README após mudanças no código.
-disable-model-invocation: true
 ---
 
 # Atualizar Documentação

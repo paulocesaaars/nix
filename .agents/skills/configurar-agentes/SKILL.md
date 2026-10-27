@@ -2,11 +2,10 @@
 name: configurar-agentes
 description: >-
   Cria ou atualiza o AGENTS.md e o CLAUDE.md do projeto a partir do modelo
-  padrão de instruções de agente, para que Claude Code, Codex, Cursor e Copilot
+  padrão de instruções de agente, para que Claude Code, Cursor e Copilot
   sigam as mesmas regras. Use quando o usuário pedir para configurar, gerar,
   instalar ou atualizar o AGENTS.md, o CLAUDE.md ou as instruções de agente do
   repositório.
-disable-model-invocation: true
 ---
 
 # Configurar Agentes
@@ -22,7 +21,7 @@ na documentação do projeto, nunca no `AGENTS.md`.
 
 | Arquivo | Quem lê | Conteúdo |
 |---------|---------|----------|
-| `AGENTS.md` | Codex, Cursor, Copilot e outros | O modelo |
+| `AGENTS.md` | Cursor, Copilot e outros | O modelo |
 | `CLAUDE.md` | Claude Code | A linha `@AGENTS.md`, que importa o `AGENTS.md` |
 
 ## Fluxo

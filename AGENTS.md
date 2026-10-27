@@ -24,6 +24,12 @@ documentos que existirem.
 
 ## Regras obrigatórias do agente
 
+### Skills e hooks do repositório
+
+Independente do agente, priorize sempre as skills e os hooks **deste
+repositório**. Só depois avalie as skills e os hooks globais, os da pasta da
+conta. Em conflito, vale o do repositório.
+
 ### Conversar não é pedir implementação
 
 **Nunca altere arquivos sem autorização explícita do usuário.** Esta regra

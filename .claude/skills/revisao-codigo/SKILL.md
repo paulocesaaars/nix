@@ -6,7 +6,6 @@ description: >-
   repositório. Apenas sugere melhorias em ordem de criticidade — não implementa.
   Use quando o usuário pedir revisão de código, code review, análise de
   qualidade ou refatoração sugerida.
-disable-model-invocation: true
 ---
 
 # Revisão de Código

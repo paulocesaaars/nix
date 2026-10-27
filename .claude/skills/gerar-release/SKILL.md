@@ -6,7 +6,6 @@ description: >-
   commit e a tag vX.Y.Z e envia ao remoto para disparar o workflow de
   publicação. Use quando o usuário pedir para gerar, criar, cortar ou publicar
   uma release, versão ou tag, ou para commitar tudo agrupado por assunto.
-disable-model-invocation: true
 ---
 
 # Gerar Release
