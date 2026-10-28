@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from nix.config.embedding_models import resolve_embedding_model, unsupported_embedding_message
 from nix.config.loader import (
     clear_config_cache,
     config_document,
@@ -225,6 +226,8 @@ def coerce(field: ConfigField, value: Any) -> Any:
             return _as_lines(field, value)
         if kind == "json":
             return _as_object(field, value)
+        if field.section == "index" and field.key == "embedding_model":
+            return _as_embedding_model(value)
         if kind == "choice":
             return _as_choice(field, value)
         return _as_text(value)
@@ -311,6 +314,14 @@ def _as_object(field: ConfigField, value: Any) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ConfigError(f"{field.dotted} precisa ser um objeto JSON.")
     return parsed
+
+
+def _as_embedding_model(value: Any) -> str:
+    """Grava o id do Hugging Face. Aceita esse id ou a raça; rejeita o número da tabela."""
+    resolved = resolve_embedding_model(str(value))
+    if resolved is None:
+        raise ConfigError(unsupported_embedding_message(str(value)))
+    return resolved
 
 
 def _as_choice(field: ConfigField, value: Any) -> str:

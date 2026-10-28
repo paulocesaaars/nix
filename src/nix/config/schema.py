@@ -10,7 +10,12 @@ from typing import Any, Literal, get_args, get_origin
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
-from nix.config.embedding_models import SUPPORTED_EMBEDDING_MODELS, default_embedding_model
+from nix.config.embedding_models import (
+    SUPPORTED_EMBEDDING_MODELS,
+    default_embedding_model,
+    resolve_embedding_model,
+    unsupported_embedding_message,
+)
 from nix.config.paths import app_root, resolve_app_path, settings_path
 from nix.config.session_defaults import (
     DEFAULT_FOLDER,
@@ -253,12 +258,10 @@ class IndexSettings(AnchoredSettings):
     @field_validator("embedding_model")
     @classmethod
     def embedding_supported(cls, value: str) -> str:
-        if value not in SUPPORTED_EMBEDDING_MODELS:
-            allowed = ", ".join(SUPPORTED_EMBEDDING_MODELS)
-            raise ConfigError(
-                f"index.embedding_model={value!r} não é suportado. Use um de: {allowed}. Depois rode `nix sync --full`."
-            )
-        return value
+        resolved = resolve_embedding_model(value)
+        if resolved is None:
+            raise ConfigError(unsupported_embedding_message(value))
+        return resolved
 
     @field_validator("rerank_model")
     @classmethod

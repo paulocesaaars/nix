@@ -20,7 +20,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 | Camada | Tecnologia | Justificativa |
 | --- | --- | --- |
 | Linguagem | Python 3.11+ (CI e tipos em 3.14) | Ecossistema de IA e requisito do projeto |
-| Embeddings | FastEmbed com `BAAI/bge-m3` (ONNX, CPU) | Local, gratuito, multilíngue (PT/EN), sem GPU, sem dependência de PyTorch |
+| Embeddings | FastEmbed ONNX na CPU. Padrão `lulu` (MiniLM multilíngue, ~220 MB); `spitz` é o `BAAI/bge-m3` (~2,3 GB) | Local, gratuito, multilíngue, sem GPU, sem PyTorch |
 | Banco vetorial | ChromaDB 1.5.x em modo persistente | Local, gratuito, embutido; faixa pinada pelo grafo de import (OTEL/gRPC) |
 | Busca léxica | SQLite FTS5 | Já disponível na stdlib; complementa a busca vetorial em termos exatos |
 | Estado do índice | SQLite | Controle de arquivos, hashes e chunks; transacional |
@@ -31,7 +31,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 | Parsing de Markdown | `python-frontmatter` + splitter consciente de cabeçalhos | Preserva metadados e estrutura das notas |
 | Qualidade | ruff, mypy | Padrão do ecossistema |
 
-**Por que embeddings locais e não `text-embedding-3`:** o requisito é custo zero na indexação. Um vault grande gera dezenas de milhares de chunks e cada reindexação completa teria custo. `bge-m3` roda em CPU, é multilíngue e tem qualidade adequada para busca semântica em notas pessoais.
+**Por que embeddings locais e não `text-embedding-3`:** o requisito é custo zero na indexação. Um vault grande gera dezenas de milhares de chunks e cada reindexação completa teria custo. Os dois modelos rodam na CPU e são multilíngues. A `lulu` é o padrão porque o sync cabe num computador com pouca folga. O `spitz` (`bge-m3`) fica para quem tem CPU, memória e disco de sobra e quer mais qualidade na busca.
 
 **Por que Chroma e não FAISS/LanceDB:** Chroma persiste sozinho, guarda metadados junto do vetor e permite deletar por `file_id` na sincronização incremental. Filtros de pasta/tag/data são aplicados na camada de recuperação (prefixo de pasta, tags, `mtime`), não como `where` de igualdade no Chroma — subpastas continuam visíveis. FAISS exigiria gerenciar o mapeamento id↔metadado manualmente.
 
@@ -57,7 +57,7 @@ graph TB
     subgraph Infra["Infraestrutura local"]
         CHROMA[("ChromaDB<br/>.nix/data/nome/chroma")]
         SQLITE[("SQLite<br/>.nix/data/nome/index.db")]
-        EMB["FastEmbed / bge-m3<br/>CPU, um por processo"]
+        EMB["FastEmbed / lulu (padrão)<br/>CPU, um por processo"]
         FS[("Vault Obsidian<br/>*.md")]
     end
 
@@ -677,7 +677,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 
 | # | Decisão | Alternativas consideradas | Motivo |
 | --- | --- | --- | --- |
-| AD-01 | Embeddings locais (`bge-m3` via FastEmbed) | `text-embedding-3-small` da OpenAI | Custo zero na indexação e reindexação; multilíngue e sem GPU |
+| AD-01 | Embeddings locais (FastEmbed; padrão `lulu`, `spitz` opcional) | `text-embedding-3-small` da OpenAI | Custo zero na indexação e reindexação; multilíngue e sem GPU |
 | AD-02 | ChromaDB persistente | FAISS, LanceDB, Qdrant local, pgvector | Persistência e deleção por `file_id` nativas; filtros de pasta/tag na camada de recuperação |
 | AD-03 | SQLite como estado do índice | Arquivo JSON de manifesto | Transacional, consultável, e traz FTS5 de graça para a busca léxica |
 | AD-04 | Sem LLM no Nix | LangGraph + OpenAI no processo | O raciocínio fica no cliente MCP; o Nix só entrega ferramentas |

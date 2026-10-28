@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 
 from nix.config.editor import ConfigEntry, coerce, require_field, set_many, snapshot
+from nix.config.embedding_present import embedding_choice_label
 from nix.core.errors import ConfigError
 
 _SECTIONS = {
@@ -19,6 +20,12 @@ _ORIGINS = {"env": "ambiente", "db": "settings.db", "default": "padrão"}
 
 
 @dataclass(frozen=True)
+class ChoiceOption:
+    value: str
+    label: str
+
+
+@dataclass(frozen=True)
 class FieldView:
     dotted: str
     description: str
@@ -28,7 +35,7 @@ class FieldView:
     lock_message: str | None
     value_text: str
     checked: bool
-    choices: tuple[str, ...]
+    choices: tuple[ChoiceOption, ...]
     min_value: str | None
     max_value: str | None
     step: str
@@ -94,9 +101,7 @@ def apply_form(form: dict[str, str]) -> SaveResult:
 
 def _view(entry: ConfigEntry) -> FieldView:
     text = _value_text(entry)
-    options = tuple(entry.choices or ())
-    if entry.widget == "choice" and text not in options:
-        options = (text, *options)
+    options = _choice_options(entry, text)
     if not entry.editable and entry.source == "env":
         lock = f"Travado por {entry.env_name}. Essa variável ganha do settings.db."
     elif not entry.editable:
@@ -119,6 +124,21 @@ def _view(entry: ConfigEntry) -> FieldView:
         source=entry.source,
         impacts=_impacts(entry),
     )
+
+
+def _choice_options(entry: ConfigEntry, current: str) -> tuple[ChoiceOption, ...]:
+    values = list(entry.choices or ())
+    if entry.widget == "choice" and current not in values:
+        values.insert(0, current)
+    return tuple(ChoiceOption(value, _choice_label(entry, value)) for value in values)
+
+
+def _choice_label(entry: ConfigEntry, value: str) -> str:
+    if entry.section == "index" and entry.key == "embedding_model":
+        label = embedding_choice_label(value)
+        if label is not None:
+            return label
+    return value
 
 
 def _impacts(entry: ConfigEntry) -> tuple[str, ...]:

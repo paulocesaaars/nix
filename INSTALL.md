@@ -8,7 +8,7 @@ Estas instruções são para **usar** o Nix no seu projeto. Se você vai desenvo
 
 - Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon
 - Um vault do Obsidian (notas `.md`)
-- ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
+- ~220 MB livres na primeira sincronização (modelo padrão `lulu`). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB
 
 Não é preciso instalar Python.
 
@@ -240,7 +240,7 @@ O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). 
 
 Depois do `init` (o instalador já dispara isso):
 
-O primeiro `sync` (ou qualquer operação que embede) baixa o modelo `BAAI/bge-m3` (~2,3 GB) do Hugging Face. Nas seguintes, só o que mudou é reprocessado.
+O primeiro `sync` (ou qualquer operação que embede) baixa o modelo configurado do Hugging Face. O padrão é a `lulu` (~220 MB). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB. Nas seguintes, só o que mudou é reprocessado.
 
 Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
 

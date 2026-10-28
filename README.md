@@ -24,7 +24,7 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
 - Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon
 - Um vault do Obsidian (notas `.md`)
-- ~2,3 GB livres na primeira sincronização (download do modelo `BAAI/bge-m3`)
+- ~220 MB livres na primeira sincronização (modelo padrão `lulu`). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB
 
 Não é preciso instalar Python. O arquivo baixado já traz o runtime.
 
@@ -169,7 +169,7 @@ Se `nix` não for encontrado, o terminal ainda tem o PATH antigo: feche-o e abra
 
 Se o instalador não gravar as variáveis, o passo a passo está só no [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão). Grave o que faltou e abra um **terminal novo**.
 
-O primeiro `sync` (ou qualquer operação que embede) baixa o modelo configurado. O padrão `BAAI/bge-m3` pesa ~2,3 GB. **Não precisa de GPU**, mas na CPU a primeira carga e cada nota podem levar muitos minutos — a barra só avança ao terminar o arquivo. Em máquina fraca com português, use `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (~220 MB) e rode `nix sync --full`. O `nix init` lista a comparação.
+O primeiro `sync` (ou qualquer operação que embede) baixa o modelo configurado. O padrão é a `lulu` (~220 MB). O embedding roda na CPU; a barra só avança ao terminar o arquivo. O `spitz` (`BAAI/bge-m3`, ~2,3 GB) melhora a busca e cada nota pode levar minutos. Troque no `nix init` ou com `nix config set index.embedding_model spitz` e rode `nix sync --full`.
 
 Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
 
