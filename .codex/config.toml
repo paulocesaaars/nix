@@ -1,2 +1,0 @@
-[mcp_servers.nix]
-command = "C:/nix/bin/nix"
