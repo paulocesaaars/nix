@@ -48,7 +48,7 @@ graph TB
 
     subgraph Core["nix.core"]
         TOOLS["Toolbelt<br/>registry.py"]
-        RAG["Serviço de recuperação<br/>híbrido + reordenação"]
+        RAG["Serviço de recuperação<br/>híbrido"]
         IDX["Serviço de indexação<br/>sync incremental / write-through"]
         VAULT["Serviço de vault<br/>leitura, escrita, confinamento"]
         CFG["Configuração<br/>settings.db + env"]
@@ -124,6 +124,11 @@ nix/
 ├── BDD.md                  # índice dos casos de uso do BDD
 ├── bdd/                    # critérios de aceite em Gherkin, um arquivo por caso de uso (um teste por cenário)
 ├── tests/                  # pytest; conftest.py isola NIX_HOME e troca o embedder
+├── DESIGN.md               # estilo visual da CLI e da interface local
+├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
+├── HARNESS.md              # regras específicas deste repositório
+├── skills-lock.json        # origem das skills de desenvolvimento (paulocesaaars/skills)
+├── .claude/skills/ / .agents/skills/ / .devin/skills/  # cópias dessas skills; não editar aqui
 ├── .cursor/
 │   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
@@ -131,7 +136,7 @@ nix/
     ├── nix_frozen.py           # entrada do binário completo; não relança o .venv
     ├── nix_hook_frozen.py      # entrada do binário leve `nix-hook`
     └── nix/
-        ├── __init__.py
+        ├── __init__.py             # versão: pyproject.toml no checkout; metadata no binário
         ├── __main__.py             # python -m nix (pacote instalado)
         ├── skills/                 # SKILL.md de produto; `nix skills install` copia para o projeto
         │   └── sessoes-nix/SKILL.md
@@ -207,7 +212,7 @@ nix/
         │   │   └── index_cmds.py   # sync, status (status via call_tool)
         │   ├── agents.py           # agentes pedidos ou confirmados, e a raiz do projeto
         │   ├── embedding_copy.py   # tabela do nix init; textos em config/embedding_present.py
-        │   └── render.py           # banner, tabelas de sync/status, erros em stderr
+        │   └── render.py           # tema e o resultado de cada comando; erros em stderr
         ├── mcp/
         │   ├── server.py           # FastMCP/MCPServer stdio; recarrega a config entre chamadas
         │   ├── traffic.py          # log de interações MCP (arquivo e .nix/traffic.db)
@@ -221,7 +226,7 @@ nix/
 
 Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `settings.db`.
 
-O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/bootstrap.py` cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`). `scripts/uninstall.py` desfaz esse checkout. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`. O binário é compilado por `scripts/build_frozen.py` com Python 3.12.
+O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/bootstrap.py` cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`). `scripts/uninstall.py` desfaz esse checkout. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`. No checkout, com o pacote em `src/nix`, `nix.__version__` lê `[project].version` desse arquivo, para uma instalação editável não mostrar metadata velho. Fora do checkout, vale o metadata do pacote instalado. O binário é compilado por `scripts/build_frozen.py` com Python 3.12.
 
 ## 5. Modelo de dados
 
@@ -643,7 +648,7 @@ CREATE UNIQUE INDEX vaults_one_default
 
 A seção `sessions` (`enabled`, `vault`, `folder`, `search_default`, `retention_days`, `max_prompt_bytes`, `max_tool_bytes`, `max_note_bytes`, `extra_redact_patterns`) vem desligada (`enabled = false`) e aceita `NIX_SESSIONS__CAMPO`. Só `sessions.enabled` exige reinício do cliente MCP.
 
-O texto de ajuda de cada campo global está no schema Pydantic. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de vaults, para uma remoção também ser percebida.
+O texto de ajuda de cada campo global está no schema Pydantic. `index.embedding_model` grava o id do Hugging Face: `lulu` é `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` e `spitz` é `BAAI/bge-m3`. A raça também é aceita na gravação. O número da tabela do `nix init` não é um id e só vale nesse comando. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de vaults, para uma remoção também ser percebida.
 
 Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, o caminho do vault é gravado com `/`. O histórico permite desfazer uma alteração global (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova. Mudanças de vault entram no mesmo histórico com `section="vaults"`.
 

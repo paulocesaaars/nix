@@ -7,7 +7,7 @@
 | Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `vault`, `config`, `sync`, `status`, `doctor`, `ui`, `session`, `hooks`, `skills`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (`nix` e `nix-hook` em `NIX_HOME`, `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v3.0.0 |
 | Autor | Paulo |
-| Data | 2026-10-27 |
+| Data | 2026-10-28 |
 
 Especificações técnicas: [TDD.md](./TDD.md). Critérios de aceite: [BDD.md](./BDD.md).
 
