@@ -673,7 +673,7 @@ Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem 
 | Reindexação write-through de 1 nota | < 100ms | Escopo de um único arquivo |
 | Busca híbrida | < 500ms | HNSW do Chroma + FTS5, ambos locais |
 
-O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.8 não lista (ex.: `BAAI/bge-m3`) são registrados a partir do catálogo em `config/embedding_models.py`. O primeiro uso baixa o ONNX do Hugging Face. `nix status` não carrega o modelo. `prepare_native_imports` roda na subida do `Runtime`, antes do Chroma e do FastEmbed: no Windows o Controle de Aplicativo pode bloquear `mmh3` e `cygrpc` (comum no Python 3.14 do checkout; o binário publicado é 3.12 e, se ainda bloquear, o `doctor` aponta o cache `onefile-<versão>`). O Nix desbloqueia o import (o Chroma local usa `RustBindingsAPI` e não precisa de gRPC). A dependência é `chromadb>=1.5,<1.6` porque o stub OTEL cobre o grafo de import da série 1.5.
+O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.8 não lista (ex.: `BAAI/bge-m3`) são registrados a partir do catálogo em `config/embedding_models.py`. O primeiro uso baixa o ONNX do Hugging Face por HTTP, com o hf-xet desligado: esse backend aborta o arquivo quando um pedaço chega fora de ordem. `HF_HUB_DISABLE_XET` é definida antes de importar o FastEmbed e não substitui um valor que já esteja no ambiente, então `HF_HUB_DISABLE_XET=0` religa o xet. O aviso de symlink do cache no Windows fica desligado do mesmo jeito. `nix status` não carrega o modelo. `prepare_native_imports` roda na subida do `Runtime`, antes do Chroma e do FastEmbed: no Windows o Controle de Aplicativo pode bloquear `mmh3` e `cygrpc` (comum no Python 3.14 do checkout; o binário publicado é 3.12 e, se ainda bloquear, o `doctor` aponta o cache `onefile-<versão>`). O Nix desbloqueia o import (o Chroma local usa `RustBindingsAPI` e não precisa de gRPC). A dependência é `chromadb>=1.5,<1.6` porque o stub OTEL cobre o grafo de import da série 1.5.
 
 ## 13. Decisões arquiteturais
 
@@ -696,6 +696,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-15 | Reaproveitar vetor por hash do texto do chunk | Casar por id (`arquivo:ordinal`); reindexar o arquivo inteiro | O id se desloca a cada inserção no meio da nota; reindexar tudo a cada regravação da nota de sessão custa CPU |
 | AD-16 | Sessões como notas no vault escolhido, sem índice próprio; busca comum as esconde por padrão | Banco vetorial separado para sessões | Reaproveita backup, filtros e índice; `sessions.vault` permite isolá-las num vault só delas |
 | AD-17 | Um consolidador por vez, destacado, para gerar a nota no `session-end` | Gravar a nota dentro do hook; um processo por sessão | O hook não pode carregar o índice; um só processo carrega o modelo uma vez para a fila inteira |
+| AD-18 | Download do ONNX por HTTP, com hf-xet desligado | hf-xet, padrão do Hugging Face Hub | O xet aborta o arquivo quando um pedaço chega fora de ordem, comum em rede com proxy ou antivírus. `HF_HUB_DISABLE_XET=0` no ambiente religa |
 
 ## 14. Evolução prevista
 

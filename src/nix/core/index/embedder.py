@@ -6,6 +6,7 @@ pede `capture_stdout=False` ao criar o Embedder do processo.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 import warnings
@@ -18,6 +19,13 @@ from nix.observability.logging import get_logger
 from nix.observability.stdio import capture_library_stdout
 
 logger = get_logger("nix.index.embedder")
+
+# O huggingface_hub lê estas variáveis ao ser importado, então valem só antes do
+# primeiro import do FastEmbed. O backend hf-xet falha em algumas redes (proxy,
+# antivírus) com "Byte range not sequential"; o download HTTP comum não falha.
+# O cache do FastEmbed no Windows não tem symlinks, e o aviso só polui a saída.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 _CUSTOM_REGISTERED = False
 
