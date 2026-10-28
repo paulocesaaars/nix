@@ -9,7 +9,7 @@
 | Autor | Paulo |
 | Data | 2026-10-27 |
 
-Especificações técnicas: [TDD.md](./TDD.md).
+Especificações técnicas: [TDD.md](./TDD.md). Critérios de aceite: [BDD.md](./BDD.md).
 
 ---
 
@@ -177,122 +177,51 @@ Guarda as sessões feitas com Claude Code, Cursor, Copilot, Devin CLI e Devin De
 
 Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sessions` e `read_session` (leitura), expostas com `sessions.enabled`. A skill `sessoes-nix` vem no pacote, orienta o agente a chamá-las e entra no projeto com `nix skills install`.
 
-## 6. Histórias de usuário e critérios de aceite
+## 6. Histórias de usuário
+
+Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, com o mesmo ID (`@HU-01`, `@HU-01.1`…). O [BDD.md](./BDD.md) é o índice.
 
 **HU-01 — Primeira configuração**
 > Como usuário, quero apontar o caminho do meu vault e indexá-lo, para o editor passar a consultá-lo.
 
-- Dado que o Nix nunca foi configurado, quando executo `nix init` e informo o vault e o modelo de embedding, então `settings.db` é criado na pasta do Nix com o vault `Default` (caminho com barras `/` no Windows) e `index.embedding_model`.
-- Dado `--name NOME`, `--vault CAMINHO` e `--embedding-model MODELO`, quando executo `nix init`, então não há prompt e o primeiro vault usa esse nome e esse caminho.
-- Dado que a configuração já existe e não passei `--force` nem `--embedding-model`, quando executo `nix init`, então só o caminho do vault padrão é atualizado e o restante permanece.
-- Dado que já existem vaults e passo `--name`, quando executo `nix init`, então o comando recusa e pede `nix vault add`.
-- Dado que o caminho informado no prompt ainda não existe, quando confirmo a criação, então o diretório é criado e gravado no vault.
-- Dado que o caminho de um vault não existe, quando valido com `nix doctor`, então recebo um erro apontando esse vault e o caminho.
-
 **HU-02 — Indexar um vault existente**
 > Como usuário com um vault de anos, quero indexar tudo de uma vez, para poder consultar meu histórico.
-
-- Dado um vault com N notas em Markdown, quando executo `nix sync`, então todas as notas não ignoradas são vetorizadas e um resumo com contagens e tempo é exibido.
-- Dado que o processo é longo, quando a sincronização roda, então vejo progresso incremental.
-- Dado que uma nota tem encoding inválido, quando a sincronização roda, então ela é reportada como erro ao final e as demais são indexadas normalmente.
 
 **HU-03 — Sincronizar mudanças feitas no Obsidian**
 > Como usuário, depois de escrever direto no Obsidian, quero atualizar o índice quando eu decidir.
 
-- Dado que editei 3 notas e apaguei 1 fora do Nix, quando executo `nix sync` (ou `sync_index`), então apenas essas 4 notas são reprocessadas e a apagada é removida do índice.
-- Dado que nada mudou, quando executo a sincronização, então nenhuma nota é reprocessada e isso é informado.
-- Dado que o vault mudou e eu não sincronizei, quando chamo `index_status`, então recebo aviso de índice desatualizado — e nenhuma vetorização automática acontece.
-
 **HU-04 — Instalar o ambiente**
 > Como usuário, quero um único arquivo para copiar, sem instalar Python, e que a configuração do vault comece em seguida.
-
-- Dado um Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon, sem Python no PATH, quando executo `install.bat`, `.\install.ps1` ou `sh install.sh`, então o binário da plataforma é baixado, o SHA-256 confere, `NIX_HOME` aponta para a pasta da instalação, `{NIX_HOME}/bin` entra no PATH do usuário, `nix init` pergunta o vault se ainda não houver `settings.db`, e a mensagem de **configuração concluída** é exibida.
-- Dado que a instalação concluiu, quando abro um **novo** terminal em qualquer diretório, então `nix sync` (e os demais subcomandos) são encontrados no PATH.
-- Dado que já existe outro `nix` no PATH (gerenciador NixOS/Nixpkgs), quando o instalador registra o comando, então um aviso é emitido e este projeto passa a ter prioridade no PATH.
-- Dado `--vault CAMINHO` no instalador, quando ele chega no `init`, então o argumento é repassado e o prompt do vault é pulado.
-- Dado que `NIX_HOME` já aponta para uma pasta com `settings.db`, quando rodei o instalador de novo, então essa pasta é preservada, o binário em `{NIX_HOME}/bin` é substituído e o `init` não é repetido.
-- Dado Windows arm64 ou macOS Intel, quando executo o instalador, então ele recusa a arquitetura e diz qual binário existe.
 
 **HU-07 — Desinstalar o ambiente**
 > Como usuário, quero um único executável que desfaça a instalação sem apagar o vault.
 
-- Dado uma instalação concluída, quando executo `uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh` e confirmo, então `NIX_HOME` e `{NIX_HOME}/bin` saem do PATH do usuário, o binário, `.nix/` e `settings.db` são apagados, e o vault permanece intacto.
-- Dado `--keep-data`, quando desinstalo, então o PATH é desfeito e o binário some, mas `settings.db` e `.nix/` permanecem.
-- Dado `--yes` (ou `-y`), quando não há terminal interativo, então a confirmação é dispensada e a desinstalação segue.
-- Dado que `NIX_HOME` aponta para outra pasta, quando desinstalo esta cópia, então a variável e o bloco de shell da outra instalação não são removidos.
-- Dado que a desinstalação concluiu, quando abro um **novo** terminal, então o comando `nix` deste projeto não é encontrado no PATH.
-
 **HU-05 — Registrar conhecimento pelo editor**
 > Como usuário, quero pedir ao agente do editor que crie uma nota, e que ela já fique pesquisável.
-
-- Dado que peço a criação de uma nota, quando ela é gravada no vault, então imediatamente após a operação ela já retorna em buscas — sem sincronização manual.
-- Dado que a nota já existe, quando peço para sobrescrever, então a ferramenta exige `confirm=true`.
-- Dado que peço para gravar fora do vault, quando a operação é tentada, então ela é rejeitada.
 
 **HU-06 — Usar o Nix dentro do Cursor (ou equivalente)**
 > Como usuário, quero acessar meu vault de dentro do editor.
 
-- Dado o Nix registrado no cliente MCP com `command` apontando para o binário na pasta da instalação (Windows: `${env:NIX_HOME}/bin/nix.exe` ou o caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto), quando peço ao agente do editor algo sobre minhas notas, então ele usa as ferramentas do Nix e recebe trechos com caminho e citação.
-- Dado `"command": "nix"` (só o nome no PATH) na IDE aberta pelo Dock/menu, quando o cliente tenta iniciar o processo, então a conexão falha com `spawn nix ENOENT`.
-- Dado macOS ou Linux, quando o `command` do MCP é o caminho absoluto da linha `comando nix:` do `nix doctor` (`{NIX_HOME}/bin/nix`), então o servidor sobe.
-- Dado que peço uma alteração de nota via MCP, quando ela é aplicada, então o índice é atualizado automaticamente.
-- Dado `update_note` em modo replace ou `delete_note`, quando o cliente chama a ferramenta, então a escrita só ocorre com `confirm=true` após aprovação (anotação `destructiveHint`).
-
 **HU-08 — Configurar e operar pela interface**
 > Como usuário, quero ver o índice, sincronizar e ajustar a configuração sem editar arquivo à mão.
-
-- Dado que já rodei `nix init`, quando executo `nix ui`, então o navegador abre numa página local e o terminal mostra a URL.
-- Dado que ainda não configurei, quando executo `nix ui`, então o comando pede `nix init` e não sobe servidor.
-- Dado a página de configuração, quando salvo um campo válido, então o valor passa a valer e a origem deixa de ser o padrão.
-- Dado um campo definido por variável de ambiente, quando abro a configuração, então o campo aparece travado.
-- Dado que desfaço uma alteração no histórico, quando a operação termina, então o valor anterior volta a valer.
-- Dado o botão Encerrar ou Ctrl+C no terminal, quando confirmo e não há sincronização, então o processo da interface termina.
-- Dado uma sincronização em andamento, quando clico em Encerrar, então a página pede para esperar. Ctrl+C nesse meio só fecha o índice depois que a sincronização termina.
-- Dado o índice sincronizado, quando busco uma pergunta na tela Busca, então vejo os mesmos trechos que `search_notes` devolveria, com caminho, linhas e pontuação.
-- Dado um cliente MCP que chamou ferramentas, quando abro Tráfego MCP, então vejo cada chamada com cliente, duração e situação, sem os argumentos se `logging.log_prompts` estiver desligado.
-- Dado um backup de uma nota, quando marco a confirmação e restauro, então a nota volta ao conteúdo do backup, o estado anterior ganha backup e o índice é atualizado.
 
 **HU-09 — Ferramenta sem vault**
 > Como usuário, quero que o agente use o vault padrão quando a chamada não disser qual.
 
-- Dado mais de um vault e um padrão, quando uma ferramenta é chamada sem `vault`, então a operação usa o padrão.
-- Dado `list_vaults`, quando o agente a chama, então recebe nome, caminho, qual é o padrão e se o índice daquele vault está desatualizado.
-
 **HU-10 — Vault inexistente**
 > Como usuário, quero um erro que mostre os vaults que existem quando o nome estiver errado.
-
-- Dado um nome que não está cadastrado, quando uma ferramenta, um recurso ou um comando pede esse vault, então o erro lista os vaults existentes e diz qual é o padrão.
-- Dado a comparação de nomes, quando informo `default` e o cadastrado é `Default`, então o vault encontrado é o `Default`.
 
 **HU-11 — Escrita recebendo lista**
 > Como usuário, quero que uma escrita não se espalhe por vários vaults numa chamada só.
 
-- Dado `create_note` (ou outra ferramenta de escrita) com `vault` em lista ou `"*"`, quando a chamada chega, então ela é recusada e pede um único nome, ou omitir para usar o padrão.
-- Dado a mesma escrita com um nome só, quando a chamada chega, então o arquivo fica só naquele vault.
-
 **HU-12 — Busca em todos**
 > Como usuário, quero uma busca que olhe todos os vaults de uma vez.
-
-- Dado vários vaults indexados, quando `search_notes` recebe `vault` igual a `"*"`, então os trechos vêm do conjunto, cada um com o vault de origem.
-- Dado que um desses vaults falha, quando a busca termina, então os outros trechos continuam na resposta e a falha vem à parte, com a ação corretiva.
-- Dado `list_notes` com um limite e mais de um vault, quando a ferramenta responde, então o limite vale em cada vault e a resposta junta as listas.
-- Dado `list_all_tags` com um limite e tags em mais de um vault, quando a ferramenta responde, então as contagens são somadas e o limite vale só na lista já somada.
 
 **HU-13 — Remover o padrão**
 > Como usuário, quero que sempre exista um vault padrão.
 
-- Dado dois ou mais vaults, quando tento remover o padrão, então a operação é recusada até eu escolher outro com `nix vault default`.
-- Dado o único vault, quando tento removê-lo, então a operação é recusada.
-- Dado `nix vault rename ANTIGO NOVO`, quando o nome muda, então o índice e os backups permanecem na pasta do nome anterior e a CLI pede `nix sync --full --vault NOVO` se a busca ficar vazia.
-- Dado uma sincronização daquele vault em andamento, quando tento renomear, remover, trocar a pasta ou gravar um ajuste, então a operação é recusada e pede para esperar o término.
-
 **HU-14 — Botões desligados durante o sync**
 > Como usuário, quero que a sincronização da interface não seja disparada de novo enquanto a anterior não termina.
-
-- Dado que inicio a sincronização na interface, quando o pedido é aceito, então prévia, incremental, reindexação completa e a opção de todos os vaults ficam desligados até o job terminar.
-- Dado o job ainda em andamento, quando recarrego a página de sincronizar, então esses controles continuam desligados.
-- Dado que o job terminou, quando a página mostra o resultado, então os controles voltam a funcionar.
-- Dado um job já em andamento, quando peço outro ou uma prévia, então a interface pede para esperar, o progresso continua na tela e a prévia não varre o vault.
 
 ## 7. Requisitos não funcionais
 

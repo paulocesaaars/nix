@@ -109,6 +109,7 @@ nix/
 ├── scripts/bootstrap.py    # venv + pip + init (desenvolvimento)
 ├── scripts/build_frozen.py # Nuitka onefile, Python 3.12, na plataforma local
 ├── scripts/smoke_frozen.py # gate de --version e doctor do binário
+├── scripts/check_bdd.py    # cobertura dos cenários de bdd/ pelos testes
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
 ├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
 ├── nix.jpeg                # foto da Nix (mascote no README)
@@ -120,9 +121,9 @@ nix/
 ├── README.md
 ├── PRD.md
 ├── TDD.md
-├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
-├── skills-lock.json        # origem das skills (paulocesaaars/skills)
-├── .claude/skills/ / .agents/skills/  # cópias das skills de desenvolvimento; não editar aqui
+├── BDD.md                  # índice dos casos de uso do BDD
+├── bdd/                    # critérios de aceite em Gherkin, um arquivo por caso de uso (um teste por cenário)
+├── tests/                  # pytest; conftest.py isola NIX_HOME e troca o embedder
 ├── .cursor/
 │   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
@@ -694,3 +695,26 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 ## 14. Evolução prevista
 
 - Conjunto de avaliação `eval/` (harness e perguntas; ainda não está no repositório).
+
+## 15. Testes e critérios de aceite
+
+Os critérios de aceite ficam em Gherkin na pasta [`bdd/`](./bdd), um arquivo por
+caso de uso; o [BDD.md](./BDD.md) é o índice. Cada cenário
+tem um ID (`@HU-03.2`) e o teste que o cobre leva o mesmo ID:
+
+```python
+@pytest.mark.bdd("HU-03.2")
+def test_sync_without_changes(vault: Path, fake_embedder: type[FakeEmbedder]) -> None: ...
+```
+
+- **Rodar:** `pytest` (dependência de desenvolvimento). `-m "not slow"` pula o
+  que usa o modelo de embedding real.
+- **Fixtures** (`tests/conftest.py`): `nix_home` é automática e aponta
+  `app_root` para uma pasta temporária, então nenhum teste toca no
+  `settings.db` nem no `.nix/` do checkout; `vault` cria um vault temporário;
+  `fake_embedder` troca o FastEmbed por vetores determinísticos, sem baixar o
+  ONNX.
+- **Cobertura:** `python scripts/check_bdd.py` lista os cenários sem teste, falha se um
+  teste apontar para um ID inexistente e confere se o índice e a pasta `bdd/`
+  batem. `--strict` também falha
+  com cenário sem teste. Cenários `@manual` viram checklist da release.

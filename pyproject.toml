@@ -42,6 +42,15 @@ ignore = ["B008"]
 [tool.ruff.lint.isort]
 known-first-party = ["nix", "nix_launch"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "bdd(id): cenário do BDD.md coberto pelo teste (ex.: \"HU-03.2\")",
+    "slow: usa recurso pesado (modelo de embedding real); fora do pre-commit",
+]
+
 [tool.mypy]
 python_version = "3.14"
 mypy_path = "src"
