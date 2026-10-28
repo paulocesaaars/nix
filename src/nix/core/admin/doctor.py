@@ -44,6 +44,13 @@ class DoctorReport:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    def counts(self) -> dict[str, int]:
+        """Quantas verificações há em cada nível."""
+        tally = {"ok": 0, "warn": 0, "error": 0}
+        for check in self.checks:
+            tally[check.level] += 1
+        return tally
+
 
 def session_activate_hint() -> str:
     root = app_root()

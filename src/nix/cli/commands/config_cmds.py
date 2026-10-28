@@ -8,7 +8,7 @@ from typing import Any
 import typer
 
 from nix.cli.deps import with_errors
-from nix.cli.render import console
+from nix.cli.render import console, highlight, print_config, print_history, print_note, print_success, print_warning
 from nix.config.editor import (
     history,
     revert_change,
@@ -21,9 +21,6 @@ from nix.config.loader import require_initialized
 from nix.core.errors import ConfigError
 
 config_app = typer.Typer(help="Lê e grava a configuração", no_args_is_help=True)
-
-_SOURCE_LABEL = {"env": "ambiente", "db": "settings.db", "default": "padrão"}
-
 
 def _show_value(value: Any) -> str:
     if isinstance(value, str):
@@ -42,16 +39,7 @@ def cmd_list(
     if as_json:
         console.print_json(json.dumps([entry.__dict__ for entry in entries], ensure_ascii=False))
         return
-    for entry in entries:
-        origin = _SOURCE_LABEL.get(entry.source, entry.source)
-        lock = ""
-        if entry.source == "env":
-            lock = f" (travado por {entry.env_name})"
-        elif not entry.editable:
-            lock = " (fixo)"
-        console.print(f"[cyan]{entry.dotted}[/cyan] = {_show_value(entry.value)}  [dim]{origin}{lock}[/dim]")
-        if entry.description:
-            console.print(f"  [dim]{entry.description}[/dim]")
+    print_config(entries)
 
 
 @config_app.command("get")
@@ -64,7 +52,7 @@ def cmd_get(
     section, name = split_key(key)
     for entry in snapshot():
         if entry.section == section and entry.key == name:
-            console.print(_show_value(entry.value))
+            typer.echo(_show_value(entry.value))
             return
     raise ConfigError(f"Campo {section}.{name} não existe. Rode `nix config list` para ver os campos.")
 
@@ -80,11 +68,11 @@ def cmd_set(
     section, name = split_key(key)
     result = set_value(section, name, value, source="cli")
     if result.changed:
-        console.print(f"[cyan]{result.dotted}[/cyan] atualizado.")
+        print_success(f"{highlight(result.dotted)} atualizado.")
     else:
-        console.print(f"[cyan]{result.dotted}[/cyan] já estava com esse valor.")
+        print_success(f"{highlight(result.dotted)} já estava com esse valor.")
     if result.warning:
-        console.print(f"[yellow]{result.warning}[/yellow]")
+        print_warning(result.warning)
 
 
 @config_app.command("unset")
@@ -96,9 +84,9 @@ def cmd_unset(
     require_initialized()
     section, name = split_key(key)
     result = unset_value(section, name, source="cli")
-    console.print(f"[cyan]{result.dotted}[/cyan] voltou ao padrão.")
+    print_success(f"{highlight(result.dotted)} voltou ao padrão.")
     if result.warning:
-        console.print(f"[yellow]{result.warning}[/yellow]")
+        print_warning(result.warning)
 
 
 @config_app.command("history")
@@ -129,14 +117,9 @@ def cmd_history(
         )
         return
     if not rows:
-        console.print("Nenhuma alteração registrada.")
+        print_note("Nenhuma alteração registrada.")
         return
-    for row in rows:
-        console.print(
-            f"[cyan]#{row.id}[/cyan] {row.changed_at} {row.source} [bold]{row.dotted}[/bold]"
-        )
-        console.print(f"  anterior: {_show_value(row.old_value)}")
-        console.print(f"  novo: {_show_value(row.new_value)}")
+    print_history(rows)
 
 
 @config_app.command("undo")
@@ -153,6 +136,6 @@ def cmd_undo(
             raise ConfigError("Não há alterações para desfazer.")
         target = rows[0].id
     result = revert_change(target, source="cli")
-    console.print(f"[cyan]{result.dotted}[/cyan] restaurado.")
+    print_success(f"{highlight(result.dotted)} restaurado.")
     if result.warning:
-        console.print(f"[yellow]{result.warning}[/yellow]")
+        print_warning(result.warning)

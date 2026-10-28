@@ -6,9 +6,10 @@ import json
 import sqlite3
 
 import typer
+from rich.markup import escape
 
 from nix.cli.deps import get_host, with_errors
-from nix.cli.render import console
+from nix.cli.render import console, print_header, print_note, print_success, print_table, print_warning
 from nix.config.loader import load_config
 from nix.config.schema import NixConfig
 from nix.core.errors import ConfigError
@@ -68,23 +69,24 @@ def cmd_list(
         console.print_json(json.dumps(payload, ensure_ascii=False))
         return
     if not rows:
-        console.print(NO_SESSION_HINT)
+        print_note(NO_SESSION_HINT)
         return
-    from rich.table import Table
-
-    table = Table(title=f"Sessões de {key}")
-    for column in ("Atualizada", "Agente", "Id", "Estado", "Eventos", "Nota"):
-        table.add_column(column)
-    for row in rows:
-        table.add_row(
-            row.updated[:16].replace("T", " "),
-            AGENT_LABELS.get(row.agent, row.agent),
-            row.short_id,
-            row.status,
-            str(row.events),
-            row.note_path or "—",
-        )
-    console.print(table)
+    print_header("sessões")
+    print_table(
+        f"Sessões de {key}",
+        ("Atualizada", "Agente", "Id", "Estado", "Eventos", "Nota"),
+        [
+            (
+                row.updated[:16].replace("T", " "),
+                AGENT_LABELS.get(row.agent, row.agent),
+                row.short_id,
+                row.status,
+                str(row.events),
+                row.note_path or "—",
+            )
+            for row in rows
+        ],
+    )
 
 
 @session_app.command("show", help="Mostra uma sessão")
@@ -122,14 +124,17 @@ def cmd_handoff(
     store = SessionStore()
     if cancel:
         done = store.cancel_handoff(key)
-        console.print("Handoff cancelado." if done else "Não havia handoff pendente neste projeto.")
+        if done:
+            print_success("Handoff cancelado.")
+        else:
+            print_note("Não havia handoff pendente neste projeto.")
         return
     if create:
         if agent and agent not in AGENTS:
             raise ConfigError(f"Agente {agent!r} desconhecido. Use um de: {', '.join(AGENTS)}.")
         source = pick_source(store, key, agent=agent)
         if source is None:
-            console.print(NO_SESSION_HINT)
+            print_note(NO_SESSION_HINT)
             return
         created = create_for_session(store, source, config.sessions.folder)
         host = get_host()
@@ -137,21 +142,21 @@ def cmd_handoff(
             note, error = write_note(host, store, source.key)
         finally:
             host.close()
-        console.print(f"Handoff criado a partir de {source.agent} {source.short_id}.")
+        print_success(f"Handoff criado a partir de {source.agent} {source.short_id}.")
         if error:
-            console.print(f"[yellow]A nota não foi gravada: {error}[/yellow]")
+            print_warning(f"A nota não foi gravada: {error}")
         elif note:
-            console.print(f"Nota: {note}")
+            print_note(f"Nota: {escape(str(note))}")
         typer.echo(created.text)
         return
     pending = store.pending_handoff(key)
     if pending is None:
         if not store.list_sessions(project=key, limit=1):
-            console.print(NO_SESSION_HINT)
+            print_note(NO_SESSION_HINT)
         else:
-            console.print("Não há handoff pendente. Crie um com `nix session handoff --create`.")
+            print_note("Não há handoff pendente. Crie um com `nix session handoff --create`.")
         return
-    console.print(f"Handoff pendente (criado em {pending.created_at}, sessão {pending.session_key}):")
+    print_note(f"Handoff pendente (criado em {pending.created_at}, sessão {escape(pending.session_key)}):")
     typer.echo(pending.text)
 
 
@@ -170,7 +175,7 @@ def cmd_render(
     store = SessionStore()
     targets = [_find(store, ref, key)] if ref else store.list_sessions(project=key, limit=_RENDER_LIMIT)
     if not targets:
-        console.print(NO_SESSION_HINT)
+        print_note(NO_SESSION_HINT)
         return
     host = get_host()
     failures: list[str] = []
@@ -190,17 +195,21 @@ def cmd_render(
                 failures.append(f"{row.short_id}: {message}")
                 continue
             state = "gravada" if result.written else "sem mudança"
-            console.print(f"{row.short_id} ({row.agent}): {state} em {result.vault}/{result.rel_path}")
+            line = f"{row.short_id} ({row.agent}): {state} em {escape(result.vault)}/{escape(result.rel_path)}"
+            if result.written:
+                print_success(line)
+            else:
+                print_note(line)
         try:
             removed = store.purge(config.sessions.retention_days)
         except sqlite3.Error as exc:
-            console.print(
-                f"[yellow]As notas foram gravadas, mas a retenção não rodou ({exc}). "
-                "Rode `nix session render` de novo quando nenhum agente estiver gravando.[/yellow]"
+            print_warning(
+                f"As notas foram gravadas, mas a retenção não rodou ({exc}). "
+                "Rode `nix session render` de novo quando nenhum agente estiver gravando."
             )
         else:
             if removed:
-                console.print(f"[dim]{removed} eventos antigos apagados (sessions.retention_days).[/dim]")
+                print_note(f"{removed} eventos antigos apagados (sessions.retention_days).")
     finally:
         host.close()
     if failures:

@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 
 import typer
+from rich.markup import escape
 
 from nix.cli.deps import with_errors
-from nix.cli.render import console
+from nix.cli.render import console, highlight, print_note, print_success, print_vaults, print_warning
 from nix.config.loader import require_initialized
 from nix.core.admin.vaults import VaultService
 
@@ -34,11 +35,9 @@ def cmd_list(as_json: bool = typer.Option(False, "--json", help="Saída JSON")) 
         console.print_json(json.dumps(payload, ensure_ascii=False))
         return
     if not rows:
-        console.print("Nenhum vault. Rode `nix init` para cadastrar o primeiro.")
+        print_warning("Nenhum vault. Rode `nix init` para cadastrar o primeiro.")
         return
-    for row in rows:
-        mark = " [dim](padrão)[/dim]" if row.is_default else ""
-        console.print(f"[cyan]{row.name}[/cyan]{mark}  {row.path}")
+    print_vaults(rows)
 
 
 @vault_app.command("add")
@@ -49,9 +48,9 @@ def cmd_add(
 ) -> None:
     """Cadastra um vault. O primeiro vira o padrão. O limite é 5."""
     vault = _service().add(name, path, source="cli")
-    console.print(f"Vault [cyan]{vault.name}[/cyan] cadastrado em {vault.path}.")
+    print_success(f"Vault {highlight(vault.name)} cadastrado em {escape(str(vault.path))}.")
     if vault.is_default:
-        console.print("Este é o vault padrão.")
+        print_note("Este é o vault padrão.")
 
 
 @vault_app.command("rename")
@@ -62,10 +61,10 @@ def cmd_rename(
 ) -> None:
     """Troca o nome. Não move o índice nem os backups."""
     vault = _service().rename(old, new, source="cli")
-    console.print(f"Vault renomeado para [cyan]{vault.name}[/cyan].")
-    console.print(
-        "[dim]O índice e os backups continuam na pasta do nome anterior. "
-        f"Se a busca ficar vazia, rode `nix sync --full --vault {vault.name}`.[/dim]"
+    print_success(f"Vault renomeado para {highlight(vault.name)}.")
+    print_note(
+        "O índice e os backups continuam na pasta do nome anterior. "
+        f"Se a busca ficar vazia, rode `nix sync --full --vault {escape(vault.name)}`."
     )
 
 
@@ -74,7 +73,8 @@ def cmd_rename(
 def cmd_remove(name: str = typer.Argument(..., help="Nome do vault")) -> None:
     """Remove um vault que não seja o último nem o padrão."""
     _service().remove(name, source="cli")
-    console.print(f"Vault [cyan]{name}[/cyan] removido. O índice em disco não foi apagado.")
+    print_success(f"Vault {highlight(name)} removido.")
+    print_note("O índice em disco não foi apagado.")
 
 
 @vault_app.command("default")
@@ -82,7 +82,7 @@ def cmd_remove(name: str = typer.Argument(..., help="Nome do vault")) -> None:
 def cmd_default(name: str = typer.Argument(..., help="Nome do vault padrão")) -> None:
     """Define o vault usado quando o nome é omitido."""
     vault = _service().set_default(name, source="cli")
-    console.print(f"Vault padrão: [cyan]{vault.name}[/cyan].")
+    print_success(f"Vault padrão: {highlight(vault.name)}.")
 
 
 @vault_app.command("path")
@@ -93,8 +93,8 @@ def cmd_path(
 ) -> None:
     """Troca a pasta de um vault já cadastrado. A pasta precisa existir."""
     vault = _service().set_path(name, path, source="cli")
-    console.print(f"Vault [cyan]{vault.name}[/cyan] agora aponta para {vault.path}.")
-    console.print(f"[dim]Rode `nix sync --vault {vault.name}` para alinhar o índice.[/dim]")
+    print_success(f"Vault {highlight(vault.name)} agora aponta para {escape(str(vault.path))}.")
+    print_note(f"Rode `nix sync --vault {escape(vault.name)}` para alinhar o índice.")
 
 
 @vault_app.command("set")
@@ -106,6 +106,6 @@ def cmd_set(
 ) -> None:
     """Grava um ajuste daquele vault. Não altera a configuração global."""
     vault, warning = _service().set_setting(name, key, value, source="cli")
-    console.print(f"Ajuste gravado no vault [cyan]{vault.name}[/cyan].")
+    print_success(f"Ajuste gravado no vault {highlight(vault.name)}.")
     if warning:
-        console.print(f"[dim]{warning}[/dim]")
+        print_note(escape(warning))

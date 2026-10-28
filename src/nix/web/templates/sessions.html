@@ -49,7 +49,7 @@
 </section>
 
 {% if view.pending %}
-<section class="card stack" style="border-color: var(--accent-line, #9fd3c9)">
+<section class="card stack" style="border-color: var(--accent-line)">
   <div class="row between">
     <div class="row"><h2>Handoff pendente</h2><span class="badge b-a">1 por projeto</span></div>
     <span class="muted small">criado em {{ view.pending.created_at | when }} · sessão <span class="mono">{{ view.pending.session_key }}</span></span>

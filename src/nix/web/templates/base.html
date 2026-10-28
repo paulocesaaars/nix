@@ -13,13 +13,14 @@
   <meta name="referrer" content="same-origin">
   <meta name="csrf" content="{{ csrf_token }}">
   <title>{{ title }} — Nix</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/nix.css">
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
   <div class="app">
     <aside class="side" aria-label="Navegação principal">
       <div class="brand">
-        <span class="logo" aria-hidden="true">n</span>
+        <img class="logo" src="/static/favicon.svg" alt="" width="30" height="30">
         <strong>nix</strong>
         <span class="ver">v{{ nix_version }}</span>
       </div>

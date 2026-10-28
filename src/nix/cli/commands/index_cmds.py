@@ -10,8 +10,9 @@ from nix.cli.deps import get_host, with_errors
 from nix.cli.render import (
     apply_sync_progress,
     console,
+    print_header,
     print_status,
-    print_tokenizer_warning,
+    print_sync_report,
     sync_progress,
 )
 from nix.config.embedding_present import sync_model_hint
@@ -69,8 +70,11 @@ def cmd_sync(
         for failure in opened.errors:
             failures.append(f"{failure.name}: {failure.message}")
         runtimes = opened.runtimes
+        if not as_json:
+            print_header("prévia da sincronização" if dry_run else "sincronização")
         if not dry_run and not as_json and runtimes:
-            console.print(f"[dim]{sync_model_hint(runtimes[0].config.index.embedding_model)}[/dim]")
+            console.print(f" [dim]{sync_model_hint(runtimes[0].config.index.embedding_model)}[/dim]")
+            console.print()
         with sync_progress() as progress:
             progress.add_task("Sincronizando", total=1)
             for runtime in runtimes:
@@ -88,7 +92,7 @@ def cmd_sync(
                 report.vault_name = runtime.vault.name
                 reports.append((runtime.vault.name, report))
                 if not as_json:
-                    _print_sync(
+                    print_sync_report(
                         runtime.vault.name,
                         runtime.vault.root,
                         list(runtime.vault.exclude),
@@ -112,30 +116,6 @@ def cmd_sync(
         raise ConfigError(f"A sincronização falhou em algum vault. {detail}")
 
 
-def _print_sync(
-    name: str,
-    root: object,
-    excludes: list[str],
-    report: SyncReport,
-    events: list[SyncProgressEvent],
-    dry_run: bool,
-) -> None:
-    prefix = "Pré-visualização: " if dry_run else ""
-    console.print(prefix + report.summary_pt())
-    print_tokenizer_warning(approximate=report.tokenizer_approximate)
-    console.print(f"Vault {name}: {root}")
-    processed = [event for event in events if event.action != "load_model"]
-    if processed:
-        console.print("Arquivos:")
-        for event in processed:
-            label = f"{event.vault} " if event.vault else ""
-            console.print(f"  {label}{event.action} {event.rel_path}")
-    if excludes:
-        console.print(f"[dim]Pastas ignoradas (vault.exclude): {', '.join(excludes)}[/dim]")
-    for err in report.errors:
-        console.print(f"[red]{err}[/red]")
-
-
 @with_errors
 def cmd_status(
     as_json: bool = typer.Option(False, "--json"),
@@ -153,11 +133,10 @@ def cmd_status(
         return
     rows = payload.get("vaults") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
+        print_header()
         print_status(_status_from_payload(payload))
         return
+    print_header()
     for item in rows:
         if isinstance(item, dict):
-            title = str(item.get("vault") or "")
-            if title:
-                console.print(f"[bold]{title}[/bold]")
-            print_status(_status_from_payload(item))
+            print_status(_status_from_payload(item), vault=str(item.get("vault") or "") or None)

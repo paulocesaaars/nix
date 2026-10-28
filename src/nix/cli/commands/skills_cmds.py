@@ -7,7 +7,15 @@ from rich.markup import escape
 
 from nix.cli.agents import choose_agents, project_root
 from nix.cli.deps import with_errors
-from nix.cli.render import console
+from nix.cli.render import (
+    console,
+    print_header,
+    print_note,
+    print_plan,
+    print_success,
+    print_table,
+    print_warning,
+)
 from nix.config.loader import load_config
 from nix.core.admin import agent_skills
 from nix.core.errors import ConfigError
@@ -45,31 +53,30 @@ def cmd_install(
             "Rode `nix skills status` para ver as pastas e tente de novo."
         )
 
-    console.print(f"Projeto: {escape(key)}")
-    for plan in plans:
-        readers = agent_skills.reader_label(plan.destination)
-        console.print(f"  {plan.action:<12} {escape(plan.rel)}  [dim]{escape(readers)}[/dim]")
+    print_header("skills da Nix")
+    print_plan(key, [(plan.action, plan.rel, agent_skills.reader_label(plan.destination)) for plan in plans])
     if dry_run:
         shown: set[str] = set()
         for plan in plans:
             if plan.name in shown:
                 continue
             shown.add(plan.name)
-            console.print(f"\n[bold]{escape(plan.name)}/SKILL.md[/bold]")
+            console.print()
+            console.print(f"[bold]{escape(plan.name)}/SKILL.md[/bold]")
             typer.echo(agent_skills.skill_markdown(plan.name))
-        console.print("[dim]Nada foi escrito (--dry-run).[/dim]")
+        print_note("Nada foi escrito (--dry-run).")
         return
     if all(plan.action == "sem mudança" for plan in plans):
-        console.print("As skills já estão como a Nix escreveria.")
+        print_success("As skills já estão como a Nix escreveria.")
         return
     if not yes and not typer.confirm("Escrever estas skills?", default=False):
-        console.print("Nada foi escrito.")
+        print_note("Nada foi escrito.")
         raise typer.Exit(code=0)
 
     backups = agent_skills.apply_install(plans, root, load_config().safety.backup_path)
-    console.print("[green]Skills da Nix ativas neste projeto.[/green]")
+    print_success("[bold]Skills da Nix ativas neste projeto.[/bold]")
     for path in backups:
-        console.print(f"  backup: {escape(path)}")
+        print_note(f"backup: {escape(path)}")
 
 
 @skills_app.command("remove", help="Remove só as skills que a Nix colocou")
@@ -86,7 +93,7 @@ def cmd_remove(
     explicit = bool(names)
     if not names:
         names = list(AGENTS)
-    console.print(f"Projeto: {escape(key)}")
+    print_header("skills da Nix")
     results = agent_skills.remove_skills(root, names, load_config().safety.backup_path)
     printed = False
     for result in results:
@@ -95,13 +102,13 @@ def cmd_remove(
         printed = True
         readers = agent_skills.reader_label(result.destination)
         if not result.removed:
-            console.print(f"{escape(readers)}: nada da Nix para remover em {escape(result.rel)}.")
+            print_note(f"{escape(readers)}: nada da Nix para remover em {escape(result.rel)}.")
             continue
-        console.print(f"{escape(readers)}: skill {escape(result.name)} removida de {escape(result.rel)}.")
+        print_success(f"{escape(readers)}: skill {escape(result.name)} removida de {escape(result.rel)}.")
         if result.backup:
-            console.print(f"  backup: {escape(result.backup)}")
+            print_note(f"backup: {escape(result.backup)}")
     if not printed:
-        console.print(f"Nenhuma skill da Nix está em {escape(key)}.")
+        print_note(f"Nenhuma skill da Nix está em {escape(key)}.")
 
 
 @skills_app.command("status", help="Mostra as skills da Nix por pasta de agente")
@@ -110,18 +117,13 @@ def cmd_status(
     project: str | None = typer.Option(None, "--project", help="Pasta do projeto. Padrão: a pasta atual."),
 ) -> None:
     root, key = project_root(project)
-    from rich.table import Table
-
-    table = Table(title=f"Skills da Nix em {key}")
-    table.add_column("Skill")
-    table.add_column("Pasta", overflow="fold")
-    table.add_column("Quem lê")
-    table.add_column("Estado")
+    rows: list[tuple[str, str, str, str]] = []
     hints: list[str] = []
     for item in agent_skills.status(root):
-        table.add_row(item.name, item.rel, agent_skills.reader_label(item.destination), item.state)
+        rows.append((item.name, item.rel, agent_skills.reader_label(item.destination), item.state))
         if item.hint:
             hints.append(item.hint)
-    console.print(table)
+    print_header("skills da Nix")
+    print_table(f"Skills da Nix em {key}", ("Skill", "Pasta", "Quem lê", "Estado"), rows)
     for hint in hints:
-        console.print(f"[yellow]{escape(hint)}[/yellow]")
+        print_warning(hint)
