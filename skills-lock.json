@@ -19,12 +19,6 @@
       "skillPath": "skills/criar-testes/SKILL.md",
       "computedHash": "efd82097ea78459ca50ee69f046daab5aec5ba5b47bbbc4cd740f8e1267fb356"
     },
-    "desenvolver": {
-      "source": "paulocesaaars/skills",
-      "sourceType": "github",
-      "skillPath": "skills/desenvolver/SKILL.md",
-      "computedHash": "8cb641b91b71218c11284a20f3684f947c63666035dfeeb3756412eac4a8ba19"
-    },
     "especificar-feature": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
