@@ -31,7 +31,7 @@ descoberto, pergunte em vez de supor.
 ```
 Progresso:
 - [ ] 1. Descobrir o contexto do repositório
-- [ ] 2. Pré-checagens (inclui a condição de não haver pendências)
+- [ ] 2. Pré-checagens (pendências de commit e conteúdo do zip)
 - [ ] 3. Levantar o que entra na release
 - [ ] 4. Conferir a versão
 - [ ] 5. Confirmar o plano com o usuário
@@ -73,6 +73,47 @@ linha é uma pendência: arquivo modificado, no stage ou novo e não ignorado.
 - Commits **locais ainda não enviados** não bloqueiam: eles vão ao remoto junto
   com a tag e aparecem no plano (passo 5).
 
+#### Condição: o zip de código-fonte só traz o necessário para usar
+
+O host pode anexar o código-fonte da tag na release. No GitHub esse zip (e o
+tar) é automático e sai de `git archive`, que obedece a `export-ignore` no
+`.gitattributes`. Se o host não anexa código-fonte, pule esta condição.
+
+Liste o que entraria no zip da árvore que será tagueada:
+
+```bash
+git archive --worktree-attributes HEAD | tar -t
+```
+
+Se o `.gitattributes` já estiver commitado, `git archive HEAD` chega. O
+`--worktree-attributes` também enxerga um `export-ignore` ainda não commitado.
+
+O zip pode conter só o que instala e usa o software:
+
+- código da aplicação;
+- manifesto e arquivo de dependências de execução;
+- wrappers de execução e instaladores;
+- recurso que o programa lê em execução (template, asset, skill de produto
+  empacotada).
+
+Não pode conter material de desenvolvimento:
+
+- skills de agente do repositório e o lock delas;
+- documentação (readme, especificação de produto, técnica ou visual, critérios
+  de aceite, instruções de agente);
+- exemplos e mocks;
+- testes;
+- configuração de editor e de CI;
+- script que só compila, confere ou publica.
+
+Skill de desenvolvimento do repositório não é skill que o programa instalado
+copia para o usuário. A segunda fica.
+
+Se sobrar caminho da lista proibida, **não publique**. Mostre os caminhos e
+diga que precisam de `export-ignore` (ou do filtro de archive do projeto) antes
+da tag. Esta skill não edita o arquivo. Na dúvida se um caminho é necessário
+para usar, pergunte e espere; não publique com a dúvida aberta.
+
 Demais verificações:
 
 - Atrás do remoto, com merge/rebase em andamento ou conflito: pare e informe a
@@ -83,9 +124,9 @@ Demais verificações:
   "Nenhum teste coletado" não é falha.
 - Se existir `BDD.md` (índice) com a pasta `bdd/`, rode o verificador de
   cobertura do projeto (procure em scripts, Makefile, manifesto ou CI). ID
-  inexistente para a release. Mostre ao usuário os cenários sem teste e o
-  checklist dos cenários `@manual`, e peça que confirme o checklist antes de
-  seguir.
+  inexistente é erro e para a release. Cenário sem teste é aviso e não
+  bloqueia. Mostre ao usuário os cenários sem teste e o checklist dos
+  cenários `@manual`, e peça que confirme o checklist antes de seguir.
 - Se a documentação estiver defasada, avise e sugira rodar a skill de
   atualização de documentação e depois `commitar`. Isso não bloqueia a release
   por si só.
@@ -140,6 +181,7 @@ tiver pedido para seguir direto):
 - **Commits na release:** <n>
 - **Commits locais a enviar junto:** <n | nenhum>
 - **Pipeline que será disparado:** <arquivo | nenhum>
+- **Zip de código-fonte:** só o necessário para usar | sem zip no host | bloqueado: <caminhos>
 
 ### Notas da tag
 <prévia do texto do passo 6>
