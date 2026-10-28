@@ -14,7 +14,7 @@ description: >-
 Transforma o working tree atual em commits coesos e envia a branch ao remoto.
 Sobe a versão do software em um commit próprio, mas **não** cria tag e **não**
 publica release. Explicações
-ao usuário em **português (Brasil)**; mensagens de commit em **inglês**.
+ao usuário e mensagens de commit em **português (Brasil)**.
 
 Nada aqui é específico de um projeto: branch, checagens e padrão de mensagens
 são **descobertos** no repositório (passo 1). Se algo não puder ser descoberto,
@@ -103,10 +103,12 @@ Regras:
 
 #### Formato da mensagem
 
-[Conventional Commits](https://www.conventionalcommits.org/), em inglês, modo imperativo:
+[Conventional Commits](https://www.conventionalcommits.org/): o tipo e o escopo no
+formato padrão (`feat`, `fix`…) e o resumo e o corpo em **português (Brasil)**,
+com o verbo no infinitivo (ex.: adicionar, corrigir, remover):
 
 ```
-<type>(<scope>): <summary em até 72 caracteres, sem ponto final>
+<tipo>(<escopo>): <resumo em até 72 caracteres, sem ponto final>
 
 - <o que mudou e por quê, um item por mudança relevante>
 - <...>
@@ -182,7 +184,7 @@ usuário já tiver pedido para seguir direto):
 1. `feat(core): ...` — arquivo_a, arquivo_b
 2. `fix(cli): ...` — arquivo_c
 3. `docs: ...` — PRD.md, TDD.md
-4. `chore(release): bump version to X.Y.Z` — <locais da versão>
+4. `chore(release): subir versão para X.Y.Z` — <locais da versão>
 
 ### Fora dos commits
 - <arquivos ignorados e motivo>
@@ -203,7 +205,7 @@ git commit -F /tmp/msg.txt          # mensagem com corpo, escrita em arquivo
 - Por último, troque a versão em todos os locais do passo 5 e rode a validação
   de versão do repositório, se houver (script do projeto ou o passo do workflow
   de release).
-  Commit só com esses arquivos: `chore(release): bump version to X.Y.Z`.
+  Commit só com esses arquivos: `chore(release): subir versão para X.Y.Z`.
 - Ao final, `git status --porcelain` deve listar só o que foi excluído de propósito.
 
 ### 8. Enviar e relatar
@@ -262,7 +264,7 @@ Se sim:
 3. Monte título e corpo a partir dos commits da branch
    (`git log --format='%s%n%b' origin/<branch padrão>..HEAD`), seguindo o padrão
    de idioma e formato dos PRs anteriores (no GitHub: `gh pr list --state merged --limit 5`).
-   Sem padrão, use o título no formato Conventional Commits e o corpo com um
+   Sem padrão, use o título no formato Conventional Commits, em português, e o corpo com um
    resumo e a lista de mudanças.
 4. Crie o PR contra a branch padrão. No GitHub:
 
