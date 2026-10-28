@@ -25,6 +25,7 @@ from nix.core.runtime import RuntimeHost
 
 _FAKE_DIM = 64
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+SECOND_VAULT_NAME = "Outro"
 
 
 @pytest.fixture(autouse=True)
@@ -51,6 +52,14 @@ def vault(tmp_path: Path) -> Path:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def second_vault(tmp_path: Path) -> Path:
+    """Pasta temporária vazia, pronta para `nix vault add`. O vault não é cadastrado."""
+    root = tmp_path / "second-vault"
+    root.mkdir()
     return root
 
 
@@ -118,3 +127,13 @@ def host(configured: Path) -> Iterator[RuntimeHost]:
         yield runtime_host
     finally:
         runtime_host.close()
+
+
+@pytest.fixture
+def second_registered(host: RuntimeHost, second_vault: Path) -> RuntimeHost:
+    """Cadastra `second_vault` como `Outro` e faz o host enxergar a configuração nova."""
+    from nix.core.admin.vaults import VaultService
+
+    VaultService().add(SECOND_VAULT_NAME, second_vault)
+    host.before_call()
+    return host
