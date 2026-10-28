@@ -31,6 +31,12 @@
       "skillPath": "skills/gerar-guardrails/SKILL.md",
       "computedHash": "1df4eee14f748b5af00919751f96bc894c895555757511fe7bc4ca50cc0596fe"
     },
+    "implementar-sdd": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/implementar-sdd/SKILL.md",
+      "computedHash": "5aa7b679bc3a198a0e08c9e88fc05c05918c18634b5d34b9884db904f4695388"
+    },
     "iniciar-projeto": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
