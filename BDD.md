@@ -33,3 +33,4 @@ histórias e o porquê de cada uma ficam no [PRD.md](./PRD.md), com o mesmo ID.
 | HU-12 | Busca em todos os vaults | [`bdd/HU-12-busca-em-todos.md`](./bdd/HU-12-busca-em-todos.md) |
 | HU-13 | Remover o padrão | [`bdd/HU-13-remover-padrao.md`](./bdd/HU-13-remover-padrao.md) |
 | HU-14 | Botões desligados durante o sync | [`bdd/HU-14-botoes-durante-sync.md`](./bdd/HU-14-botoes-durante-sync.md) |
+| HU-15 | Continuar a partir de uma sessão | [`bdd/HU-15-continuar-sessao.md`](./bdd/HU-15-continuar-sessao.md) |

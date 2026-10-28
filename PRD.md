@@ -223,6 +223,9 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 **HU-14 — Botões desligados durante o sync**
 > Como usuário, quero que a sincronização da interface não seja disparada de novo enquanto a anterior não termina.
 
+**HU-15 — Continuar a partir de uma sessão**
+> Como usuário, quero que outro agente retome de onde o anterior parou, sem repetir o que já foi feito e sem gravar sessão que eu não pedi para capturar.
+
 ## 7. Requisitos não funcionais
 
 | ID | Categoria | Requisito |
