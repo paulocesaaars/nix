@@ -9,18 +9,33 @@ install.ps1 text eol=lf
 uninstall.sh text eol=lf
 uninstall.ps1 text eol=lf
 
-# Arquivos de desenvolvimento do repositório ficam fora do zip do release
+# O zip da release (git archive) leva só o que serve para instalar e usar o Nix.
+# Skills de produto ficam em src/nix/skills: o `nix skills install` lê de lá.
 .github/                 export-ignore
 .cursor/                 export-ignore
 .vscode/                 export-ignore
+.agents/                 export-ignore
+.claude/                 export-ignore
+.devin/                  export-ignore
 mock/                    export-ignore
+bdd/                     export-ignore
+tests/                   export-ignore
+skills-lock.json         export-ignore
 AGENTS.md                export-ignore
+CLAUDE.md                export-ignore
+HARNESS.md               export-ignore
+BDD.md                   export-ignore
+DESIGN.md                export-ignore
 TDD.md                   export-ignore
 PRD.md                   export-ignore
 README.md                export-ignore
+INSTALL.md               export-ignore
 nix.jpeg                 export-ignore
 nix.png                  export-ignore
 requirements-dev.txt     export-ignore
 .gitattributes           export-ignore
 .gitignore               export-ignore
+scripts/build_frozen.py  export-ignore
+scripts/check_bdd.py     export-ignore
 scripts/check_version.py export-ignore
+scripts/smoke_frozen.py  export-ignore
