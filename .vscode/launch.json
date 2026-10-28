@@ -104,6 +104,18 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true
+    },
+    {
+      "name": "Nix: testes",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${command:python.interpreterPath}",
+      "module": "pytest",
+      "args": ["-m", "not slow"],
+      "pythonArgs": ["-P"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
     }
   ]
 }
