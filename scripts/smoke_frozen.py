@@ -1,11 +1,12 @@
 """Confere o binário congelado antes de publicar a release.
 
 Stdout de `nix --version` tem de ser só a versão, na primeira e na segunda
-partida. Em seguida `nix init` e `nix doctor` exercitam o template e os
-imports pesados, sem baixar o modelo ONNX. Por fim, o binário leve `nix-hook` é cronometrado (meta de 300 ms, HU-S9;
-o binário completo recalcula o CRC do payload e não cabe nessa meta) e o
-`sessionStart` do Cursor tem de imprimir o `additional_context` com o
-handoff (HU-S7).
+partida. Em seguida `nix init` e `nix doctor --json` exercitam o template e os
+imports pesados, sem baixar o modelo ONNX. O painel da CLI não entra nessa
+conferência: o JSON traz o nível de cada `Import`. Por fim, o binário leve
+`nix-hook` é cronometrado (meta de 300 ms, HU-S9; o binário completo
+recalcula o CRC do payload e não cabe nessa meta) e o `sessionStart` do
+Cursor tem de imprimir o `additional_context` com o handoff (HU-S7).
 
 Uso:
   python scripts/smoke_frozen.py dist/nix-1.2.3-windows-amd64.exe 1.2.3
@@ -118,6 +119,37 @@ def _hook_binary(binary: Path) -> Path:
     return hook
 
 
+def _missing_imports(stdout: str) -> list[str]:
+    """Pacotes cujo `Import` no `nix doctor --json` não está em nível ok."""
+    try:
+        report = json.loads(stdout)
+    except json.JSONDecodeError:
+        _fail(
+            "nix doctor --json não devolveu um relatório.\n"
+            f"stdout:\n{stdout}\n"
+            "O smoke lê o JSON do diagnóstico, não o painel da CLI."
+        )
+    checks = report.get("checks") if isinstance(report, dict) else None
+    if not isinstance(checks, list):
+        _fail(
+            "nix doctor --json não trouxe a lista `checks`.\n"
+            f"stdout:\n{stdout}\n"
+            "O relatório precisa listar cada import com rótulo e nível."
+        )
+    missing: list[str] = []
+    for label in _IMPORTS:
+        match = next(
+            (item for item in checks if isinstance(item, dict) and item.get("label") == f"Import {label}"),
+            None,
+        )
+        if not isinstance(match, dict) or match.get("level") != "ok":
+            detail = ""
+            if isinstance(match, dict):
+                detail = f" ({match.get('level')}: {match.get('message')})"
+            missing.append(f"{label}{detail}")
+    return missing
+
+
 def _check_hook(binary: Path, hook: Path, root: Path, env: dict[str, str]) -> None:
     """HU-S9 (tempo do hook) e HU-S7 (`additional_context` no `sessionStart` do Cursor)."""
     project = root / "projeto"
@@ -183,13 +215,12 @@ def main() -> None:
         _check_version(binary, version, env)
         _check_version(binary, version, env)
         _run(binary, ["init", "--vault", str(vault)], env)
-        doctor = _run(binary, ["doctor"], env)
-        report = doctor.stdout
-        missing = [label for label in _IMPORTS if f"Import {label}: ok" not in report]
+        doctor = _run(binary, ["doctor", "--json"], env)
+        missing = _missing_imports(doctor.stdout)
         if missing:
             _fail(
                 "nix doctor não confirmou os imports do binário: " + ", ".join(missing) + ".\n"
-                f"stdout:\n{report}\nstderr:\n{doctor.stderr}\n"
+                f"stdout:\n{doctor.stdout}\nstderr:\n{doctor.stderr}\n"
                 "Inclua o pacote que faltou no Nuitka e compile de novo."
             )
         _check_hook(binary, _hook_binary(binary), root, env)
