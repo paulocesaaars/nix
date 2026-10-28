@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     from nix.core.admin.doctor import DoctorReport
     from nix.core.admin.setup import InitResult
 
-# Cores do DESIGN.md: Rausch como destaque e as cores de status. O texto normal e o
-# `dim` seguem o tema do terminal, porque o fundo é do usuário.
+# Cores do DESIGN.md: acento e cores de status. O texto normal e o `dim` seguem o
+# tema do terminal, porque o fundo é do usuário.
 NIX_THEME = Theme(
     {
         "accent": "#FF385C",

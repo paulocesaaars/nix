@@ -85,7 +85,7 @@ def main() -> None:
     if not register_user_command(ROOT):
         print(
             "A instalação segue. Registre NIX_HOME e o PATH à mão "
-            "(INSTALL.md) e abra um terminal novo."
+            "(README.md, seção Registrar NIX_HOME e o PATH à mão) e abra um terminal novo."
         )
 
     print("Iniciando configuração (nix init)...")

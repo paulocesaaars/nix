@@ -283,16 +283,16 @@ def _fail(message: str, code: int = 1) -> None:
 
 
 def print_manual_env_help(root: Path, failures: list[str]) -> None:
-    """Aponta para o INSTALL.md; não duplica o passo a passo."""
+    """Aponta para o README; não duplica o passo a passo."""
     bin_dir = root / "bin"
     windows = any(item.startswith("Windows") for item in failures)
     unix = any(item.startswith("shell") for item in failures)
     if windows and not unix:
-        guide = 'Siga o INSTALL.md, seções Windows (interface ou PowerShell).'
+        guide = "Siga o README.md, seções Windows (interface ou PowerShell)."
     elif unix and not windows:
-        guide = 'Siga o INSTALL.md, seção "Linux, macOS e Git Bash".'
+        guide = 'Siga o README.md, seção "Linux, macOS e Git Bash".'
     else:
-        guide = 'Siga o INSTALL.md, seção "Registrar NIX_HOME e o PATH à mão".'
+        guide = 'Siga o README.md, seção "Registrar NIX_HOME e o PATH à mão".'
     print(
         "[erro] Não foi possível registrar NIX_HOME e o PATH automaticamente.\n"
         f"  NIX_HOME={root}\n"
@@ -303,16 +303,16 @@ def print_manual_env_help(root: Path, failures: list[str]) -> None:
 
 
 def print_manual_unenv_help(root: Path, failures: list[str]) -> None:
-    """Aponta para o INSTALL.md na remoção manual do PATH."""
+    """Aponta para o README na remoção manual do PATH."""
     bin_dir = root / "bin"
     windows = any(item.startswith("Windows") for item in failures)
     unix = any(item.startswith("shell") for item in failures)
     if windows and not unix:
-        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão" (Windows).'
+        guide = 'Siga o README.md, seção "Remover NIX_HOME e o PATH à mão" (Windows).'
     elif unix and not windows:
-        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão" (Linux, macOS e Git Bash).'
+        guide = 'Siga o README.md, seção "Remover NIX_HOME e o PATH à mão" (Linux, macOS e Git Bash).'
     else:
-        guide = 'Siga o INSTALL.md, seção "Remover NIX_HOME e o PATH à mão".'
+        guide = 'Siga o README.md, seção "Remover NIX_HOME e o PATH à mão".'
     print(
         "[erro] Não foi possível remover NIX_HOME e o PATH automaticamente.\n"
         f"  NIX_HOME={root}\n"
@@ -456,7 +456,7 @@ def register_user_command(root: Path) -> bool:
     """Grava NIX_HOME e coloca `{NIX_HOME}/bin` no PATH do usuário.
 
     Retorna False se algum alvo permanente falhar; a instalação segue e o
-    usuário deve gravar à mão só o que faltou (INSTALL.md).
+    usuário deve gravar à mão só o que faltou (README.md).
     """
     bin_dir = root / "bin"
     if not (bin_dir / "nix").is_file() and not (bin_dir / "nix.cmd").is_file():

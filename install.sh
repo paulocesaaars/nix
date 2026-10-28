@@ -227,7 +227,7 @@ if register_path "$root"; then
   echo "NIX_HOME=$root"
   echo "Comando nix: $root/bin"
 else
-  echo "A instalação segue. Registre NIX_HOME e o PATH à mão (INSTALL.md) e abra um terminal novo." >&2
+  echo "A instalação segue. Registre NIX_HOME e o PATH à mão (README.md, seção Registrar NIX_HOME e o PATH à mão) e abra um terminal novo." >&2
 fi
 
 if [ ! -f "$root/settings.db" ]; then

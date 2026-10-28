@@ -26,7 +26,7 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 - Um vault do Obsidian (notas `.md`)
 - ~220 MB livres na primeira sincronização (modelo padrão `lulu`). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB
 
-Não é preciso instalar Python. O arquivo baixado já traz o runtime.
+Não é preciso instalar Python para o binário da release: o arquivo baixado já traz o runtime. Se a empresa bloqueia o `.exe` e o PowerShell, use Python 3.11+ pelo Git Bash, na seção [Quando o executável e o PowerShell estão bloqueados](#quando-o-executável-e-o-powershell-estão-bloqueados).
 
 ## Instalação
 
@@ -52,13 +52,52 @@ No Windows use barras `/` no caminho do vault (`C:/Obsidian/MeuVault`).
 
 A pasta da instalação é `%LOCALAPPDATA%\nix` no Windows, `~/Library/Application Support/nix` no macOS e `~/.local/share/nix` no Linux (ou o `NIX_HOME` que já existir). Os binários ficam em `{NIX_HOME}/bin`. Windows arm64 e macOS Intel não têm binário: o instalador diz isso e para.
 
+A primeira execução descompacta o binário num cache (`%LOCALAPPDATA%\nix\onefile-<versão>` no Windows, `~/Library/Caches/nix/onefile-<versão>` no macOS, `~/.cache/nix/onefile-<versão>` no Linux). O instalador já faz essa partida. As seguintes reutilizam o cache. O `nix-hook` fica ao lado de `nix`: o binário completo confere o CRC de todo o payload a cada partida e não cabe no orçamento de 300 ms do hook de sessão. O `nix hooks install` aponta os agentes para o `nix-hook`, cujo cache fica em `hook-<versão>` na mesma pasta.
+
 <p>
   <img src="nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
 </p>
 
-Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp). O instalador grava `NIX_HOME` e coloca `nix` no PATH. Abra um novo terminal e rode `nix doctor` / `nix sync`. Se o registro automático falhar, veja [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão). Se o gerenciador Nix (NixOS) já estiver no PATH, o instalador avisa: este `nix` passa a ter prioridade.
+Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp). O instalador grava `NIX_HOME` e coloca `nix` no PATH. Abra um novo terminal e rode `nix doctor` / `nix sync`. Se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão). Se o gerenciador Nix (NixOS) já estiver no PATH, o instalador avisa: este `nix` passa a ter prioridade.
 
 `NIX_VERSION=1.2.3` (com ou sem o `v`) instala uma release específica.
+
+### Quando o executável e o PowerShell estão bloqueados
+
+Algumas redes bloqueiam o download de `.exe` e a execução do PowerShell. O `install.ps1` não serve nesse caso: ele baixa o binário e roda no PowerShell. Instale pelo código, com Python 3.11 ou mais novo e Git, no Git Bash. Nenhum `nix.exe` da release entra na máquina. O `pip` precisa alcançar o PyPI.
+
+```bash
+git clone https://github.com/paulocesaaars/nix.git
+cd nix
+python scripts/bootstrap.py --vault "C:/Obsidian/MeuVault"
+```
+
+Se `python` não existir nesse bash, use `py` ou `python3`. Sem `--vault`, o `init` pergunta o caminho. No Windows, use barras `/` no caminho do vault.
+
+O script cria o `.venv`, instala o Nix, grava `NIX_HOME` e o comando `nix` no PATH do usuário e no `~/.bashrc`, e roda `nix init`. Abra um terminal novo e rode `nix doctor`. No terminal que já está aberto:
+
+```bash
+source bin/env.sh
+```
+
+No MCP não há `nix.exe`. Aponte `command` para o Python do ambiente e passe o módulo em `args`. Troque a pasta se o clone ficou em outro lugar:
+
+```json
+{
+  "mcpServers": {
+    "nix": {
+      "command": "C:/Git/nix/.venv/Scripts/python.exe",
+      "args": ["-P", "-m", "nix"]
+    }
+  }
+}
+```
+
+Os hooks dessa instalação chamam `python -m nix hook`. O `nix-hook.exe` da release não entra.
+
+Para desfazer o checkout: `python scripts/uninstall.py`. O vault do Obsidian não é alterado. `--yes` pula a pergunta; `--keep-data` preserva `settings.db` e o índice. O binário instalado por `install.ps1` ou `install.sh` continua saindo por `uninstall.ps1`, `uninstall.bat` ou `uninstall.sh`.
+
+A primeira sincronização ainda baixa o modelo de embedding (cerca de 220 MB, o `lulu`).
 
 ### A partir do código (desenvolvedor)
 
@@ -80,40 +119,99 @@ O mesmo fluxo, com registro de PATH, é `python scripts/bootstrap.py`. Para desf
 
 ### Skills de agente (desenvolvedor)
 
-As skills de desenvolvimento (desenvolver uma funcionalidade pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, iniciar o projeto e publicar a release) vêm de [paulocesaaars/skills](https://github.com/paulocesaaars/skills) e ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor), `.agents/skills/` (Cursor) e `.devin/skills/` (Devin CLI e Devin Desktop). O `skills-lock.json` registra a origem de cada uma. Não edite as cópias daqui: altere no repositório de skills e atualize, na raiz deste projeto:
-
-```bash
-npx skills update -y
-```
-
-Para reinstalar do zero:
-
-```bash
-npx skills add paulocesaaars/skills -a claude-code -a cursor --copy -y
-```
+As skills de desenvolvimento (implementar SDD pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, gerar uma skill, iniciar o projeto e publicar a release) ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor, Copilot e Devin). O `skills-lock.json` registra a origem das que estão sincronizadas.
 
 ## Sessões
 
-Opcional e por projeto. Na raiz do repositório, os hooks gravam a sessão e a skill `sessoes-nix` ensina o agente a consultar o que ficou gravado. Essa skill vem com a Nix e não entra no repositório de skills de desenvolvimento.
+Opcional e por repositório. Os hooks gravam a conversa daquele projeto; a skill `sessoes-nix` ensina o agente a consultar o que ficou gravado. Essa skill vem com a Nix e não entra no repositório de skills de desenvolvimento.
+
+Rode estes comandos **na pasta do projeto** em que a conversa acontece. Um hook ou uma skill na pasta da conta (configuração global do Claude ou do Devin) não registra o projeto: a Nix descarta o evento e não há sessão para retomar. A conversa anterior a esse `install` também não fica gravada.
 
 ```bash
-nix hooks install --agent cursor --agent claude
-nix skills install --agent cursor --agent claude
+nix config set sessions.enabled true
+nix hooks install --agent claude --agent devin --yes
+nix skills install --agent claude --agent devin --yes
 ```
 
-Sem `--agent`, cada comando pergunta um a um e só escreve depois de confirmar. A skill vai para a pasta que o agente lê e não altera as outras:
+`sessions.enabled` vem desligado. Com ele desligado os hooks ainda podem gravar, mas `nix session` e as ferramentas `list_sessions`, `read_session` e `session_handoff` ficam indisponíveis. Depois de ligar, reinicie o cliente MCP.
 
-| Agentes | Pasta |
-| --- | --- |
-| Claude Code | `.claude/skills/sessoes-nix/` |
-| Cursor e Copilot | `.agents/skills/sessoes-nix/` |
-| Devin CLI e Devin Desktop | `.devin/skills/sessoes-nix/` |
+Os agentes aceitos em `--agent` são `cursor`, `claude`, `copilot`, `devin` e `devin-desktop`. Repita a opção para vários. Sem `--agent`, cada comando pergunta um a um e só escreve depois de confirmar. `--yes` pula a confirmação. `--dry-run` só mostra o que seria escrito. `--project PASTA` escolhe outro repositório sem sair da pasta atual.
 
-`nix hooks status` e `nix skills status` mostram o que está ativo. `remove` apaga só o que a Nix marcou. `nix session list` mostra as sessões do projeto; `show`, `handoff` e `render` leem, entregam o handoff e gravam a nota.
+O hook fica no repositório, nunca na pasta da conta:
+
+| Agente | Arquivo do hook | Pasta da skill |
+| --- | --- | --- |
+| Claude Code | `.claude/settings.local.json` | `.claude/skills/sessoes-nix/` |
+| Cursor | `.cursor/hooks.json` | `.agents/skills/sessoes-nix/` |
+| Copilot | `.github/hooks/nix.json` | `.agents/skills/sessoes-nix/` |
+| Devin CLI | `.devin/hooks.v1.json` | `.agents/skills/sessoes-nix/` |
+| Devin Desktop | `.devin/hooks.json` | `.agents/skills/sessoes-nix/` |
+
+Dois agentes que leem a mesma pasta de skill geram uma cópia só. `nix hooks status` e `nix skills status` mostram o que está ativo. `remove` apaga só o que a Nix marcou.
+
+### Continuar uma sessão em outro agente
+
+Encerre a sessão no agente de origem (no Claude Code, saia da conversa naquele repositório). O fim da sessão deixa um handoff pendente. Há no máximo um por projeto, e ele é entregue uma única vez.
+
+```bash
+nix session handoff
+```
+
+Se não houver pendente, crie a partir da sessão mais recente:
+
+```bash
+nix session handoff --create
+```
+
+`--cancel` descarta o pendente. `--agent NOME`, junto com `--create`, tira da origem a sessão que esse agente acabou de abrir.
+
+No **Devin CLI**, abra o mesmo repositório. O início da sessão recebe o handoff. Peça para continuar.
+
+No **Devin Desktop** não há evento de início nem de fim de sessão, e o stdout do hook não entra na conversa. Com o MCP da Nix ligado, peça para continuar. A skill chama `session_handoff` com `agent` igual a `devin-desktop` e `accept=true`. `accept=false` só mostra, sem consumir.
+
+O Devin na nuvem não alcança a Nix desta máquina. O MCP precisa estar no Devin CLI ou no Devin Desktop local.
+
+`nix session list` mostra as sessões do projeto. `nix session show ID` lê uma. `nix session render` grava a nota no vault. Os detalhes de cada comando estão em [CLI](#cli).
 
 ## Desinstalar
 
-`uninstall.bat`, `.\uninstall.ps1` ou `sh uninstall.sh`. Confirme com `s`, ou passe `--yes`. Isso remove o PATH, os binários `nix` e `nix-hook`, o índice (`.nix/`) e o `settings.db` da pasta `NIX_HOME`. O vault **não** é apagado. `--keep-data` preserva a configuração e o índice. Detalhes: [INSTALL.md](INSTALL.md#desinstalação).
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `nix` e `nix-hook` e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. **O vault do Obsidian não é alterado.** Não precisa da pasta do repositório.
+
+Confirme com `s`. Em script, passe `--yes`. `--keep-data` preserva `settings.db` e o índice.
+
+```bat
+uninstall.bat
+:: ou, sem pergunta:
+uninstall.bat --yes
+:: para manter settings.db e o índice:
+uninstall.bat --keep-data --yes
+```
+
+```powershell
+.\uninstall.ps1
+# ou: .\uninstall.ps1 --yes
+# ou: .\uninstall.ps1 --keep-data --yes
+```
+
+```bash
+sh uninstall.sh
+# ou: sh uninstall.sh --yes
+# ou: sh uninstall.sh --keep-data --yes
+```
+
+Pelo raw, o mesmo script da release:
+
+```powershell
+irm https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.sh | sh
+```
+
+Abra um **novo terminal** depois: o `nix` deste projeto deixa de valer. Se o registro permanente falhar, veja [Remover NIX_HOME e o PATH à mão](#remover-nix_home-e-o-path-à-mão). Remova também o servidor `nix` do `mcp.json` do editor.
+
+O modelo `BAAI/bge-m3` (~2,3 GB) pode permanecer no cache do Hugging Face; o desinstalador não apaga esse cache (pode ser compartilhado com outros programas). O cache de extração do binário (`onefile-<versão>` e `hook-<versão>`) também fica; apague essa pasta se quiser o espaço de volta.
 
 ## Registro no cliente MCP
 
@@ -153,6 +251,8 @@ Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta pa
 
 O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
+Na instalação por Python, sem `nix.exe`, use o interpretador do `.venv` como em [Quando o executável e o PowerShell estão bloqueados](#quando-o-executável-e-o-powershell-estão-bloqueados).
+
 ## Primeiros passos
 
 Depois do `init` (o instalador já dispara isso), **abra um novo terminal** e rode:
@@ -165,13 +265,99 @@ nix status
 
 Se `nix` não for encontrado, o terminal ainda tem o PATH antigo: feche-o e abra outro.
 
-## Registrar NIX_HOME e o PATH à mão
-
-Se o instalador não gravar as variáveis, o passo a passo está só no [INSTALL.md](INSTALL.md#registrar-nix_home-e-o-path-à-mão). Grave o que faltou e abra um **terminal novo**.
-
 O primeiro `sync` (ou qualquer operação que embede) baixa o modelo configurado. O padrão é a `lulu` (~220 MB). O embedding roda na CPU; a barra só avança ao terminar o arquivo. O `spitz` (`BAAI/bge-m3`, ~2,3 GB) melhora a busca e cada nota pode levar minutos. Troque no `nix init` ou com `nix config set index.embedding_model spitz` e rode `nix sync --full`.
 
 Notas novas sem pasta no caminho vão para `vault.default_new_note_folder` (padrão `Inbox`).
+
+## Registrar NIX_HOME e o PATH à mão
+
+O instalador tenta gravar `NIX_HOME` (pasta do Nix) e `{NIX_HOME}/bin` no PATH do usuário. Se isso falhar (permissão, política, registro bloqueado), a configuração do vault **continua**. Registre as variáveis você mesmo e **abra um terminal novo**.
+
+Use a pasta real da instalação no lugar dos exemplos.
+
+### Windows (interface)
+
+1. `Win+R`, rode `sysdm.cpl` → **Avançado** → **Variáveis de Ambiente**.
+2. Em **Variáveis do usuário**, **Novo**:
+   - Nome: `NIX_HOME`
+   - Valor: pasta do Nix, por exemplo `C:\Users\voce\AppData\Local\nix`
+3. Selecione **Path** (usuário) → **Editar** → **Novo** → `%NIX_HOME%\bin`
+4. Confirme com **OK** em todas as janelas.
+
+### Windows (PowerShell, permanente)
+
+```powershell
+$nixHome = "$env:LOCALAPPDATA\nix"
+[Environment]::SetEnvironmentVariable("NIX_HOME", $nixHome, "User")
+$expand = "%NIX_HOME%\bin"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($p -notlike "*$expand*") {
+  [Environment]::SetEnvironmentVariable("Path", "$p;$expand", "User")
+}
+```
+
+### Linux, macOS e Git Bash
+
+Acrescente ao `~/.bashrc` (e ao `~/.profile` se o terminal for de login). No macOS o caminho é `$HOME/Library/Application Support/nix`; no Linux, `$HOME/.local/share/nix`.
+
+```bash
+# >>> nix >>>
+export NIX_HOME="$HOME/.local/share/nix"
+case ":$PATH:" in *":$NIX_HOME/bin:"*) ;; *) export PATH="$NIX_HOME/bin:$PATH" ;; esac
+# <<< nix <<<
+```
+
+Depois: `source ~/.bashrc` ou abra um terminal novo.
+
+### Só nesta sessão (não grava)
+
+```powershell
+$env:NIX_HOME = "$env:LOCALAPPDATA\nix"
+$env:Path = "$env:NIX_HOME\bin;$env:Path"
+```
+
+```bash
+export NIX_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/nix"
+export PATH="$NIX_HOME/bin:$PATH"
+```
+
+## Remover NIX_HOME e o PATH à mão
+
+Se o desinstalador não desfizer as variáveis, apague o que o instalador gravou e **abra um terminal novo**. O vault continua intacto.
+
+Use a pasta real da instalação no lugar de `%LOCALAPPDATA%\nix`.
+
+### Windows (interface)
+
+1. `Win+R`, rode `sysdm.cpl` → **Avançado** → **Variáveis de Ambiente**.
+2. Em **Variáveis do usuário**, selecione **NIX_HOME** → **Excluir** (só se o valor for a pasta deste Nix).
+3. Selecione **Path** (usuário) → **Editar** → remova `%NIX_HOME%\bin` (e o caminho absoluto `...\nix\bin`, se existir).
+4. Confirme com **OK** em todas as janelas.
+
+### Windows (PowerShell, permanente)
+
+```powershell
+$nixHome = "$env:LOCALAPPDATA\nix"
+$stored = [Environment]::GetEnvironmentVariable("NIX_HOME", "User")
+if ($stored -and ($stored -ieq $nixHome)) {
+  [Environment]::SetEnvironmentVariable("NIX_HOME", $null, "User")
+}
+$bin = Join-Path $nixHome "bin"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($p) {
+  $kept = $p.Split(";") | Where-Object {
+    $t = $_.Trim().Trim('"')
+    $t -and $t -ne "%NIX_HOME%\bin" -and $t -ne $bin
+  }
+  [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), "User")
+}
+```
+
+### Linux, macOS e Git Bash
+
+Apague o bloco entre `# >>> nix >>>` e `# <<< nix <<<` em `~/.bashrc`, `~/.zshrc`, `~/.bash_profile` e `~/.profile` (só os arquivos que existirem), se `NIX_HOME` nesse bloco for a pasta desta instalação.
+
+Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 ## Indexação
 
@@ -183,25 +369,101 @@ Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. S
 
 ## CLI
 
-| Comando | Função |
+Estes são os comandos que você roda no terminal. `nix --help` lista os grupos. `nix COMANDO --help` mostra as opções daquele comando. Nada aqui indexa o vault sozinho: o índice muda com `nix sync` ou com uma escrita feita pelas ferramentas MCP.
+
+| Comando | Quando usar |
 | --- | --- |
-| `nix` | Inicia o servidor MCP stdio |
-| `nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]` | Grava o primeiro vault e o modelo no `settings.db`. Sem `--name`, o nome é `Default` |
-| `nix vault list\|add\|rename\|remove\|default\|path\|set` | Cadastra até 5 vaults, renomeia, remove, escolhe o padrão, troca a pasta e grava os ajustes daquele vault |
-| `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração global |
-| `nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]` | Sincroniza o índice (nunca automático) |
-| `nix status [--json] [--vault NOME]... [--all]` | Notas, chunks, último sync e defasagem |
-| `nix doctor [--json]` | Diagnóstico de ambiente, config e índice de cada vault |
-| `nix ui [--no-browser] [--port N]` | Abre a interface local (status, sync, diagnóstico, consultas, conexão de clientes, sessões, tráfego MCP, backups, vaults, configuração, histórico) |
-| `nix session list\|show\|handoff\|render` | Lista e mostra sessões, entrega ou cancela o handoff e grava a nota |
-| `nix hooks install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Ativa, remove e mostra os hooks de sessão no repositório |
-| `nix skills install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Copia, remove e mostra a skill `sessoes-nix` nas pastas dos agentes |
+| `nix` | O editor sobe o servidor MCP. No terminal, sem cliente, o processo espera o protocolo e encerra com Ctrl+C |
+| `nix --version` | Mostra a versão e sai |
+| `nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]` | Primeira configuração: grava o vault e o modelo |
+| `nix vault list\|add\|rename\|remove\|default\|path\|set` | Até 5 vaults: cadastra, renomeia, remove, escolhe o padrão, troca a pasta e grava os ajustes daquele vault |
+| `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração global da instalação |
+| `nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]` | Atualiza o índice depois de editar no Obsidian |
+| `nix status [--json] [--vault NOME]... [--all]` | Vê se o índice está atrás do vault |
+| `nix doctor [--json]` | Descobre por que o editor não acha o Nix ou o índice falhou |
+| `nix ui [--no-browser] [--port N]` | As mesmas operações no navegador, sem agente |
+| `nix session list\|show\|handoff\|render` | Lê sessões do repositório atual, cria ou cancela o handoff e grava a nota |
+| `nix hooks install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Liga, tira e consulta os hooks **deste** repositório |
+| `nix skills install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Copia, tira e consulta a skill `sessoes-nix` **deste** repositório |
 
-De 1 a 5 vaults no mesmo Nix. Sem `--vault` e sem `--all`, `nix sync` e `nix status` usam o padrão. `--vault` pode repetir; `--all` percorre todos, em sequência — não combine os dois. `--name` no `init` só vale na criação do primeiro vault; para os seguintes, `nix vault add NOME CAMINHO`.
+### Servidor
 
-`nix vault rename` troca o nome e não move o índice nem os backups. Se a busca ficar vazia, rode `nix sync --full --vault NOME`. Remover o padrão é recusado até `nix vault default` apontar outro. O último vault não sai. Um nome no formato `AAAAMMDDTHHMMSS` é recusado. Renomear, remover, `nix vault path` e `nix vault set` esperam se aquele vault estiver sincronizando.
+`nix`, sem subcomando, é o processo que o cliente MCP inicia. Não use esse comando para configurar o vault. `nix --version` imprime a versão e termina.
 
-Nas ferramentas, omitir `vault` usa o padrão. Busca, listas, status e sync aceitam um nome, uma lista ou `"*"` (todos). Escrita aceita um nome só.
+### Primeira configuração
+
+`nix init` grava o primeiro vault e o modelo de embedding no `settings.db`. O instalador já chama isso quando ainda não há configuração.
+
+- `--vault CAMINHO` informa a pasta. Sem isso, o terminal pergunta.
+- `--name NOME` batiza o primeiro vault. Sem a opção, o nome é `Default`. Vale só na criação. O vault seguinte entra com `nix vault add`.
+- `--embedding-model NOME` escolhe o modelo (`lulu` ou `spitz`). Sem a opção, o terminal pergunta na criação.
+- `--force` regrava a configuração do zero.
+
+### Vaults
+
+De 1 a 5 vaults na mesma instalação. Omitir o vault no `sync` e no `status` usa o padrão.
+
+- `nix vault list` mostra nome, pasta e qual é o padrão. `--json` entrega a mesma lista em JSON.
+- `nix vault add NOME CAMINHO` cadastra outro. Um nome no formato `AAAAMMDDTHHMMSS` é recusado.
+- `nix vault rename ANTIGO NOVO` troca o nome. O índice e os backups ficam onde estão. Se a busca ficar vazia, rode `nix sync --full --vault NOVO`.
+- `nix vault default NOME` escolhe o padrão. Remover o padrão é recusado até outro ocupar o lugar. O último vault não sai.
+- `nix vault remove NOME` tira o cadastro. A pasta do Obsidian permanece.
+- `nix vault path NOME CAMINHO` aponta o mesmo nome para outra pasta.
+- `nix vault set NOME CAMPO VALOR` grava um ajuste daquele vault: `include`, `exclude`, `follow_symlinks` ou as pastas. Listas e objetos entram como JSON. Não mexe na configuração global.
+
+Renomear, remover, `path` e `set` esperam se aquele vault estiver sincronizando.
+
+Nas ferramentas MCP, omitir `vault` usa o padrão. Busca, listas, status e sync aceitam um nome, uma lista ou `"*"` (todos). Escrita aceita um nome só.
+
+### Configuração global
+
+Os campos ficam no `settings.db` da instalação (`NIX_HOME`; no checkout por Python, a pasta do clone). `nix config set secao.chave valor` grava um campo. Listas e objetos entram como JSON.
+
+- `nix config list` mostra os campos. `--json` muda o formato.
+- `nix config get secao.chave` lê um.
+- `nix config unset secao.chave` volta o campo ao padrão.
+- `nix config history` mostra as alterações. `--limit N` corta a lista (padrão 20).
+- `nix config undo` desfaz a última. `nix config undo ID` desfaz uma entrada do histórico.
+
+Para as ferramentas de sessão: `nix config set sessions.enabled true`. Reinicie o cliente MCP em seguida.
+
+Uma variável `NIX_SECAO__CAMPO` ganha do banco naquele campo e o trava no `nix config` e na interface. O cadastro dos vaults não usa essa variável.
+
+### Índice
+
+Editar no Obsidian não atualiza o índice. Rode `nix sync` quando quiser alinhar.
+
+- Sem `--vault` e sem `--all`, vale o vault padrão.
+- `--vault NOME` pode repetir. `--all` percorre todos, em sequência. Não combine os dois.
+- `--full` reconstrói o índice inteiro. Use depois de trocar o modelo (`nix config set index.embedding_model spitz`).
+- `--dry-run` só mostra o que mudaria.
+- `--json` entrega o relatório em JSON. O mesmo vale para `nix status` e `nix doctor`.
+
+`nix status` mostra notas, chunks, o último sync e se o vault está à frente do índice. `nix doctor` confere ambiente, configuração, o comando que o MCP deve chamar e o índice de cada vault. Comece por ele quando o editor não conecta.
+
+### Interface
+
+`nix ui` abre o navegador em `127.0.0.1` com status, sync, diagnóstico, busca, conexão dos clientes, sessões, tráfego MCP, backups, vaults e configuração. Exige o `nix init`. Encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL. `--port N` fixa a porta.
+
+### Sessões
+
+Exige `sessions.enabled`. Rode na pasta do repositório, ou passe `--project PASTA`. O passo a passo para continuar uma conversa em outro agente está em [Sessões](#sessões).
+
+- `nix session list` lista as sessões, da mais recente para a mais antiga. `--agent NOME` filtra. `--limit N` corta (padrão 20, no máximo 500). `--json` muda o formato.
+- `nix session show ID` imprime uma sessão. O id pode ser o curto que aparece na lista.
+- `nix session handoff` mostra o pendente. `--create` monta um a partir da sessão mais recente. `--cancel` descarta. `--agent NOME` com `--create` não usa a sessão que esse agente acabou de abrir.
+- `nix session render` grava ou atualiza a nota no vault. Com um id, só aquela sessão. Sem id, as do projeto.
+
+### Hooks e skills
+
+Os dois grupos só escrevem no repositório. Não existe instalação global: a pasta da conta não registra o projeto.
+
+`--agent` aceita `cursor`, `claude`, `copilot`, `devin` e `devin-desktop`, e pode repetir. `--yes` não pergunta. `--dry-run` não escreve. `--project PASTA` aponta outro repositório.
+
+- `nix hooks install` ativa a captura. `remove` tira só o que a Nix marcou. `status` mostra o que está ativo.
+- `nix skills install` copia a `sessoes-nix`. `remove` apaga só a pasta com a marca da Nix. `status` mostra as pastas.
+
+Os arquivos e o handoff entre agentes estão em [Sessões](#sessões).
 
 ## Ferramentas MCP
 
@@ -268,7 +530,7 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz `nix` e `nix-hook` por plataforma e o `checksums.txt`.
+4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz `nix` e `nix-hook` por plataforma e o `checksums.txt`. O zip de código-fonte da tag traz só o que instala e usa o Nix; skills de desenvolvimento, documentação e testes ficam de fora.
 
 Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.2.3`).
 

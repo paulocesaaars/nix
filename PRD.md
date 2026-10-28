@@ -38,13 +38,13 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 | O4 | Custo zero e privacidade | Embeddings e banco vetorial 100% locais e gratuitos; nenhuma chamada remota |
 | O5 | Encaixar no fluxo do editor | Registrável como servidor MCP stdio em Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop |
 
-### Não-objetivos (v1)
+### Não-objetivos
 
 - Não é um substituto do Obsidian. A interface local cobre configuração, operação e consulta (status, sincronização, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups e histórico), não a edição das notas. A única escrita no vault pela interface é restaurar um backup, com confirmação explícita.
 - Não haverá LLM, chat, RAG conversacional nem orquestração de agente no Nix.
 - O MCP não tem transporte HTTP. Não haverá servidor multiusuário, autenticação de contas nem hospedagem em nuvem. A interface local escuta só em `127.0.0.1` enquanto `nix ui` está aberto.
 - Não haverá sincronização de vault entre máquinas (isso é responsabilidade do Obsidian Sync/Git/Dropbox).
-- Não haverá edição de anexos binários (PDFs, imagens) na v1 — apenas extração de texto de PDFs referenciados pelas notas, se `index.index_attachments` estiver ativo.
+- Não há edição de anexos binários (PDFs, imagens) — apenas extração de texto de PDFs referenciados pelas notas, se `index.index_attachments` estiver ativo.
 - Não haverá fine-tuning de modelos.
 
 ## 4. Persona e contexto de uso
@@ -243,7 +243,7 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 
 ## 8. Regras de negócio
 
-- **RN-01 — Consentimento de indexação.** O Nix nunca varre nem vetoriza o vault por iniciativa própria. Não há watcher de arquivos nem indexação em background na v1. A indexação ocorre só por `nix sync` ou pela ferramenta `sync_index`.
+- **RN-01 — Consentimento de indexação.** O Nix nunca varre nem vetoriza o vault por iniciativa própria. Não há watcher de arquivos nem indexação em background. A indexação ocorre só por `nix sync` ou pela ferramenta `sync_index`.
 - **RN-02 — Coerência write-through.** Toda escrita originada nas ferramentas tenta atualizar o índice na mesma operação. Se a vetorização falhar, o arquivo no vault é preservado (fonte da verdade), o arquivo é marcado com `status = error` e o usuário é instruído a rodar `nix sync` ou `sync_index`.
 - **RN-03 — Confinamento ao vault.** Nenhuma leitura ou escrita ocorre fora do diretório do vault da operação, incluindo tentativas via caminho relativo ou link simbólico.
 - **RN-04 — Proveniência da fonte.** Toda resposta de ferramenta que devolve conteúdo do vault inclui caminho relativo e o trecho (ou o corpo da nota). A fidelidade da resposta em linguagem natural é responsabilidade do cliente LLM.

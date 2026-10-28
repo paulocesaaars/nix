@@ -108,7 +108,7 @@ nix/
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
 ├── scripts/bootstrap.py    # venv + pip + init (desenvolvimento)
 ├── scripts/build_frozen.py # Nuitka onefile, Python 3.12, na plataforma local
-├── scripts/smoke_frozen.py # gate de --version e doctor do binário
+├── scripts/smoke_frozen.py # gate de --version, doctor --json e nix-hook
 ├── scripts/check_bdd.py    # cobertura dos cenários de bdd/ pelos testes
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
 ├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
@@ -259,7 +259,8 @@ CREATE TABLE chunks (
     title         TEXT NOT NULL DEFAULT '',
     token_count   INTEGER NOT NULL,
     start_line    INTEGER,
-    end_line      INTEGER
+    end_line      INTEGER,
+    embed_hash    TEXT                    -- hash do texto vetorizado; nulo até o sync do arquivo
 );
 
 -- Busca léxica sobre os mesmos chunks
@@ -285,6 +286,8 @@ CREATE TABLE sync_runs (
     error_log    TEXT
 );
 ```
+
+`embed_hash` guarda o hash do texto vetorizado de cada chunk (RF-150). Um índice criado antes dessa coluna a recebe por `ALTER TABLE`, sem trocar o `schema_version`.
 
 `index_meta.embedding_model` é comparado a cada execução: se o usuário trocar o modelo na configuração, o índice é considerado incompatível e o Nix exige `nix sync --full` em vez de misturar vetores de espaços diferentes.
 
@@ -502,7 +505,7 @@ uninstall.ps1 / uninstall.sh      # PATH, binário, settings.db e .nix (não o v
 uninstall.bat                     # delega a uninstall.ps1
 scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path → nix init
 scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12; também gera o nix-hook
-scripts/smoke_frozen.py           # stdout de --version, imports do doctor e os 300 ms do nix-hook
+scripts/smoke_frozen.py           # --version só com a versão; doctor --json com cada Import em ok; nix-hook em 300 ms
 ```
 
 O binário publicado cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
@@ -716,12 +719,17 @@ def test_sync_without_changes(vault: Path, fake_embedder: type[FakeEmbedder]) ->
 ```
 
 - **Rodar:** `pytest` (dependência de desenvolvimento). `-m "not slow"` pula o
-  que usa o modelo de embedding real.
+  que usa o modelo de embedding real. No editor, o launch `Nix: testes` roda
+  essa mesma seleção.
 - **Fixtures** (`tests/conftest.py`): `nix_home` é automática e aponta
   `app_root` para uma pasta temporária, então nenhum teste toca no
   `settings.db` nem no `.nix/` do checkout; `vault` cria um vault temporário;
   `fake_embedder` troca o FastEmbed por vetores determinísticos, sem baixar o
-  ONNX.
+  ONNX. `second_vault` é outra pasta, vazia e sem cadastro; `second_registered`
+  cadastra essa pasta com o nome `Outro`, que não é o padrão.
+  `tests/web/conftest.py` sobe a interface com sessão e CSRF (`client`);
+  `embed_hold` segura o embedding enquanto o teste de sincronização em andamento
+  precisa que os controles continuem desligados.
 - **Cobertura:** `python scripts/check_bdd.py` lista os cenários sem teste, falha se um
   teste apontar para um ID inexistente e confere se o índice e a pasta `bdd/`
   batem. `--strict` também falha
