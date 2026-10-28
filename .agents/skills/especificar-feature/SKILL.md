@@ -16,7 +16,7 @@ Produz a especificação de uma funcionalidade. Toda a saída é em
 
 ## Regras
 
-- Siga todas as premissas do `AGENTS.md`. Em conflito, vale o `AGENTS.md`.
+- Siga o `AGENTS.md`. Em conflito, vale o `HARNESS.md`, se existir.
 - **Não** edite, crie nem apague código. A especificação é o único artefato.
 - Não invente requisitos. Para ambiguidade ou contradição, pergunte. Se a
   ambiguidade for irrelevante, registre a suposição em uma linha.
@@ -90,8 +90,9 @@ impactos e uma recomendação. Registre cada decisão na seção **Decisões**.
 
 Se o projeto usa BDD (existe `BDD.md`), especifique também os **cenários BDD**: leia o índice `BDD.md` e os
 arquivos de `bdd/` que a funcionalidade toca, e sugira, em Gherkin português, os cenários novos e os que mudam por causa da
-funcionalidade. Cada cenário novo recebe o próximo ID livre da história
-(por exemplo `@US-03.4`), no arquivo daquele caso de uso, ou de uma história nova (arquivo novo
+funcionalidade. Cada cenário novo recebe o próximo ID livre da história,
+com o prefixo que os arquivos de `bdd/` já usam (o `@US-03.2` do `AGENTS.md`
+é só ilustração). Grave no arquivo daquele caso de uso, ou numa história nova (arquivo novo
 em `bdd/` e linha nova no índice); o que não dá para automatizar leva
 `@manual`. Cenários existentes só mudam com decisão explícita do usuário.
 
@@ -171,7 +172,7 @@ TDD.md>
 
 ## Cenários BDD sugeridos
 <só se o projeto usa BDD: cenários em Gherkin para `bdd/`, indicando o arquivo, com IDs e `@manual` quando não
-der para automatizar; marque "novo" ou "altera @HU-xx.y">
+der para automatizar; marque "novo" ou "altera @<prefixo>-xx.y", com o prefixo de `bdd/`>
 
 ## Decisões
 | Ponto | Decisão | Motivo |
