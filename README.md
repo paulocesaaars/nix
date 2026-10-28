@@ -80,7 +80,7 @@ O mesmo fluxo, com registro de PATH, é `python scripts/bootstrap.py`. Para desf
 
 ### Skills de agente (desenvolvedor)
 
-As skills de desenvolvimento (especificar funcionalidade, revisar código, atualizar a documentação, commitar, guardrails, iniciar o projeto e publicar a release) vêm de [paulocesaaars/skills](https://github.com/paulocesaaars/skills) e ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor), `.agents/skills/` (Cursor) e `.devin/skills/` (Devin CLI e Devin Desktop). O `skills-lock.json` registra a origem de cada uma. Não edite as cópias daqui: altere no repositório de skills e atualize, na raiz deste projeto:
+As skills de desenvolvimento (desenvolver uma funcionalidade pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, iniciar o projeto e publicar a release) vêm de [paulocesaaars/skills](https://github.com/paulocesaaars/skills) e ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor), `.agents/skills/` (Cursor) e `.devin/skills/` (Devin CLI e Devin Desktop). O `skills-lock.json` registra a origem de cada uma. Não edite as cópias daqui: altere no repositório de skills e atualize, na raiz deste projeto:
 
 ```bash
 npx skills update -y
