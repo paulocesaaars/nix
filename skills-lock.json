@@ -11,7 +11,13 @@
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/commitar/SKILL.md",
-      "computedHash": "4a2f2a6a33621f5303258615ec79e2e39621b6f3503772ef2e1e9b259033a0d7"
+      "computedHash": "c80469e895a9778805c84b7b498e024d77e1bbb2b24b07d67a4bd316763f5d8e"
+    },
+    "criar-testes": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/criar-testes/SKILL.md",
+      "computedHash": "efd82097ea78459ca50ee69f046daab5aec5ba5b47bbbc4cd740f8e1267fb356"
     },
     "especificar-feature": {
       "source": "paulocesaaars/skills",
@@ -35,7 +41,7 @@
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/publicar-release/SKILL.md",
-      "computedHash": "bc4031a4e6d74b31e2c0124fff6592d296ff7fa2030366430b5e11dc197ca89c"
+      "computedHash": "eee90c29959934578c5e09a762bbc5b7ea6843a4505f971d1f56712049beb184"
     },
     "revisar-codigo": {
       "source": "paulocesaaars/skills",
