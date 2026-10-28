@@ -28,11 +28,11 @@ class SkillDestination:
     agents: tuple[str, ...]
 
 
-# Cursor e Copilot leem a mesma pasta; Devin CLI e Devin Desktop também.
+# Cursor, Copilot e Devin leem a mesma pasta. O Devin também encontra
+# `.claude/skills`; a pasta recomendada na documentação dele é `.agents/skills`.
 DESTINATIONS: tuple[SkillDestination, ...] = (
     SkillDestination(".claude/skills", ("claude",)),
-    SkillDestination(".agents/skills", ("cursor", "copilot")),
-    SkillDestination(".devin/skills", ("devin", "devin-desktop")),
+    SkillDestination(".agents/skills", ("cursor", "copilot", "devin", "devin-desktop")),
 )
 
 

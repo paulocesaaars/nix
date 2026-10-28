@@ -127,8 +127,8 @@ nix/
 ├── DESIGN.md               # estilo visual da CLI e da interface local
 ├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
 ├── HARNESS.md              # regras específicas deste repositório
-├── skills-lock.json        # origem das skills de desenvolvimento (paulocesaaars/skills)
-├── .claude/skills/ / .agents/skills/ / .devin/skills/  # cópias dessas skills; não editar aqui
+├── skills-lock.json        # origem das skills de desenvolvimento
+├── .claude/skills/ / .agents/skills/  # skills de desenvolvimento
 ├── .cursor/
 │   └── mcp.json            # command = binário em NIX_HOME (caminho absoluto no Unix)
 └── src/
@@ -605,7 +605,7 @@ O consolidador (`service.consolidate`, com a fila e a trava em `drain.py`) pega 
 
 ### 9.5 Skills da Nix
 
-`nix skills install` copia as skills que vêm no pacote (`src/nix/skills/<nome>/SKILL.md`, hoje `sessoes-nix`) para a pasta que o agente lê, dentro do repositório: `.claude/skills/` (Claude Code), `.agents/skills/` (Cursor e Copilot) e `.devin/skills/` (Devin CLI e Devin Desktop). Dois agentes que leem a mesma pasta geram uma cópia só. A marca é o arquivo `.nix-skill`, com o nome da skill, gravado antes do `SKILL.md`: se a escrita parar no meio, a pasta fica desatualizada e o `install` seguinte repara. Um agente sem pasta em `DESTINATIONS` é recusado, em vez de o comando dizer que nada mudou. A escolha do agente e a raiz do projeto ficam em `cli/agents.py`, usadas por hooks e skills. A poda de pasta vazia fica em `core/admin/empty_dirs.py`. `remove` apaga só a pasta que tem essa marca; uma pasta sem a marca, mesmo com o nome `sessoes-nix`, permanece. Antes de alterar ou apagar há backup em `safety.backup_dir/skills/`. Rodar de novo só reescreve o `SKILL.md` quando o texto do pacote mudou. O binário completo inclui o arquivo pelo `--include-package-data=nix`; o `nix-hook` não importa esse módulo.
+`nix skills install` copia as skills que vêm no pacote (`src/nix/skills/<nome>/SKILL.md`, hoje `sessoes-nix`) para a pasta que o agente lê, dentro do repositório: `.claude/skills/` (Claude Code) e `.agents/skills/` (Cursor, Copilot, Devin CLI e Devin Desktop). Dois agentes que leem a mesma pasta geram uma cópia só. A marca é o arquivo `.nix-skill`, com o nome da skill, gravado antes do `SKILL.md`: se a escrita parar no meio, a pasta fica desatualizada e o `install` seguinte repara. Um agente sem pasta em `DESTINATIONS` é recusado, em vez de o comando dizer que nada mudou. A escolha do agente e a raiz do projeto ficam em `cli/agents.py`, usadas por hooks e skills. A poda de pasta vazia fica em `core/admin/empty_dirs.py`. `remove` apaga só a pasta que tem essa marca; uma pasta sem a marca, mesmo com o nome `sessoes-nix`, permanece. Antes de alterar ou apagar há backup em `safety.backup_dir/skills/`. Rodar de novo só reescreve o `SKILL.md` quando o texto do pacote mudou. O binário completo inclui o arquivo pelo `--include-package-data=nix`; o `nix-hook` não importa esse módulo.
 
 ## 10. Configuração
 
