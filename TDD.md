@@ -169,7 +169,6 @@ nix/
         │   │   ├── vector.py       # busca densa
         │   │   ├── lexical.py      # busca FTS5
         │   │   ├── fusion.py       # Reciprocal Rank Fusion
-        │   │   ├── rerank.py       # cross-encoder opcional
         │   │   └── service.py      # fachada de recuperação
         │   ├── insights/           # órfãs, duplicatas, links, resumo
         │   ├── sessions/           # sessões dos agentes (só stdlib nos módulos do hook)
@@ -439,11 +438,8 @@ graph LR
 - **RRF** funde os dois rankings: `score(d) = Σ 1 / (k + rank_i(d))`, com `k = 60`.
 - **Expansão de vizinhos** recupera os chunks `ordinal ± 1` dos melhores resultados.
 - **Corte de score** descarta trechos abaixo de `max(min_score, melhor × 0.65)`.
-- **Reordenação** é opcional (`retrieval.rerank`), com cross-encoder local (`index.rerank_model`).
 
-`search_notes` sempre passa por `search_many`, com um vault ou com vários. A consulta é vetorizada uma vez. Cada vault roda a híbrida com `candidate_pool` e os filtros, sem corte final. Os trechos são juntados, ordenados pelo score, e então `min_score` e `top_k` valem para o conjunto. Com o rerank ligado, o cross-encoder roda uma vez sobre esse conjunto juntado inteiro. Falha num vault vai para `vault_errors`, com a ação corretiva, e os outros seguem. Cada trecho traz o nome do vault.
-
-`RetrievalService.search` ainda corta a janela de rerank nos primeiros 20 candidatos, mas a ferramenta e a interface não o chamam: as duas usam `search_many`.
+`search_notes` sempre passa por `search_many`, com um vault ou com vários. A consulta é vetorizada uma vez. Cada vault roda a híbrida com `candidate_pool` e os filtros, sem corte final. Os trechos são juntados, ordenados pelo score, e então `min_score` e `top_k` valem para o conjunto. Falha num vault vai para `vault_errors`, com a ação corretiva, e os outros seguem. Cada trecho traz o nome do vault.
 
 Cada trecho devolvido por `search_notes` inclui `vault`, `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP.
 
@@ -698,4 +694,3 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 ## 14. Evolução prevista
 
 - Conjunto de avaliação `eval/` (harness e perguntas; ainda não está no repositório).
-- Reordenação com cross-encoder ligada por padrão e outras melhorias de qualidade.

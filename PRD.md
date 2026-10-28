@@ -346,7 +346,7 @@ Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sess
 - Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code, Devin CLI e Devin Desktop.
 - Escrita com write-through, confirmação e backup.
 - Sessões dos agentes: `sessions.db`, hooks por projeto para Claude Code, Cursor, Copilot, Devin CLI e Devin Desktop (`nix hooks install/remove/status`), a skill `sessoes-nix` instalada no projeto com `nix skills install/remove/status`, nota no vault, handoff, as ferramentas `list_sessions`, `read_session` e `session_handoff`, a tela Sessões e o reaproveitamento de vetores por hash de chunk.
-- Filtros pasta/tag/data, wikilinks, reordenação opcional (`retrieval.rerank`).
+- Filtros pasta/tag/data e wikilinks.
 - Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
 - Seções globais graváveis: `index`, `retrieval`, `safety` e `logging`. O cadastro dos vaults fica à parte (`nix vault`). Um campo global definido por `NIX_SECAO__CAMPO` ganha do banco.
@@ -354,7 +354,6 @@ Ferramentas: `session_handoff` (escrita, entrega o handoff pendente), `list_sess
 **Próximo**
 
 - Conjunto de avaliação `eval/` (harness e 30 perguntas; ainda não está no repositório).
-- Reordenação ligada por padrão e outras melhorias de qualidade de recuperação.
 
 ## 11. Riscos
 

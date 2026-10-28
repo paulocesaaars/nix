@@ -15,7 +15,6 @@ from nix.core.index.vectorstore import VectorStore
 from nix.core.models import RetrievedChunk
 from nix.core.retrieval.fusion import reciprocal_rank_fusion
 from nix.core.retrieval.lexical import LexicalSearch
-from nix.core.retrieval.rerank import Reranker
 from nix.core.retrieval.vector import VectorSearch
 from nix.core.vault.paths import is_included, matches_folder
 from nix.observability.logging import get_logger
@@ -45,43 +44,9 @@ class RetrievalService:
         self.store = store
         self.vector = VectorSearch(vectors, embedder)
         self.lexical = LexicalSearch(store)
-        self._reranker: Reranker | None = None
-
-    def _rerank(self) -> Reranker:
-        if self._reranker is None:
-            self._reranker = Reranker(self.config.index.rerank_model)
-        return self._reranker
 
     def embed_query(self, query: str) -> list[float]:
         return self.vector.embed_query(query)
-
-    def search(
-        self,
-        query: str,
-        *,
-        top_k: int | None = None,
-        folder: str | None = None,
-        tags: list[str] | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
-        expand_neighbors: bool | None = None,
-        use_rerank: bool | None = None,
-        embedding: list[float] | None = None,
-    ) -> list[RetrievedChunk]:
-        settings = self.config.retrieval
-        k = top_k or settings.top_k
-        vector = embedding if embedding is not None else self.embed_query(query)
-        found = self.collect(
-            query,
-            embedding=vector,
-            top_k=k,
-            folder=folder,
-            tags=tags,
-            date_from=date_from,
-            date_to=date_to,
-            expand_neighbors=expand_neighbors,
-        )
-        return self.finish(query, found, k=k, use_rerank=use_rerank, rerank_window=20)
 
     def collect(
         self,
@@ -95,7 +60,7 @@ class RetrievalService:
         date_to: str | None = None,
         expand_neighbors: bool | None = None,
     ) -> list[RetrievedChunk]:
-        """Híbrida com o pool de candidatos e os filtros. Sem corte final nem rerank."""
+        """Híbrida com o pool de candidatos e os filtros. Sem corte final."""
         settings = self.config.retrieval
         pool = max(top_k, settings.candidate_pool)
         hidden = self._hidden_folder(folder)
@@ -138,27 +103,10 @@ class RetrievalService:
             fused = self._expand(fused, settings.neighbor_expansion)
         return fused
 
-    def finish(
-        self,
-        query: str,
-        fused: list[RetrievedChunk],
-        *,
-        k: int,
-        use_rerank: bool | None = None,
-        rerank_window: int | None = 20,
-    ) -> list[RetrievedChunk]:
-        """Aplica rerank, top_k e o piso de score no conjunto já ordenado."""
+    def finish(self, fused: list[RetrievedChunk], *, k: int) -> list[RetrievedChunk]:
+        """Aplica top_k e o piso de score no conjunto já ordenado."""
         settings = self.config.retrieval
-        do_rerank = settings.rerank if use_rerank is None else use_rerank
-        if do_rerank and fused:
-            window = fused if rerank_window is None else fused[:rerank_window]
-            try:
-                fused = self._rerank().rerank(query, window, k)
-            except Exception:
-                logger.warning("Reordenação falhou; usando o ranking híbrido.", exc_info=True)
-                fused = fused[:k]
-        else:
-            fused = fused[:k]
+        fused = fused[:k]
         if not fused:
             return []
         best = fused[0].score
@@ -253,9 +201,8 @@ def search_many(
     date_from: str | None = None,
     date_to: str | None = None,
     expand_neighbors: bool | None = None,
-    use_rerank: bool | None = None,
 ) -> MultiSearchResult:
-    """Vetoriza uma vez, junta pelo score e reranqueia o conjunto, se o rerank estiver ligado.
+    """Vetoriza uma vez e junta pelo score.
 
     Falha num vault vai para `vault_errors` com a ação corretiva. Os outros seguem.
     """
@@ -296,5 +243,5 @@ def search_many(
             continue
         merged.extend(replace(chunk, vault=name) for chunk in found)
     merged.sort(key=lambda chunk: chunk.score, reverse=True)
-    chunks = primary.finish(query, merged, k=k, use_rerank=use_rerank, rerank_window=None)
+    chunks = primary.finish(merged, k=k)
     return MultiSearchResult(chunks=chunks, vault_errors=errors)

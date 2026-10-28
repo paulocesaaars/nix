@@ -26,11 +26,6 @@ from nix.config.session_defaults import (
 )
 from nix.core.errors import ConfigError
 
-SUPPORTED_RERANK_MODELS: tuple[str, ...] = (
-    "Xenova/ms-marco-MiniLM-L-6-v2",
-    "Xenova/ms-marco-MiniLM-L-12-v2",
-)
-
 LogLevel = Literal["debug", "info", "warning", "error"]
 Widget = Literal["bool", "int", "float", "text", "lines", "json", "choice"]
 
@@ -250,10 +245,6 @@ class IndexSettings(AnchoredSettings):
         description="Indexa PDFs referenciados pelas notas.",
         json_schema_extra=_impact(requires_sync=True),
     )
-    rerank_model: str = Field(
-        default="Xenova/ms-marco-MiniLM-L-6-v2",
-        description="Cross-encoder local, usado só se retrieval.rerank estiver ligado.",
-    )
 
     @field_validator("embedding_model")
     @classmethod
@@ -262,14 +253,6 @@ class IndexSettings(AnchoredSettings):
         if resolved is None:
             raise ConfigError(unsupported_embedding_message(value))
         return resolved
-
-    @field_validator("rerank_model")
-    @classmethod
-    def rerank_supported(cls, value: str) -> str:
-        if value not in SUPPORTED_RERANK_MODELS:
-            allowed = ", ".join(SUPPORTED_RERANK_MODELS)
-            raise ConfigError(f"index.rerank_model={value!r} não é suportado. Use um de: {allowed}.")
-        return value
 
     @field_validator("auto_sync_external_changes")
     @classmethod
@@ -323,10 +306,6 @@ class RetrievalSettings(BaseModel):
         ge=0.0,
         le=1.0,
         description="Descarta trechos abaixo deste score.",
-    )
-    rerank: bool = Field(
-        default=False,
-        description="Reordena os melhores resultados com o cross-encoder local.",
     )
     expand_query: bool = Field(
         default=True,
@@ -691,8 +670,6 @@ def _bounds(field: Any) -> tuple[float | None, float | None]:
 def _choices(section: str, key: str, annotation: Any) -> tuple[str, ...] | None:
     if section == "index" and key == "embedding_model":
         return SUPPORTED_EMBEDDING_MODELS
-    if section == "index" and key == "rerank_model":
-        return SUPPORTED_RERANK_MODELS
     if get_origin(annotation) is Literal:
         return tuple(str(item) for item in get_args(annotation))
     return None
