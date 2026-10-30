@@ -36,8 +36,9 @@ pasta da suíte, runner e verificador são **descobertos** no repositório
   teste. Entra no relatório como checklist.
 - Teste que já cita o ID não é reescrito. Se ele não verifica o resultado do
   cenário, registre no relatório e deixe para a revisão.
-- Um cenário, um teste, o mesmo ID. Não reaproveite ID e não cubra dois
-  cenários com um teste só.
+- Preserve IDs únicos para cenários e associe os IDs aos testes conforme a
+  convenção do projeto. Um cenário pode gerar várias execuções e um teste pode
+  cobrir mais de um cenário se a rastreabilidade permanecer clara.
 - Não acrescente dependência. Se o cenário só fecha com uma ferramenta que o
   projeto não tem, pare nesse cenário e pergunte.
 - Mostre o plano e **aguarde confirmação** antes de gravar.
@@ -72,7 +73,7 @@ que cada cenário exercita.
 
 Pare sem gravar nada quando:
 
-- não existe `BDD.md`;
+- `BDD.md` está ausente ou vazio, ou não há cenários preenchidos em `bdd/`;
 - o índice e a pasta `bdd/` divergem, ou há ID de cenário repetido — o
   verificador costuma apontar isso; peça a correção e não invente o índice;
 - a convenção de marcação não aparece no `BDD.md` nem num teste existente.
@@ -89,8 +90,9 @@ Sem verificador, monte a lista você mesmo:
    funcionalidade. O formato exato é o que o `BDD.md` descreve.
 2. `@manual` na funcionalidade vale para todos os cenários dela; no cenário,
    vale só para ele.
-3. Procure cada ID na suíte, fora de `bdd/` e do `BDD.md`. ID citado num teste
-   conta como coberto. Citação só em documentação não conta.
+3. Procure cada ID na suíte, fora de `bdd/` e do `BDD.md`. ID citado num teste indica uma associação, mas só conta como coberto após
+   conferir que o teste verifica o comportamento esperado. Citação só em
+   documentação não conta.
 
 Aplique o recorte do usuário (IDs, arquivo de `bdd/`, caso de uso). ID pedido
 que não existe no `bdd/` entra no plano como "não encontrado", sem teste

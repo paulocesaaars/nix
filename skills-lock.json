@@ -5,55 +5,61 @@
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/atualizar-docs/SKILL.md",
-      "computedHash": "a8dd02c88c37f93b605288a7130bddb5dd246256f949c94a646b73d79d5068ef"
-    },
-    "commitar": {
-      "source": "paulocesaaars/skills",
-      "sourceType": "github",
-      "skillPath": "skills/commitar/SKILL.md",
-      "computedHash": "c80469e895a9778805c84b7b498e024d77e1bbb2b24b07d67a4bd316763f5d8e"
+      "computedHash": "065300abddc25b3cf9b77ea86c39810ed13afd02fc71685426aaca353f7afb83"
     },
     "criar-testes": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/criar-testes/SKILL.md",
-      "computedHash": "efd82097ea78459ca50ee69f046daab5aec5ba5b47bbbc4cd740f8e1267fb356"
+      "computedHash": "4edae97e70a9cc32630e5294fa5fbbea608f3422e4617bcbb13c2d53d757fbd3"
     },
     "especificar-feature": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/especificar-feature/SKILL.md",
-      "computedHash": "4410a6a20ef7c33c23433a5f2eeb6d326354ca917f41283a43b2fb209fc1cda2"
+      "computedHash": "6de54b164237e1c00f09c9a4dfc5031482519f58f93394fb0540ea0af643aa9d"
+    },
+    "especificar-projeto": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/especificar-projeto/SKILL.md",
+      "computedHash": "1513b3261481ecee024a7728caad4fdab6435a62895a8de4c2c9b1b3fa0597a8"
     },
     "gerar-guardrails": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/gerar-guardrails/SKILL.md",
-      "computedHash": "1df4eee14f748b5af00919751f96bc894c895555757511fe7bc4ca50cc0596fe"
+      "computedHash": "95ca43ac8a8b6168768a0484fa4efaf6ed4828149cc7a479c69bdecd339fbcd4"
     },
     "implementar-sdd": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/implementar-sdd/SKILL.md",
-      "computedHash": "5aa7b679bc3a198a0e08c9e88fc05c05918c18634b5d34b9884db904f4695388"
+      "computedHash": "3208c2badc60ad9706d1d981be12e713169c9c8e28074b8308fe622a261765e0"
     },
     "iniciar-projeto": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/iniciar-projeto/SKILL.md",
-      "computedHash": "71391cf80c754b126e0bfe5bd62fe7960c978bb2e60d32dbd9f8ee333faf2f21"
+      "computedHash": "1910d59e10bb11610b5b9639607509b673ece73007c0f4c4330d9290936c08c9"
     },
     "publicar-release": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/publicar-release/SKILL.md",
-      "computedHash": "eee90c29959934578c5e09a762bbc5b7ea6843a4505f971d1f56712049beb184"
+      "computedHash": "2909ed2c0df82901504feb563b782c20a281aa8c738340d9ebff681c5f20d6b7"
     },
     "revisar-codigo": {
       "source": "paulocesaaars/skills",
       "sourceType": "github",
       "skillPath": "skills/revisar-codigo/SKILL.md",
-      "computedHash": "2c533e946badc9756f4b3d42aea6018957a03ff4a6c3fa3e62d4188c1da8d1f2"
+      "computedHash": "c13dd71d09d3cdd07d3c09958453d37cf2fc0d90b8fabcea86eed4e685156a86"
+    },
+    "versionar": {
+      "source": "paulocesaaars/skills",
+      "sourceType": "github",
+      "skillPath": "skills/versionar/SKILL.md",
+      "computedHash": "739d23e32937bdeedf0b99524cbc4e808c9378acb974987eff613c5e1947694d"
     }
   }
 }

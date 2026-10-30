@@ -6,7 +6,9 @@ description: >-
   críticos e entrega uma especificação alinhada ao AGENTS.md, ao PRD.md, ao
   TDD.md e, se houver, ao DESIGN.md. Não implementa. Use quando o usuário pedir para
   especificar, detalhar, escrever a spec, levantar requisitos ou desenhar uma
-  funcionalidade nova.
+  funcionalidade nova. No início, roda os testes: sem suíte, avisa e segue;
+  se falharem, pergunta se a correção entra na especificação atual. Também
+  pergunta se o usuário quer commitar no final com a skill versionar.
 ---
 
 # Especificar Funcionalidade
@@ -16,7 +18,7 @@ Produz a especificação de uma funcionalidade. Toda a saída é em
 
 ## Regras
 
-- Siga o `AGENTS.md`. Em conflito, vale o `HARNESS.md`, se existir.
+- Siga todas as premissas do `AGENTS.md`. Em conflito, vale o `AGENTS.md`.
 - **Não** edite, crie nem apague código. A especificação é o único artefato.
 - Não invente requisitos. Para ambiguidade ou contradição, pergunte. Se a
   ambiguidade for irrelevante, registre a suposição em uma linha.
@@ -32,18 +34,54 @@ Produz a especificação de uma funcionalidade. Toda a saída é em
 
 ```
 Progresso:
-- [ ] 1. Perguntar sobre o modelo
-- [ ] 2. Ler a documentação
-- [ ] 3. Entrevistar até ter contexto
-- [ ] 4. Especificar e pedir decisões críticas
-- [ ] 5. Entregar a especificação
-- [ ] 6. Oferecer o plano
+- [ ] 0. Rodar os testes
+- [ ] 1. Perguntar se commita no final
+- [ ] 2. Perguntar sobre o modelo
+- [ ] 3. Ler a documentação
+- [ ] 4. Entrevistar até ter contexto
+- [ ] 5. Especificar e pedir decisões críticas
+- [ ] 6. Entregar a especificação
+- [ ] 7. Oferecer o plano
+- [ ] 8. Commitar, se o usuário pediu
 ```
 
-### 1. Perguntar sobre o modelo
+### 0. Rodar os testes
 
-Antes de qualquer outra ação, pergunte se o usuário quer trocar o modelo para
-esta especificação:
+Antes de qualquer outra ação, descubra o comando de teste do projeto (CI,
+Makefile, manifesto ou script) e rode-o.
+
+Se quem chamou esta skill já rodou os testes nesta conversa, não rode de
+novo. Use o resultado que ele registrou.
+
+- Suíte passando: siga.
+- Projeto sem testes (nenhum comando, nenhum arquivo de teste, ou o runner
+  não coletou nenhum): alerte que o projeto não possui testes e que não foi
+  possível validar o funcionamento. Não pare por isso.
+- Suíte falhando: mostre o erro e pergunte:
+  - **Adicionar a correção na especificação atual**
+  - **Seguir sem adicionar**
+
+  Não pare nas duas respostas. Não altere código nem teste para a suíte
+  passar. Se o usuário aceitar, a especificação desta conversa inclui a
+  correção: o que falhou e o comportamento esperado. Se o esperado não estiver
+  claro na falha, pergunte antes de escrever. Se ele recusar, a especificação
+  não cobre essa falha.
+
+### 1. Perguntar se commita no final
+
+Pergunte:
+
+- **Commitar no final** com a skill `versionar`
+- **Não commitar**
+
+Guarde a resposta. Não commite no meio do fluxo.
+
+Se esta skill estiver rodando como etapa de outra que já commita no fim
+(por exemplo `implementar-sdd`), não pergunte e não commite.
+
+### 2. Perguntar sobre o modelo
+
+Pergunte se o usuário quer trocar o modelo para esta especificação:
 
 - **Manter o modelo atual**
 - **Trocar o modelo**
@@ -51,7 +89,7 @@ esta especificação:
 Se ele quiser trocar, oriente-o a selecionar o novo modelo e a repetir o
 pedido. Pare e aguarde. O agente não troca o modelo sozinho.
 
-### 2. Ler a documentação
+### 3. Ler a documentação
 
 Leia o `AGENTS.md` e o que for relevante ao pedido:
 
@@ -66,7 +104,7 @@ Leia também o código que a funcionalidade toca, para ancorar a especificação
 no que já existe. Se a funcionalidade já existir ou contradizer o `PRD.md`,
 avise o usuário antes de seguir.
 
-### 3. Entrevistar até ter contexto
+### 4. Entrevistar até ter contexto
 
 Se o pedido for simples demais ou vago, entreviste o usuário antes de
 especificar. Faça poucas perguntas por rodada (até 4), da mais importante para
@@ -82,21 +120,20 @@ a menos, e repita até cobrir:
 Não pergunte o que o código ou a documentação já respondem. Pare de entrevistar
 quando der para especificar sem inventar.
 
-### 4. Especificar e pedir decisões críticas
+### 5. Especificar e pedir decisões críticas
 
 Monte a especificação com o modelo abaixo. Ao encontrar um ponto crítico ou
 importante sem resposta, pare e pergunte. Apresente as alternativas com
 impactos e uma recomendação. Registre cada decisão na seção **Decisões**.
 
-Se o projeto usa BDD (existe `BDD.md`), especifique também os **cenários BDD**: leia o índice `BDD.md` e os
+Se o projeto usa BDD (`BDD.md` está preenchido com índice de cenários), especifique também os **cenários BDD**: leia o índice `BDD.md` e os
 arquivos de `bdd/` que a funcionalidade toca, e sugira, em Gherkin português, os cenários novos e os que mudam por causa da
-funcionalidade. Cada cenário novo recebe o próximo ID livre da história,
-com o prefixo que os arquivos de `bdd/` já usam (o `@US-03.2` do `AGENTS.md`
-é só ilustração). Grave no arquivo daquele caso de uso, ou numa história nova (arquivo novo
+funcionalidade. Cada cenário novo recebe o próximo ID livre da história
+(por exemplo `@US-03.4`), no arquivo daquele caso de uso, ou de uma história nova (arquivo novo
 em `bdd/` e linha nova no índice); o que não dá para automatizar leva
 `@manual`. Cenários existentes só mudam com decisão explícita do usuário.
 
-### 5. Entregar a especificação
+### 6. Entregar a especificação
 
 Depois de entregar, se o projeto usa BDD, pergunte se pode adicionar os
 cenários sugeridos a `bdd/` (e ao índice `BDD.md`, se o caso de uso for novo). Só grave com a
@@ -105,13 +142,14 @@ aprovação do usuário.
 Apresente a especificação no chat. Para salvá-la em arquivo, pergunte antes o
 caminho e o nome. Não grave sem autorização.
 
-### 6. Oferecer o plano
+### 7. Oferecer o plano
 
 Ao terminar, pergunte se o usuário quer gerar um plano de implementação a
 partir da especificação.
 
-- **Se sim:** o plano sai do **modo de planejamento nativo do agente** em uso,
-  com a especificação como insumo.
+- **Se sim:** se a etapa 1 pediu commit, rode a etapa 8 antes de entrar no
+  modo de planejamento. O plano sai do **modo de planejamento nativo do agente**
+  em uso, com a especificação como insumo.
   - **Agente que entra no modo sozinho:** entre no modo de planejamento.
   - **Agente que não entra no modo sozinho:** **não** escreva o plano. Pare,
     informe o comando do agente e entregue a especificação pronta para colar
@@ -123,7 +161,16 @@ partir da especificação.
 
   **Não** use skill para gerar o plano, nem esta nem outra. Escrever o plano
   no chat também não substitui o modo de planejamento.
-- **Se não:** encerre. Não implemente nada.
+- **Se não:** siga para a etapa 8. Não implemente nada.
+
+### 8. Commitar, se o usuário pediu
+
+Só se a resposta da etapa 1 foi commitar. Localize a skill `versionar` pelo
+nome nas pastas do repositório (`.claude/skills`, `.agents/skills`) e, se
+faltar, nas globais. Leia o `SKILL.md` e siga-o. Não reinterprete as regras
+dela.
+
+Se a resposta foi não commitar, encerre. Não implemente nada.
 
 ## Modelo da especificação
 
@@ -172,7 +219,7 @@ TDD.md>
 
 ## Cenários BDD sugeridos
 <só se o projeto usa BDD: cenários em Gherkin para `bdd/`, indicando o arquivo, com IDs e `@manual` quando não
-der para automatizar; marque "novo" ou "altera @<prefixo>-xx.y", com o prefixo de `bdd/`>
+der para automatizar; marque "novo" ou "altera @HU-xx.y">
 
 ## Decisões
 | Ponto | Decisão | Motivo |

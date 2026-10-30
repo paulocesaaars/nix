@@ -21,14 +21,15 @@ documentos que existirem; o que o projeto não tem não se aplica.
 | Arquitetura, componentes, dependências, configuração, segurança | [`TDD.md`](TDD.md) |
 | Estilo visual: cores, tipografia, espaçamento, raios, elevação, componentes, layout | [`DESIGN.md`](DESIGN.md) |
 | Regras específicas deste projeto, que complementam este arquivo | [`HARNESS.md`](HARNESS.md) |
-| Critérios de aceite em Gherkin (se o projeto usa BDD), cada cenário com um teste de mesmo ID | [`BDD.md`](BDD.md) (índice) e [`bdd/`](bdd) |
+| Critérios de aceite em Gherkin e rastreabilidade dos cenários, quando BDD está preenchido | [`BDD.md`](BDD.md) (índice) e [`bdd/`](bdd) |
 
 Este arquivo vale para qualquer projeto. Leia também o `HARNESS.md`, se
 existir, e siga **tudo** o que estiver nele: ele traz as regras específicas
 deste projeto. Se uma decisão do `HARNESS.md` conflitar com este arquivo, vale o
 `HARNESS.md`, inclusive sobre as regras daqui que se declaram prevalentes.
 
-@HARNESS.md
+A leitura de `HARNESS.md` é uma instrução textual; não dependa de uma
+sintaxe de importação automática específica de um agente.
 
 ---
 
@@ -99,21 +100,21 @@ para qualquer alteração visível ao usuário.
 
 ### Critérios de aceite (BDD)
 
-Esta seção vale quando o projeto usa BDD, isto é, tem um [`BDD.md`](BDD.md). Ele
-é o índice dos casos de uso; os critérios de aceite ficam em Gherkin na pasta
-[`bdd/`](bdd), um arquivo por caso de uso. Cada cenário tem um ID estável (por
-exemplo `@US-03.2`) e é coberto por um teste com o mesmo ID; o que não dá para
-automatizar leva `@manual` e vira checklist do usuário.
+Esta seção vale quando `BDD.md` está preenchido com um índice de cenários e
+há cenários em `bdd/`. Arquivos vazios apenas demonstram a estrutura e não
+ativam BDD. Os cenários usam Gherkin e IDs estáveis; testes, quando solicitados,
+podem referenciar esses IDs para rastreabilidade. Cenários `@manual` compõem
+um checklist, não uma obrigação de automatização.
 
-- Ao especificar uma funcionalidade, especifique também os cenários BDD:
-  sugira os novos e os que mudam, e só grave em `bdd/` (e no índice, se o caso
-  de uso for novo) com a aprovação do usuário.
-- Ao implementar um cenário, escreva o teste dele. Ao terminar uma
-  implementação, e sempre antes de commit ou release, rode os testes e confira
-  a cobertura dos cenários de `bdd/`. Teste falhando bloqueia a entrega.
-- **Nunca** altere um cenário nem o resultado esperado de um teste para fazê-lo
-  passar. Mudar o comportamento esperado exige a aprovação do usuário.
-- **Nunca** contorne as checagens: corrija a causa.
+- Ao especificar uma funcionalidade, sugira cenários pertinentes e grave-os
+  somente com aprovação do usuário.
+- Só crie ou altere testes quando o usuário pedir ou aceitar explicitamente a
+  sugestão. Para gerar testes BDD, é necessário haver cenários preenchidos.
+- Executar testes existentes é uma verificação distinta de criar testes e pode
+  ser exigido pelo fluxo solicitado. Relate testes não executados e falhas.
+- Nunca altere um cenário ou resultado esperado apenas para fazer um teste
+  passar; mudanças de comportamento esperado exigem aprovação.
+- Nunca contorne as checagens.
 
 ### Ferramentas de pesquisa e versionamento
 
@@ -142,12 +143,11 @@ usuário e diga qual alternativa foi usada.
 - Mensagens de erro indicam a **ação corretiva**.
 - Em linguagem tipada, as funções públicas têm tipos. O linter e o verificador
   de tipos do projeto ficam sem erros.
-- Com BDD (`BDD.md`), os testes nascem dos cenários de `bdd/`; outros testes só
-  quando o usuário pedir. A validação padrão é a checagem estática limpa e os
-  testes passando, mais o checklist dos cenários `@manual`.
-- Sem BDD, não crie nem execute testes por iniciativa própria; escreva-os
-  quando o usuário pedir. A validação padrão é a checagem estática limpa, mais
-  uma verificação manual do comportamento.
+- Só escreva ou altere testes quando o usuário solicitar. Se houver cenários
+  BDD preenchidos, eles orientam os testes solicitados; não imponha relação
+  de um teste por cenário. Execute testes existentes conforme o fluxo pedido.
+- Sem testes executados, relate a limitação e faça verificações apropriadas ao
+  escopo, incluindo checagem estática ou verificação manual quando cabível.
 
 ### Comunicação e idioma
 

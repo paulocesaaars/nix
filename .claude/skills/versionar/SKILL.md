@@ -1,12 +1,13 @@
 ---
-name: commitar
+name: versionar
 description: >-
   Commita todas as mudanças pendentes em commits separados por assunto e
   funcionalidade, sobe a versão do software em um commit próprio e envia a
   branch ao remoto, sem criar tag nem publicar release. Ao final, oferece atualizar a documentação do projeto e
-  abrir o pull request. Use
-  quando o usuário pedir para commitar, fazer commit, organizar commits ou
-  commitar tudo agrupado por assunto, sem gerar release.
+  abrir o pull request. No início, roda os testes. Sem suíte, avisa que não
+  foi possível validar o funcionamento e segue. Use
+  quando o usuário pedir esse fluxo completo. Um pedido apenas de commit não
+  autoriza subir versão nem enviar a branch; pergunte antes de executar essas etapas.
 ---
 
 # Gerar Commits
@@ -19,6 +20,10 @@ ao usuário e mensagens de commit em **português (Brasil)**.
 Nada aqui é específico de um projeto: branch, checagens e padrão de mensagens
 são **descobertos** no repositório (passo 1). Se algo não puder ser descoberto,
 pergunte em vez de supor.
+
+Se o usuário pedir apenas commit, execute somente os commits autorizados;
+não altere versão nem faça push sem pedido ou confirmação. Quando outra skill
+oferecer este fluxo, explicite que ele inclui versão e envio antes de aceitá-lo.
 
 ## Fluxo
 
@@ -48,6 +53,15 @@ Progresso:
 
 ### 2. Pré-checagens
 
+A primeira ação é rodar os testes. Descubra o comando (CI, Makefile, manifesto
+ou script) e execute-o.
+
+- Suíte passando: siga.
+- Suíte falhando: mostre os erros e pare. Não commite com teste quebrado.
+- Projeto sem testes (nenhum comando, nenhum arquivo de teste, ou o runner
+  não coletou nenhum): alerte que o projeto não possui testes e que não foi
+  possível validar o funcionamento. Não pare por isso.
+
 ```bash
 git fetch origin
 git status -sb                     # não pode estar atrás do remoto
@@ -55,10 +69,9 @@ git status -sb                     # não pode estar atrás do remoto
 
 - Atrás do remoto, com merge/rebase em andamento ou conflito: pare e informe a
   ação corretiva. Não faça `pull`, `rebase` nem `reset` por conta própria.
-- Rode localmente as checagens descobertas (lint, tipos) e os testes do projeto
-  (ex.: `pytest`). Se falharem, mostre os erros e pare — não commite com
-  checagem ou teste quebrado. "Nenhum teste coletado" não é falha.
-- Se o projeto tem `BDD.md` (índice) com a pasta `bdd/` e um verificador de
+- Rode localmente as checagens descobertas (lint, tipos). Se falharem, mostre
+  os erros e pare — não commite com checagem quebrada.
+- Se o projeto tem `BDD.md` preenchido (índice) com a pasta `bdd/` e um verificador de
   cobertura (procure em scripts, Makefile, manifesto ou CI), rode-o: ID inexistente é erro e para;
   cenário sem teste é aviso e entra no relatório.
 
@@ -141,7 +154,10 @@ Descubra **todos** os locais que carregam a versão do software:
 A versão da release (manifesto = tag `vX.Y.Z`) é a **fonte da verdade**: todo
 outro local a espelha, nunca o contrário.
 
-Escolha a nova versão:
+Escolha a nova versão. Conventional Commits são indícios, não uma regra completa
+do SemVer: avalie o contrato público e a compatibilidade, inclusive que em
+versões 0.y.z a API pode mudar. Não classifique uma mudança só pelo tipo do commit.
+
 
 - Use a versão pedida pelo usuário; senão aplique SemVer sobre a última tag
   (`git tag --sort=-v:refname | head -1`): **major** para quebra de contrato,

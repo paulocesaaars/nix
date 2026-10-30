@@ -12,7 +12,11 @@ description: >-
 
 # Iniciar Projeto
 
-Inicia o projeto instalando as instruções de agente padronizadas. Explicações ao usuário
+Inicia o projeto instalando as instruções de agente padronizadas. Roda **uma
+vez**, depois que as skills já estiverem instaladas no projeto e antes de
+`especificar-projeto`. Se o `AGENTS.md` já for o modelo e os documentos de
+referência já existirem, diga que o projeto já foi iniciado e não refaça.
+Explicações ao usuário
 em **português (Brasil)**. Edita **apenas** `AGENTS.md`, `CLAUDE.md` e `HARNESS.md` e cria, se faltarem, os
 documentos de referência (`PRD.md`, `TDD.md`, `DESIGN.md`, `BDD.md` e a pasta
 `bdd/`), todos
@@ -76,7 +80,8 @@ ou arquitetura não entra; sugira movê-lo para a documentação do projeto.
 ### 4. HARNESS.md
 
 O `AGENTS.md` (modelo) é igual em todo projeto e importa o `HARNESS.md`
-com `@HARNESS.md`. As regras próprias do projeto vivem só nele.
+por instrução textual de leitura. As regras próprias do projeto vivem só nele;
+`@HARNESS.md` só é importação automática onde o agente oferecer esse recurso.
 
 | Situação | Ação |
 |----------|------|
