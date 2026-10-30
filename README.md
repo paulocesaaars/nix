@@ -26,7 +26,7 @@ Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 - Um vault do Obsidian (notas `.md`)
 - ~220 MB livres na primeira sincronização (modelo padrão `lulu`). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB
 
-Não é preciso instalar Python para o binário da release: o arquivo baixado já traz o runtime. Se a empresa bloqueia o `.exe` e o PowerShell, use Python 3.11+ pelo Git Bash, na seção [Quando o executável e o PowerShell estão bloqueados](#quando-o-executável-e-o-powershell-estão-bloqueados).
+Não é preciso instalar Python para o binário da release: o arquivo baixado já traz o runtime. Se a empresa bloqueia o `.exe`, o PowerShell e os links de download do instalador, baixe o zip do código na release e instale pelo Python no Git Bash, na seção [Quando o executável, o PowerShell e os links de download estão bloqueados](#quando-o-executável-o-powershell-e-os-links-de-download-estão-bloqueados).
 
 ## Instalação
 
@@ -62,9 +62,19 @@ Depois registre o servidor no editor — veja [Registro no cliente MCP](#registr
 
 `NIX_VERSION=1.2.3` (com ou sem o `v`) instala uma release específica.
 
-### Quando o executável e o PowerShell estão bloqueados
+### Quando o executável, o PowerShell e os links de download estão bloqueados
 
-Algumas redes bloqueiam o download de `.exe` e a execução do PowerShell. O `install.ps1` não serve nesse caso: ele baixa o binário e roda no PowerShell. Instale pelo código, com Python 3.11 ou mais novo e Git, no Git Bash. Nenhum `nix.exe` da release entra na máquina. O `pip` precisa alcançar o PyPI.
+Algumas redes bloqueiam o `.exe`, a execução do PowerShell e o download que o `install.ps1` faz (`irm` do script e dos binários da release). O caminho é baixar o zip do código-fonte na [última release](https://github.com/paulocesaaars/nix/releases/latest) — o arquivo **Source code (zip)** — e usar a instalação por Python, a mesma base da seção [A partir do código (desenvolvedor)](#a-partir-do-código-desenvolvedor). Nenhum `nix.exe` entra na máquina.
+
+Se o computador da empresa não abre o GitHub, baixe esse zip em outra máquina e copie o arquivo. Descompacte e entre na pasta (`nix-<versão>`). No Git Bash, com Python 3.11 ou mais novo:
+
+```bash
+python scripts/bootstrap.py --vault "C:/Obsidian/MeuVault"
+```
+
+O `bootstrap.py` cria o `.venv`, instala os pacotes de `requirements.txt`, grava `NIX_HOME`, coloca `nix` no PATH e roda `nix init`. O zip da release traz esse script e o `requirements.txt`. O `requirements-dev.txt` fica só no clone completo do Git: a lista de comandos da seção do desenvolvedor que usa esse arquivo vale para quem alterou o código a partir do clone. O `pip` precisa alcançar o PyPI. Sem `--vault`, o `init` pergunta o caminho. No Windows, use barras `/` no caminho do vault.
+
+Se `python` não existir nesse bash, use `py` ou `python3`. Com Git liberado, o mesmo script roda depois de um clone:
 
 ```bash
 git clone https://github.com/paulocesaaars/nix.git
@@ -72,15 +82,13 @@ cd nix
 python scripts/bootstrap.py --vault "C:/Obsidian/MeuVault"
 ```
 
-Se `python` não existir nesse bash, use `py` ou `python3`. Sem `--vault`, o `init` pergunta o caminho. No Windows, use barras `/` no caminho do vault.
-
-O script cria o `.venv`, instala o Nix, grava `NIX_HOME` e o comando `nix` no PATH do usuário e no `~/.bashrc`, e roda `nix init`. Abra um terminal novo e rode `nix doctor`. No terminal que já está aberto:
+Abra um terminal novo e rode `nix doctor`. No terminal que já está aberto:
 
 ```bash
 source bin/env.sh
 ```
 
-No MCP não há `nix.exe`. Aponte `command` para o Python do ambiente e passe o módulo em `args`. Troque a pasta se o clone ficou em outro lugar:
+No MCP não há `nix.exe`. Aponte `command` para o Python do ambiente e passe o módulo em `args`. Troque a pasta se o zip ou o clone ficou em outro lugar:
 
 ```json
 {
@@ -95,7 +103,7 @@ No MCP não há `nix.exe`. Aponte `command` para o Python do ambiente e passe o 
 
 Os hooks dessa instalação chamam `python -m nix hook`. O `nix-hook.exe` da release não entra.
 
-Para desfazer o checkout: `python scripts/uninstall.py`. O vault do Obsidian não é alterado. `--yes` pula a pergunta; `--keep-data` preserva `settings.db` e o índice. O binário instalado por `install.ps1` ou `install.sh` continua saindo por `uninstall.ps1`, `uninstall.bat` ou `uninstall.sh`.
+Para desfazer essa instalação, na pasta descompactada ou no clone: `python scripts/uninstall.py`. O vault do Obsidian não é alterado. `--yes` pula a pergunta; `--keep-data` preserva `settings.db` e o índice. O binário instalado por `install.ps1` ou `install.sh` sai pelos comandos da seção [Desinstalar](#desinstalar).
 
 A primeira sincronização ainda baixa o modelo de embedding (cerca de 220 MB, o `lulu`).
 
@@ -279,7 +287,7 @@ Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta pa
 
 O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
-Na instalação por Python, sem `nix.exe`, use o interpretador do `.venv` como em [Quando o executável e o PowerShell estão bloqueados](#quando-o-executável-e-o-powershell-estão-bloqueados).
+Na instalação por Python, sem `nix.exe`, use o interpretador do `.venv` como em [Quando o executável, o PowerShell e os links de download estão bloqueados](#quando-o-executável-o-powershell-e-os-links-de-download-estão-bloqueados).
 
 ## Primeiros passos
 
