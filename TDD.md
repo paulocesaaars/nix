@@ -709,7 +709,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 
 ## 15. Testes e critérios de aceite
 
-Os critérios de aceite ficam em Gherkin na pasta [`bdd/`](./bdd), um arquivo por
+Os critérios de aceite das funcionalidades ficam em Gherkin na pasta [`bdd/`](./bdd), um arquivo por
 caso de uso; o [BDD.md](./BDD.md) é o índice. Cada cenário
 tem um ID (`@HU-03.2`) e o teste que o cobre leva o mesmo ID:
 

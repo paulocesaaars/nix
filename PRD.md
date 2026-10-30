@@ -190,12 +190,6 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 **HU-03 — Sincronizar mudanças feitas no Obsidian**
 > Como usuário, depois de escrever direto no Obsidian, quero atualizar o índice quando eu decidir.
 
-**HU-04 — Instalar o ambiente**
-> Como usuário, quero um único arquivo para copiar, sem instalar Python, e que a configuração do vault comece em seguida.
-
-**HU-07 — Desinstalar o ambiente**
-> Como usuário, quero um único executável que desfaça a instalação sem apagar o vault.
-
 **HU-05 — Registrar conhecimento pelo editor**
 > Como usuário, quero pedir ao agente do editor que crie uma nota, e que ela já fique pesquisável.
 
