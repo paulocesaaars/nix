@@ -15,7 +15,8 @@ for arg in "$@"; do
     -h|--help)
       cat <<'EOF'
 Remove NIX_HOME e $NIX_HOME/bin do PATH se apontarem para esta instalação,
-apaga o binário e, salvo --keep-data, apaga settings.db e .nix.
+apaga o binário, o cache de extração (onefile-* e hook-*) e, salvo --keep-data,
+apaga settings.db e .nix. Se a pasta da instalação ficar vazia, ela também sai.
 O vault do Obsidian não é alterado.
 
 Uso:
@@ -78,6 +79,7 @@ if [ "$yes" -ne 1 ]; then
     die "Sem terminal interativo. Rode de novo com --yes."
   fi
   echo "Isto remove o Nix em $root."
+  echo "O cache de extração (onefile-* e hook-*) também será apagado."
   if [ "$keep" -ne 1 ]; then
     echo "settings.db e .nix também serão apagados. O vault não."
   fi
@@ -123,9 +125,47 @@ fi
 if [ "$keep" -ne 1 ]; then
   rm -rf "$root/.nix"
   rm -f "$root/settings.db" "$root/settings.db-wal" "$root/settings.db-shm"
-  echo "Binário, settings.db e .nix removidos de $root. O vault não foi alterado."
+fi
+
+cache_root() {
+  case "$(uname -s)" in
+    Darwin)
+      printf '%s\n' "$HOME/Library/Caches/nix"
+      ;;
+    *)
+      if [ -n "${XDG_CACHE_HOME:-}" ]; then
+        printf '%s\n' "$XDG_CACHE_HOME/nix"
+      else
+        printf '%s\n' "$HOME/.cache/nix"
+      fi
+      ;;
+  esac
+}
+
+remove_extraction_cache() {
+  dir=$1
+  [ -d "$dir" ] || return 0
+  for entry in "$dir"/onefile-* "$dir"/hook-*; do
+    [ -d "$entry" ] || continue
+    rm -rf "$entry"
+  done
+  rmdir "$dir" 2>/dev/null || true
+}
+
+remove_extraction_cache "$root"
+cache=$(cache_root)
+if [ "$cache" != "$root" ]; then
+  remove_extraction_cache "$cache"
+fi
+
+if [ "$keep" -ne 1 ]; then
+  if [ -d "$root" ]; then
+    echo "Binário, settings.db, .nix e o cache de extração removidos de $root. O vault não foi alterado."
+  else
+    echo "Binário, settings.db, .nix e o cache de extração removidos. A pasta $root foi apagada. O vault não foi alterado."
+  fi
 else
-  echo "Binário removido de $root. settings.db e .nix foram preservados."
+  echo "Binário e cache de extração removidos de $root. settings.db e .nix foram preservados."
 fi
 
 echo "Abra um terminal novo: o comando nix desta instalação deixa de valer."

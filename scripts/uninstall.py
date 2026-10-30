@@ -1,4 +1,4 @@
-"""Remove o PATH do Nix e apaga artefatos locais (.venv, .nix, settings.db)."""
+"""Remove o PATH do Nix e apaga artefatos locais (.venv, .nix, settings.db, cache)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from register_path import unregister_user_command  # noqa: E402
 
 _HELP = """\
 Remove o Nix de um checkout de desenvolvimento: tira NIX_HOME e o comando nix
-do PATH se apontarem para esta pasta, apaga .venv e, salvo --keep-data,
-apaga também .nix (índice, backups, logs) e settings.db.
+do PATH se apontarem para esta pasta, apaga .venv, o cache de extração
+(onefile-* e hook-*) e, salvo --keep-data, apaga também .nix (índice, backups,
+logs) e settings.db.
 O vault do Obsidian e o código-fonte não são alterados.
 O binário instalado na máquina usa uninstall.ps1, uninstall.sh ou uninstall.bat.
 
@@ -90,6 +91,49 @@ def _remove_path(path: Path) -> str | None:
     return None
 
 
+def _cache_root() -> Path:
+    """Pasta do cache Nuitka. Espelha `platform_cache_dir()` + `nix`."""
+    if sys.platform == "win32":
+        raw = os.environ.get("LOCALAPPDATA", "").strip()
+        base = Path(raw) if raw else Path.home() / "AppData" / "Local"
+        return base / "nix"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / "nix"
+    raw = os.environ.get("XDG_CACHE_HOME", "").strip()
+    base = Path(raw).expanduser() if raw else Path.home() / ".cache"
+    return base / "nix"
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return os.path.normcase(str(left)) == os.path.normcase(str(right))
+
+
+def _remove_extraction_cache(directory: Path, *, remove_dir: bool) -> list[str]:
+    """Apaga `onefile-*` e `hook-*`. A pasta sai só se ficar vazia e não for o código."""
+    failures: list[str] = []
+    if not directory.is_dir():
+        return failures
+    for child in list(directory.iterdir()):
+        if child.is_dir() and (child.name.startswith("onefile-") or child.name.startswith("hook-")):
+            failed = _remove_path(child)
+            if failed:
+                failures.append(failed)
+    if not remove_dir or not directory.is_dir():
+        return failures
+    try:
+        next(directory.iterdir())
+    except StopIteration:
+        failed = _remove_path(directory)
+        if failed:
+            failures.append(failed)
+    except OSError as exc:
+        failures.append(
+            f"{directory}: {exc}. Feche programas que usem esta pasta "
+            "(terminais, editor, servidor MCP) e rode o desinstalador de novo."
+        )
+    return failures
+
+
 def _local_targets(*, keep_data: bool) -> list[Path]:
     targets = [ROOT / ".venv"]
     targets.extend(sorted(ROOT.glob("*.egg-info")))
@@ -109,6 +153,7 @@ def _print_plan(*, keep_data: bool) -> None:
     print("Será removido:")
     print("  - NIX_HOME e o comando nix do PATH do usuário")
     print("  - .venv")
+    print("  - cache de extração (onefile-* e hook-*)")
     if keep_data:
         print("  (settings.db e .nix serão mantidos por --keep-data)")
     else:
@@ -148,6 +193,8 @@ def main() -> None:
         failed = _remove_path(target)
         if failed:
             failures.append(failed)
+    cache = _cache_root()
+    failures.extend(_remove_extraction_cache(cache, remove_dir=not _same_path(cache, ROOT)))
 
     if failures:
         for item in failures:

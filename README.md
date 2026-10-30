@@ -175,9 +175,47 @@ O Devin na nuvem não alcança a Nix desta máquina. O MCP precisa estar no Devi
 
 ## Desinstalar
 
-O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `nix` e `nix-hook` e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. **O vault do Obsidian não é alterado.** Não precisa da pasta do repositório.
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `nix` e `nix-hook`, o cache de extração (`onefile-*` e `hook-*`) e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. Se a pasta da instalação ficar vazia, ela também sai. **O vault do Obsidian não é alterado.**
 
 Confirme com `s`. Em script, passe `--yes`. `--keep-data` preserva `settings.db` e o índice.
+
+### Nix instalado pelo PowerShell
+
+Quem instalou com `install.ps1` desinstala sem a pasta do repositório. No PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.ps1 -OutFile "$env:TEMP\uninstall-nix.ps1"
+& "$env:TEMP\uninstall-nix.ps1"
+```
+
+Responda `s` em `Continuar? [s/N]`. O script também apaga o cache `onefile-*` e `hook-*`. Se `%LOCALAPPDATA%\nix` ficar vazia, a pasta sai. A linha que confirma o fim diz que a pasta foi apagada, ou que o que restava foi removido dela. Abra um terminal novo em seguida.
+
+```powershell
+& "$env:TEMP\uninstall-nix.ps1" --yes
+# para manter settings.db e o índice:
+& "$env:TEMP\uninstall-nix.ps1" --keep-data --yes
+```
+
+No Linux e no macOS, o script da release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.sh | sh
+# ou: curl -fsSL .../uninstall.sh -o uninstall.sh && sh uninstall.sh --yes
+```
+
+### Na pasta do repositório ou do zip
+
+Na pasta do clone, ou na pasta descompactada do **Source code (zip)** — a instalação por `bootstrap.py`:
+
+```bash
+python scripts/uninstall.py
+# ou: python scripts/uninstall.py --yes
+# ou: python scripts/uninstall.py --keep-data --yes
+```
+
+Esse comando tira o `NIX_HOME` se ele apontar para essa pasta, apaga o `.venv` e, salvo `--keep-data`, também `.nix/` e `settings.db`. O código-fonte da pasta permanece.
+
+Com os scripts da raiz do repositório:
 
 ```bat
 uninstall.bat
@@ -199,19 +237,9 @@ sh uninstall.sh
 # ou: sh uninstall.sh --keep-data --yes
 ```
 
-Pelo raw, o mesmo script da release:
-
-```powershell
-irm https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.ps1 | iex
-```
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.sh | sh
-```
-
 Abra um **novo terminal** depois: o `nix` deste projeto deixa de valer. Se o registro permanente falhar, veja [Remover NIX_HOME e o PATH à mão](#remover-nix_home-e-o-path-à-mão). Remova também o servidor `nix` do `mcp.json` do editor.
 
-O modelo `BAAI/bge-m3` (~2,3 GB) pode permanecer no cache do Hugging Face; o desinstalador não apaga esse cache (pode ser compartilhado com outros programas). O cache de extração do binário (`onefile-<versão>` e `hook-<versão>`) também fica; apague essa pasta se quiser o espaço de volta.
+O modelo de embedding pode permanecer no cache do Hugging Face (`BAAI/bge-m3` pesa ~2,3 GB). Esse cache é compartilhado com outros programas, e o desinstalador não o apaga. O servidor `nix` no `mcp.json` de cada projeto também fica: apague essa entrada no editor.
 
 ## Registro no cliente MCP
 

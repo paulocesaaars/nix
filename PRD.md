@@ -122,7 +122,7 @@ Esta é a regra de negócio central do produto:
 | RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
 | RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar os binários `nix` e `nix-hook` da plataforma, conferir o SHA-256 de cada um, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `settings.db`. Não exige Python na máquina | Must |
-| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar `nix` e `nix-hook`, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` | Must |
+| RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar `nix` e `nix-hook`, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), apagar o cache de extração (`onefile-*` e `hook-*`) e a pasta da instalação se ela ficar vazia, e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração | Must |
 
 ### 5.6 Interface MCP
 
@@ -272,7 +272,7 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 - CLI de bootstrap: `init [--name] [--vault] [--embedding-model] [--force]` (o primeiro vault chama-se `Default` se `--name` for omitido), `vault` (listar, cadastrar, renomear, remover, padrão, pasta e ajustes), `sync` e `status` com `--vault` repetível e `--all`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor. Uma configuração anterior, de um vault só, vira o `Default` e conserva o índice e os backups já gravados.
 - Vários vaults nomeados (de 1 a 5, exatamente um padrão) no mesmo processo. Ferramenta sem `vault` usa o padrão. Busca em um, em vários ou em todos. Escrita num único vault.
 - Instalador `install.bat` / `install.ps1` / `install.sh` (`nix` e `nix-hook` da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
-- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, `nix` e `nix-hook`, `.nix/` e `settings.db`; não toca no vault).
+- Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, `nix` e `nix-hook`, `.nix/`, `settings.db` e o cache `onefile-*`/`hook-*`; apaga a pasta da instalação se ficar vazia; não toca no vault).
 - CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em um ou mais vaults, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, tela Vaults, configuração e histórico).
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
 - Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, Claude Code, VS Code, Devin CLI e Devin Desktop.
@@ -315,4 +315,4 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 - **Skill da Nix** — `SKILL.md` que vem no pacote e o `nix skills install` copia para a pasta de skills do agente, no projeto. O arquivo `.nix-skill` marca essas pastas para o `remove` só apagar o que a Nix instalou.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
 - **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa `nix` e `nix-hook`, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
-- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `nix` e `nix-hook`, `.nix/` e `settings.db`; não altera o vault.
+- **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `nix` e `nix-hook`, `.nix/`, `settings.db` e o cache `onefile-*`/`hook-*`, e a pasta da instalação se ficar vazia; não altera o vault.

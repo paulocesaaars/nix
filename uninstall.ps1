@@ -1,4 +1,4 @@
-# Remove o binário do Nix, NIX_HOME e o PATH. Não altera o vault.
+﻿# Remove o binário do Nix, NIX_HOME e o PATH. Não altera o vault.
 # Uso: .\uninstall.ps1 [--yes] [--keep-data]
 $ErrorActionPreference = "Stop"
 $script:NixSourced = ($MyInvocation.InvocationName -eq ".")
@@ -19,7 +19,8 @@ foreach ($arg in $args) {
     if ($arg -in @("-h", "--help")) {
         Write-Host @"
 Remove NIX_HOME e {NIX_HOME}\bin do PATH se apontarem para esta instalação,
-apaga o binário e, salvo --keep-data, apaga settings.db e .nix.
+apaga o binário, o cache de extração (onefile-* e hook-*) e, salvo --keep-data,
+apaga settings.db e .nix. Se a pasta da instalação ficar vazia, ela também sai.
 O vault do Obsidian não é alterado.
 
 Uso:
@@ -98,6 +99,7 @@ if (-not $Yes) {
         Die "Sem terminal interativo. Rode de novo com --yes."
     }
     Write-Host "Isto remove o Nix em $Root."
+    Write-Host "O cache de extração (onefile-* e hook-*) também será apagado."
     if (-not $KeepData) { Write-Host "settings.db e .nix também serão apagados. O vault não." }
     $answer = Read-Host "Continuar? [s/N]"
     if ($answer.Trim().ToLower() -notin @("s", "sim", "y", "yes")) {
@@ -131,10 +133,36 @@ if (-not $KeepData) {
     }
     $nixDir = Join-Path $Root ".nix"
     if (Test-Path -LiteralPath $nixDir) { Remove-Item -Recurse -Force -LiteralPath $nixDir }
-    Write-Host "Binário, settings.db e .nix removidos de $Root. O vault não foi alterado."
+}
+
+function Remove-NixExtractionCache([string]$Dir) {
+    if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return }
+    Get-ChildItem -Force -LiteralPath $Dir -Directory | ForEach-Object {
+        if ($_.Name -like "onefile-*" -or $_.Name -like "hook-*") {
+            Remove-Item -Recurse -Force -LiteralPath $_.FullName
+        }
+    }
+    if ((Test-Path -LiteralPath $Dir) -and -not (Get-ChildItem -Force -LiteralPath $Dir | Select-Object -First 1)) {
+        Remove-Item -Force -LiteralPath $Dir
+    }
+}
+
+Remove-NixExtractionCache $Root
+if ($env:LOCALAPPDATA) {
+    $Cache = Join-Path $env:LOCALAPPDATA "nix"
+    if (-not (Same-Path $Cache $Root)) { Remove-NixExtractionCache $Cache }
+}
+
+if (-not $KeepData) {
+    if (Test-Path -LiteralPath $Root) {
+        Write-Host "Binário, settings.db, .nix e o cache de extração removidos de $Root. O vault não foi alterado."
+    }
+    else {
+        Write-Host "Binário, settings.db, .nix e o cache de extração removidos. A pasta $Root foi apagada. O vault não foi alterado."
+    }
 }
 else {
-    Write-Host "Binário removido de $Root. settings.db e .nix foram preservados."
+    Write-Host "Binário e cache de extração removidos de $Root. settings.db e .nix foram preservados."
 }
 
 Write-Host "Abra um terminal novo: o comando nix desta instalação deixa de valer."

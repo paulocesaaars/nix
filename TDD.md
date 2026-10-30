@@ -102,7 +102,7 @@ O vault migrado do esquema 1 é a exceção: o índice (`index.db` e o chroma) c
 ```
 nix/
 ├── install.bat / install.sh / install.ps1  # baixa o binário, confere SHA-256, registra PATH e inicia `nix init`
-├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix e settings.db
+├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix, settings.db e o cache onefile/hook
 ├── bin/nix / bin/nix.cmd   # shims só do checkout de desenvolvimento (acham o .venv)
 ├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH no checkout
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
@@ -111,7 +111,7 @@ nix/
 ├── scripts/smoke_frozen.py # gate de --version, doctor --json e nix-hook
 ├── scripts/check_bdd.py    # cobertura dos cenários de bdd/ pelos testes
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
-├── scripts/uninstall.py    # desfaz PATH e apaga artefatos do checkout
+├── scripts/uninstall.py    # desfaz PATH, artefatos do checkout e o cache onefile/hook
 ├── nix.jpeg                # foto da Nix (mascote no README)
 ├── settings.db            # config local (não versionado; criado por `nix init`)
 ├── .nix/                   # estado local: data (SQLite+Chroma), backups, logs, sessions.db
@@ -501,7 +501,7 @@ O instalador na raiz do repositório não entra no núcleo: só baixa o binário
 ```
 install.ps1 / install.sh          # release estável (ou NIX_VERSION) → SHA-256 → {NIX_HOME}/bin/nix e nix-hook
 install.bat                       # delega a install.ps1
-uninstall.ps1 / uninstall.sh      # PATH, binário, settings.db e .nix (não o vault)
+uninstall.ps1 / uninstall.sh      # PATH, binário, settings.db, .nix e cache onefile/hook (não o vault)
 uninstall.bat                     # delega a uninstall.ps1
 scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path → nix init
 scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12; também gera o nix-hook
@@ -514,7 +514,7 @@ O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive
 
 `NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. Argumentos extras (`--vault PATH`, `--force`) vão para `nix init` só quando `settings.db` ainda não existe. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
-O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação; `--keep-data` preserva `settings.db` e `.nix/`. O vault não é alterado.
+O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação. Apaga também o cache de extração (`onefile-*` e `hook-*` em `{CACHE_DIR}/nix` e na pasta da instalação) e, se a pasta da instalação ficar vazia, a pasta. No Linux e no macOS esse cache não é a pasta da instalação; só entram diretórios com esses prefixos, para não apagar outros arquivos em `~/.cache/nix`. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração. O vault não é alterado. O modelo no cache do Hugging Face fica: pode ser compartilhado com outros programas.
 
 No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `settings.db` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
 
