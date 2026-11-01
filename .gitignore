@@ -27,6 +27,7 @@ chroma/
 nix.toml
 .env
 .env.*
+.codex/
 
 # Sistema
 .DS_Store
