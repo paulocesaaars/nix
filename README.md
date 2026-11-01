@@ -20,14 +20,14 @@ Transporte: **MCP stdio**. No terminal, `nix` sem subcomando abre a interface. O
 ## Por que usar
 
 - O agente do editor **encontra ideias**, não só palavras: busca semântica + léxica no vault.
-- **Cria e atualiza notas** no formato do Obsidian, sem sair do Cursor.
+- **Cria e atualiza notas** em Markdown, sem sair do Cursor.
 - Tudo roda **na sua máquina**. Nenhum trecho do vault vai para API de embedding.
 - Você controla quando o índice muda: não há watcher em segundo plano.
 
 ## Requisitos
 
 - Windows amd64, Linux (amd64 ou arm64) ou macOS Apple Silicon
-- Uma wiki do Obsidian (notas `.md`)
+- Uma pasta de notas Markdown (`.md`)
 - ~220 MB livres na primeira sincronização (modelo padrão `lulu`). O `spitz` (`BAAI/bge-m3`) pesa ~2,3 GB
 
 Não é preciso instalar Python para o binário da release: o arquivo baixado já traz o runtime. Se a empresa bloqueia o `.exe`, o PowerShell e os links de download do instalador, baixe o zip do código na release e instale pelo Python no Git Bash, na seção [Quando o executável, o PowerShell e os links de download estão bloqueados](#quando-o-executável-o-powershell-e-os-links-de-download-estão-bloqueados).
@@ -388,9 +388,9 @@ Depois: `source ~/.bashrc` ou abra um terminal novo.
 
 Esta é a regra central:
 
-> Alterações feitas **fora** do Nix (Obsidian, editor) **não** são indexadas sozinhas. Alterações feitas pelas ferramentas MCP atualizam o índice na mesma operação.
+> Alterações feitas **fora** do Nix, por exemplo, em um editor de texto, **não** são indexadas sozinhas. Alterações feitas pelas ferramentas MCP atualizam o índice na mesma operação.
 
-Depois de editar no Obsidian, rode `nix sync` ou peça `sync_index` ao agente. Se a vetorização de uma escrita falhar, o arquivo permanece na wiki (fonte da verdade) e um `nix sync` corrige o índice.
+Depois de editar as notas fora do Nix, rode `nix sync` ou peça `sync_index` ao agente. Se a vetorização de uma escrita falhar, o arquivo permanece na wiki (fonte da verdade) e um `nix sync` corrige o índice.
 
 ## CLI
 
@@ -442,7 +442,7 @@ Estes são os comandos que você roda no terminal. `nix --help` lista os grupos.
 - **Cadastrar a primeira wiki.** `nix init` grava a pasta e o modelo. A instalação não faz mais essa pergunta.
 - **Achar uma ideia no editor.** Com o MCP da Nix ligado, peça ao agente para buscar nas notas. Ele usa `search_notes` no índice da wiki.
 - **Registrar uma nota sem sair do editor.** Peça ao agente para criar ou atualizar a nota. A escrita passa pelas ferramentas do MCP e o índice daquela nota é atualizado na hora.
-- **Trazer para o índice o que você editou no Obsidian.** Rode `nix sync`. `--dry-run` mostra o que mudaria. `--full` reconstrói o índice, e é obrigatório depois de trocar o modelo de embedding.
+- **Trazer para o índice o que você editou fora do Nix.** Rode `nix sync`. `--dry-run` mostra o que mudaria. `--full` reconstrói o índice, e é obrigatório depois de trocar o modelo de embedding.
 - **Usar mais de uma wiki.** `nix wiki add Trabalho C:/Notas/Trabalho` cadastra a segunda. `nix wiki default Trabalho` passa a usá-la quando o nome é omitido. A busca pode pedir uma, várias ou todas.
 - **Descobrir por que o editor não conecta.** `nix doctor` confere o comando, a configuração e o índice.
 - **Guardar memória entre agentes.** `nix brain enable --wiki Default` liga o Mega Brain. `nix brain hooks install --scope global --all` faz Cursor, VS Code, Claude Code e Codex chamarem o Nix a cada evento da sessão. O VS Code não tem arquivo global: a captura dele fica parcial.
@@ -497,7 +497,7 @@ Uma variável `NIX_SECAO__CAMPO` ganha do banco naquele campo e o trava no `nix 
 
 ### Índice
 
-Editar no Obsidian não atualiza o índice. Rode `nix sync` quando quiser alinhar.
+Editar notas fora do Nix não atualiza o índice. Rode `nix sync` quando quiser alinhar.
 
 - Sem `--wiki` e sem `--all`, vale a wiki padrão.
 - `--wiki NOME` pode repetir. `--all` percorre todas, em sequência. Não combine os dois.
@@ -527,7 +527,7 @@ O agente não executa `nix` no terminal. Você pede em linguagem normal e ele ch
 
 | No terminal | O que você diz ao agente | Ferramenta |
 | --- | --- | --- |
-| `nix sync` | Sincroniza o índice, ou traz o que mudou no Obsidian | `sync_index` |
+| `nix sync` | Sincroniza o índice, ou traz o que mudou fora do Nix | `sync_index` |
 | `nix status` | O índice está atrasado? | `index_status` |
 | `nix wiki list` | Quais wikis estão cadastradas? | `list_wikis` |
 | `nix brain status` | Como está o Mega Brain neste projeto? | `brain_status` |

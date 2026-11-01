@@ -23,11 +23,11 @@ Tudo roda na máquina do usuário. Embeddings e banco vetorial são locais e gra
 
 ## 2. Problema
 
-Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enfrenta:
+Pastas de notas crescem rápido e viram um arquivo morto. Hoje o usuário enfrenta:
 
-- **Busca literal insuficiente.** A busca do Obsidian encontra palavras, não ideias. Quem não lembra o termo exato usado não acha a nota.
+- **Busca literal insuficiente.** Uma busca literal encontra palavras, não ideias. Quem não lembra o termo exato usado não acha a nota.
 - **Conhecimento fragmentado.** A resposta para uma pergunta costuma estar espalhada em várias notas, e sintetizar isso manualmente é caro.
-- **Captura com atrito.** Registrar uma nota nova no formato certo, com os links e tags corretos, exige abrir o Obsidian e lembrar das convenções.
+- **Captura com atrito.** Registrar uma nota nova no formato certo, com os links e tags corretos, exige abrir as notas e lembrar das convenções.
 - **Agentes de desenvolvimento não conhecem o vault.** Cursor, VS Code, Claude Code e Codex não têm, por padrão, busca semântica nem escrita segura nas anotações pessoais.
 
 ## 3. Objetivos
@@ -42,22 +42,22 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 ### Não-objetivos
 
-- Não é um substituto do Obsidian. A interface local cobre configuração, operação e consulta (status, sincronização, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups e histórico), não a edição das notas. A única escrita no vault pela interface é restaurar um backup, com confirmação explícita.
+- A interface local cobre configuração, operação e consulta (status, sincronização, diagnóstico, busca, notas, tags, insights, conexão de clientes, tráfego MCP, backups e histórico), não a edição das notas. A única escrita no vault pela interface é restaurar um backup, com confirmação explícita.
 - Não haverá LLM, chat, RAG conversacional nem orquestração de agente no Nix.
 - O MCP não tem transporte HTTP. Não haverá servidor multiusuário, autenticação de contas nem hospedagem em nuvem. A interface local escuta só em `127.0.0.1` enquanto `nix ui` está aberto.
-- Não haverá sincronização de vault entre máquinas (isso é responsabilidade do Obsidian Sync/Git/Dropbox).
+- Não haverá sincronização de vault entre máquinas (isso depende de um mecanismo externo de sincronização).
 - Não há edição de anexos binários (PDFs, imagens) — apenas extração de texto de PDFs referenciados pelas notas, se `index.index_attachments` estiver ativo.
 - Não haverá fine-tuning de modelos.
 
 ## 4. Persona e contexto de uso
 
-**Paulo — desenvolvedor, usuário avançado de Obsidian.** Mantém um vault com notas técnicas, de projetos, de leituras e diário. É confortável com terminal e com arquivos de configuração. Usa Cursor no dia a dia e quer o vault disponível dentro do editor via MCP. Valoriza controle: não quer que um processo em background fique lendo e reprocessando o vault sem sua autorização.
+**Paulo — desenvolvedor, usuário de notas em Markdown.** Mantém um vault com notas técnicas, de projetos, de leituras e diário. É confortável com terminal e com arquivos de configuração. Usa Cursor no dia a dia e quer o vault disponível dentro do editor via MCP. Valoriza controle: não quer que um processo em background fique lendo e reprocessando o vault sem sua autorização.
 
 **Momentos de uso principais:**
 
 1. Durante o trabalho, no Cursor / Claude Code / Copilot, perguntando algo que sabe ter anotado antes.
 2. Ao final de uma leitura ou reunião, pedindo ao agente do editor que registre uma nota nova no vault.
-3. Depois de uma sessão de escrita direta no Obsidian, rodando `nix sync` (ou pedindo `sync_index`).
+3. Depois de uma sessão de escrita direta nos arquivos, rodando `nix sync` (ou pedindo `sync_index`).
 
 ## 5. Escopo funcional
 
@@ -186,8 +186,8 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 **HU-02 — Indexar um vault existente**
 > Como usuário com um vault de anos, quero indexar tudo de uma vez, para poder consultar meu histórico.
 
-**HU-03 — Sincronizar mudanças feitas no Obsidian**
-> Como usuário, depois de escrever direto no Obsidian, quero atualizar o índice quando eu decidir.
+**HU-03 — Sincronizar mudanças feitas fora do Nix**
+> Como usuário, depois de escrever direto nos arquivos, quero atualizar o índice quando eu decidir.
 
 **HU-05 — Registrar conhecimento pelo editor**
 > Como usuário, quero pedir ao agente do editor que crie uma nota, e que ela já fique pesquisável.
@@ -312,7 +312,7 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 
 ## 12. Fora de escopo
 
-Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; servidor de time; processo residente; edição de anexos binários; geração automática de notas sem pedido do usuário (a página de sessão e o perfil do Mega Brain são a exceção e dependem de `nix brain enable` e do hook, RN-07); migração do `sessions.db`; banco vetorial separado para sessões; sincronização de arquivos entre dispositivos.
+Interface de edição de notas ou plugin de editor; LLM/chat/agente próprio; CLI de consulta (`ask`/`chat`); transporte MCP HTTP; multiusuário; hospedagem em nuvem; servidor de time; processo residente; edição de anexos binários; geração automática de notas sem pedido do usuário (a página de sessão e o perfil do Mega Brain são a exceção e dependem de `nix brain enable` e do hook, RN-07); migração do `sessions.db`; banco vetorial separado para sessões; sincronização de arquivos entre dispositivos.
 
 ## 13. Glossário
 
