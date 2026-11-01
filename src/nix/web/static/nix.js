@@ -26,8 +26,8 @@
 
   document.addEventListener("change", function (event) {
     var box = event.target;
-    if (!box || box.id !== "sync-all-vaults") return;
-    document.querySelectorAll("[data-all-vaults]").forEach(function (input) {
+    if (!box || box.id !== "sync-all-wikis") return;
+    document.querySelectorAll("[data-all-wikis]").forEach(function (input) {
       input.checked = box.checked;
     });
   });

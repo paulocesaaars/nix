@@ -25,6 +25,7 @@ from nix.core.runtime import RuntimeHost
 
 _FAKE_DIM = 64
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+SECOND_WIKI_NAME = "Outro"
 
 
 @pytest.fixture(autouse=True)
@@ -39,9 +40,9 @@ def nix_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def vault(tmp_path: Path) -> Path:
-    """Vault temporário com notas, frontmatter, tags e links."""
-    root = tmp_path / "vault"
+def wiki(tmp_path: Path) -> Path:
+    """Wiki temporário com notas, frontmatter, tags e links."""
+    root = tmp_path / "wiki"
     notes = {
         "Inbox/reuniao.md": "---\ntags: [reuniao]\n---\n# Reunião\n\nDecidimos validar CEP no cadastro.\n",
         "Projetos/ViaCEP/api.md": "# API ViaCEP\n\n## Endpoints\n\nConsulta de CEP. Ver [[reuniao]].\n",
@@ -51,6 +52,14 @@ def vault(tmp_path: Path) -> Path:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def second_wiki(tmp_path: Path) -> Path:
+    """Pasta temporária vazia, pronta para `nix wiki add`. A wiki não é cadastrado."""
+    root = tmp_path / "second-wiki"
+    root.mkdir()
     return root
 
 
@@ -97,20 +106,20 @@ def fake_embedder(monkeypatch: pytest.MonkeyPatch) -> type[FakeEmbedder]:
 
 
 @pytest.fixture
-def configured(vault: Path, fake_embedder: type[FakeEmbedder]) -> Path:
-    """Nix inicializado (`settings.db` em `nix_home`) com o vault temporário como padrão."""
+def configured(wiki: Path, fake_embedder: type[FakeEmbedder]) -> Path:
+    """Nix inicializado (`settings.db` em `nix_home`) com a wiki temporário como padrão."""
     from nix.config.embedding_models import default_embedding_model
     from nix.config.loader import clear_config_cache
     from nix.core.admin.setup import initialize
 
-    initialize(vault=vault, embedding_model=default_embedding_model(), force=False, update_embedding=True)
+    initialize(wiki=wiki, embedding_model=default_embedding_model(), force=False, update_embedding=True)
     clear_config_cache()
-    return vault
+    return wiki
 
 
 @pytest.fixture
 def host(configured: Path) -> Iterator[RuntimeHost]:
-    """Runtimes do processo sobre o vault configurado; fechados ao fim do teste."""
+    """Runtimes do processo sobre a wiki configurado; fechados ao fim do teste."""
     from nix.config.loader import load_config
 
     runtime_host = RuntimeHost(load_config())
@@ -118,3 +127,13 @@ def host(configured: Path) -> Iterator[RuntimeHost]:
         yield runtime_host
     finally:
         runtime_host.close()
+
+
+@pytest.fixture
+def second_registered(host: RuntimeHost, second_wiki: Path) -> RuntimeHost:
+    """Cadastra `second_wiki` como `Outro` e faz o host enxergar a configuração nova."""
+    from nix.core.admin.wikis import WikiService
+
+    WikiService().add(SECOND_WIKI_NAME, second_wiki)
+    host.before_call()
+    return host

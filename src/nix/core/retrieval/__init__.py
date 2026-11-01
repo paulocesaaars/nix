@@ -1,1 +1,1 @@
-"""Recuperação híbrida (densa + léxica) sobre o vault indexado."""
+"""Recuperação híbrida (densa + léxica) sobre a wiki indexado."""

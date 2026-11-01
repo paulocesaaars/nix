@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "3.0.0"
-description = "Servidor MCP stdio para vaults do Obsidian"
+version = "4.0.0"
+description = "Servidor MCP stdio para wikis do Obsidian"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Paulo" }]
@@ -22,7 +22,7 @@ py-modules = ["nix_launch"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-nix = ["py.typed", "cli/ascii-art.txt", "web/templates/*.html", "web/static/*", "skills/*/SKILL.md"]
+nix = ["py.typed", "cli/ascii-art.txt", "mcp/nix.png", "mcp/nix-48.png", "web/templates/*.html", "web/static/*"]
 
 [tool.ruff]
 line-length = 120

@@ -6,44 +6,44 @@ import json
 
 from pydantic import Field
 
-from nix.core.errors import NoteNotFoundError, VaultError
+from nix.core.errors import NoteNotFoundError, WikiError
 from nix.core.models import Heading, LinkDirection, NoteContent, NoteLines, NoteOutline, NoteRef
 from nix.core.runtime import Runtime
-from nix.core.tools.args import MultiVaultArgs, VaultArgs
-from nix.core.vault.markdown import headings_in_file, split_frontmatter
-from nix.core.vault.paths import assert_accessible, is_included
+from nix.core.tools.args import MultiWikiArgs, WikiArgs
+from nix.core.wiki.markdown import headings_in_file, split_frontmatter
+from nix.core.wiki.paths import assert_accessible, is_included
 
 _MAX_NOTE_LINES = 400
 
 
-class SearchNotesArgs(MultiVaultArgs):
+class SearchNotesArgs(MultiWikiArgs):
     query: str = Field(description="Consulta em linguagem natural ou termos-chave")
     top_k: int = Field(default=5, ge=1, le=50)
-    folder: str | None = Field(default=None, description="Pasta relativa ao vault")
+    folder: str | None = Field(default=None, description="Pasta relativa à wiki")
     tags: list[str] | None = Field(default=None)
     date_from: str | None = Field(default=None, description="ISO YYYY-MM-DD")
     date_to: str | None = Field(default=None, description="ISO YYYY-MM-DD")
 
 
-class ReadNoteArgs(VaultArgs):
-    rel_path: str = Field(description="Caminho relativo da nota no vault")
+class ReadNoteArgs(WikiArgs):
+    rel_path: str = Field(description="Caminho relativo da nota na wiki")
 
 
-class ListNotesArgs(MultiVaultArgs):
+class ListNotesArgs(MultiWikiArgs):
     folder: str | None = None
     tag: str | None = None
     limit: int = Field(default=50, ge=1, le=500)
 
 
-class LinkedNotesArgs(VaultArgs):
+class LinkedNotesArgs(WikiArgs):
     rel_path: str
     direction: LinkDirection = Field(
         default="both", description="outgoing, incoming ou both"
     )
 
 
-class ReadNoteLinesArgs(VaultArgs):
-    rel_path: str = Field(description="Caminho relativo da nota no vault")
+class ReadNoteLinesArgs(WikiArgs):
+    rel_path: str = Field(description="Caminho relativo da nota na wiki")
     start_line: int | None = Field(
         default=None,
         ge=1,
@@ -60,27 +60,27 @@ class ReadNoteLinesArgs(VaultArgs):
     )
 
 
-class GetNoteOutlineArgs(VaultArgs):
-    rel_path: str = Field(description="Caminho relativo da nota no vault")
+class GetNoteOutlineArgs(WikiArgs):
+    rel_path: str = Field(description="Caminho relativo da nota na wiki")
 
 
-class ListAllTagsArgs(MultiVaultArgs):
-    folder: str | None = Field(default=None, description="Pasta relativa ao vault")
+class ListAllTagsArgs(MultiWikiArgs):
+    folder: str | None = Field(default=None, description="Pasta relativa à wiki")
     limit: int = Field(default=200, ge=1, le=1000)
 
 
-# list_tags exige um teto e corta cada vault antes da soma. O limite do usuário
+# list_tags exige um teto e corta cada wiki antes da soma. O limite do usuário
 # só entra na lista já somada; este teto evita que uma tag frequente no total
-# suma ou perca contagem quando um vault sozinho passa do limite pedido.
+# suma ou perca contagem quando uma wiki sozinho passa do limite pedido.
 _TAG_SCAN_LIMIT = 100_000
 
 
 def _guard_read(runtime: Runtime, rel_path: str) -> str:
-    vault = runtime.vault
+    wiki = runtime.wiki
     return assert_accessible(
         rel_path,
-        vault.include,
-        vault.exclude,
+        wiki.include,
+        wiki.exclude,
     )
 
 
@@ -101,7 +101,7 @@ def _body_offset(runtime: Runtime, rel_path: str, cache: dict[str, int]) -> int:
         return 0
     try:
         raw = runtime.reader.read_text(rel_path, keep_newlines=True)
-    except VaultError:
+    except WikiError:
         cache[rel_path] = 0
         return 0
     cache[rel_path] = split_frontmatter(raw).body_line_offset
@@ -117,9 +117,9 @@ def _file_line(line: int | None, offset: int) -> int | None:
 def search_notes(runtimes: list[Runtime], args: SearchNotesArgs) -> dict[str, object]:
     from nix.core.retrieval.service import search_many
 
-    by_name = {runtime.vault.name: runtime for runtime in runtimes}
+    by_name = {runtime.wiki.name: runtime for runtime in runtimes}
     outcome = search_many(
-        [(runtime.vault.name, runtime.retrieval) for runtime in runtimes],
+        [(runtime.wiki.name, runtime.retrieval) for runtime in runtimes],
         args.query,
         top_k=args.top_k,
         folder=args.folder,
@@ -130,14 +130,14 @@ def search_notes(runtimes: list[Runtime], args: SearchNotesArgs) -> dict[str, ob
     offsets: dict[tuple[str, str], int] = {}
     rows: list[dict[str, object]] = []
     for chunk in outcome.chunks:
-        runtime = by_name.get(chunk.vault) or runtimes[0]
-        key = (chunk.vault, chunk.rel_path)
+        runtime = by_name.get(chunk.wiki) or runtimes[0]
+        key = (chunk.wiki, chunk.rel_path)
         if key not in offsets:
             offsets[key] = _body_offset(runtime, chunk.rel_path, {})
         offset = offsets[key]
         rows.append(
             {
-                "vault": chunk.vault,
+                "wiki": chunk.wiki,
                 "chunk_id": chunk.chunk_id,
                 "file_id": chunk.file_id,
                 "rel_path": chunk.rel_path,
@@ -154,9 +154,9 @@ def search_notes(runtimes: list[Runtime], args: SearchNotesArgs) -> dict[str, ob
             }
         )
     return {
-        "vault": [runtime.vault.name for runtime in runtimes],
+        "wiki": [runtime.wiki.name for runtime in runtimes],
         "results": rows,
-        "vault_errors": outcome.vault_errors,
+        "wiki_errors": outcome.wiki_errors,
     }
 
 
@@ -166,7 +166,7 @@ def read_note(runtime: Runtime, args: ReadNoteArgs) -> dict[str, object]:
         parsed = runtime.reader.parse(posix)
     except NoteNotFoundError:
         raise
-    except VaultError:
+    except WikiError:
         raise
     return NoteContent(
         rel_path=posix,
@@ -193,11 +193,11 @@ def _match_heading(headings: list[Heading], query: str, rel_path: str) -> Headin
     if len(by_title) == 1:
         return by_title[0]
     if len(by_title) > 1:
-        raise VaultError(
+        raise WikiError(
             f"Há mais de um heading {wanted!r} em {rel_path}. "
             'Use o caminho "Pai > Filho" ou use get_note_outline para ver os headings.'
         )
-    raise VaultError(
+    raise WikiError(
         f"O heading {wanted!r} não existe em {rel_path}; use get_note_outline para ver os headings."
     )
 
@@ -259,7 +259,7 @@ def read_note_lines(runtime: Runtime, args: ReadNoteLinesArgs) -> dict[str, obje
         )
         return _lines_dict(result)
     if start > total:
-        raise VaultError(
+        raise WikiError(
             f"start_line {start} está fora de {posix} ({total} linhas). "
             "Use get_note_outline para ver o total de linhas e os headings."
         )
@@ -268,7 +268,7 @@ def read_note_lines(runtime: Runtime, args: ReadNoteLinesArgs) -> dict[str, obje
     if end > total:
         end = total
     if end < start:
-        raise VaultError(
+        raise WikiError(
             f"end_line {end} é menor que start_line {start} em {posix}. "
             "Informe um intervalo crescente ou use get_note_outline para ver os headings."
         )
@@ -305,13 +305,13 @@ def _lines_dict(result: NoteLines) -> dict[str, object]:
 
 
 def list_all_tags(runtimes: list[Runtime], args: ListAllTagsArgs) -> dict[str, object]:
-    """Soma as contagens e guarda o detalhe de cada vault."""
+    """Soma as contagens e guarda o detalhe de cada wiki."""
     totals: dict[str, int] = {}
     labels: dict[str, str] = {}
     detail: dict[str, list[dict[str, object]]] = {}
     for runtime in runtimes:
-        include = runtime.vault.include
-        exclude = runtime.vault.exclude
+        include = runtime.wiki.include
+        exclude = runtime.wiki.exclude
 
         def path_ok(rel: str, include: list[str] = include, exclude: list[str] = exclude) -> bool:
             return is_included(rel, include, exclude)
@@ -320,12 +320,12 @@ def list_all_tags(runtimes: list[Runtime], args: ListAllTagsArgs) -> dict[str, o
             key = tag.casefold()
             labels.setdefault(key, tag)
             totals[key] = totals.get(key, 0) + count
-            detail.setdefault(key, []).append({"vault": runtime.vault.name, "count": count})
+            detail.setdefault(key, []).append({"wiki": runtime.wiki.name, "count": count})
     tags = sorted(totals, key=lambda key: (-totals[key], labels[key].casefold()))
     return {
-        "vault": [runtime.vault.name for runtime in runtimes],
+        "wiki": [runtime.wiki.name for runtime in runtimes],
         "tags": [
-            {"tag": labels[key], "count": totals[key], "vaults": detail[key]}
+            {"tag": labels[key], "count": totals[key], "wikis": detail[key]}
             for key in tags[: args.limit]
         ],
     }
@@ -337,14 +337,14 @@ def list_notes(runtimes: list[Runtime], args: ListNotesArgs) -> dict[str, object
         rows = runtime.store.list_notes(folder=args.folder, tag=args.tag, limit=args.limit)
         for row in rows:
             rel = str(row["rel_path"])
-            if not is_included(rel, runtime.vault.include, runtime.vault.exclude):
+            if not is_included(rel, runtime.wiki.include, runtime.wiki.exclude):
                 continue
             tags = _tags_from_row(row)
             ref = NoteRef(rel_path=rel, title=str(row["title"] or ""), tags=tags)
             notes.append(
-                {"vault": runtime.vault.name, "rel_path": ref.rel_path, "title": ref.title, "tags": ref.tags}
+                {"wiki": runtime.wiki.name, "rel_path": ref.rel_path, "title": ref.title, "tags": ref.tags}
             )
-    return {"vault": [runtime.vault.name for runtime in runtimes], "notes": notes}
+    return {"wiki": [runtime.wiki.name for runtime in runtimes], "notes": notes}
 
 
 def get_linked_notes(runtime: Runtime, args: LinkedNotesArgs) -> list[dict[str, object]]:

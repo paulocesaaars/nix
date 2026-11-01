@@ -40,7 +40,7 @@ def main() -> None:
             "Cria o ambiente virtual .venv, instala os pacotes do Nix, "
             "registra NIX_HOME e o comando nix no PATH, e inicia nix init.\n"
             "Argumentos extras vão para nix init, por exemplo:\n"
-            '  python scripts/bootstrap.py --vault "C:/Obsidian/MeuVault"'
+            '  python scripts/bootstrap.py --wiki "C:/Notas/MinhaWiki"'
         )
         return
 
@@ -85,7 +85,7 @@ def main() -> None:
     if not register_user_command(ROOT):
         print(
             "A instalação segue. Registre NIX_HOME e o PATH à mão "
-            "(INSTALL.md) e abra um terminal novo."
+            "(README.md, seção Registrar NIX_HOME e o PATH à mão) e abra um terminal novo."
         )
 
     print("Iniciando configuração (nix init)...")

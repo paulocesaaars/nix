@@ -3,7 +3,7 @@
 <form class="inline" method="post" action="/sync/start" hx-post="/sync/start" hx-target="#job" hx-swap="innerHTML" hx-disabled-elt="#sync-controls"
       hx-on::before-swap="{{ before_swap() }}">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">
-  <input type="hidden" name="vault" value="{{ selected_vault | default('') }}">
-  <input data-all-vaults type="checkbox" name="all_vaults" value="on" {% if all_vaults | default(false) %}checked{% endif %} hidden>
+  <input type="hidden" name="wiki" value="{{ selected_wiki | default('') }}">
+  <input data-all-wikis type="checkbox" name="all_wikis" value="on" {% if all_wikis | default(false) %}checked{% endif %} hidden>
   <button class="btn btn-primary" type="submit">{{ icon("sync", 16, "2") }}Sincronizar</button>
 </form>

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from nix.core.index.embedder import Embedder
 from nix.core.index.vectorstore import VectorStore
 from nix.core.models import RetrievedChunk
-from nix.core.vault.paths import matches_folder
+from nix.core.wiki.paths import matches_folder
 
 
 def _parse_date(value: str | None) -> float | None:

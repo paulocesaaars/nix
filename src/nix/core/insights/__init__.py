@@ -1,4 +1,4 @@
-"""Insights sobre o vault: órfãs, duplicatas, sugestão de links e resumo."""
+"""Insights sobre a wiki: órfãs, duplicatas, sugestão de links e resumo."""
 
 from __future__ import annotations
 

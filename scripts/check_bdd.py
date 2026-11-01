@@ -1,6 +1,6 @@
-"""Confere a ligação entre os cenários do BDD (`BDD.md` e `bdd/`) e os testes.
+"""Confere a ligação entre os cenários do BDD (`docs/BDD.md` e `docs/bdd/`) e os testes.
 
-O `BDD.md` é o índice dos casos de uso; os cenários ficam em `bdd/*.md`. Erra se
+O `BDD.md` é o índice dos casos de uso; os cenários ficam em `docs/bdd/*.md`. Erra se
 o índice e a pasta divergirem. Lista os cenários automatizáveis sem teste
 (`@pytest.mark.bdd("HU-03.2")`) e os testes que apontam para um ID que não
 existe. Cenários `@manual` ficam fora da cobertura e aparecem como checklist.
@@ -68,22 +68,22 @@ def read_scenarios(text: str, source: str) -> list[Scenario]:
 
 
 def read_bdd(root: Path) -> list[Scenario]:
-    """Lê todos os `bdd/*.md` e confere se o índice do `BDD.md` bate com a pasta."""
-    index = root / "BDD.md"
-    folder = root / "bdd"
+    """Lê todos os `docs/bdd/*.md` e confere se o índice do `BDD.md` bate com a pasta."""
+    index = root / "docs" / "BDD.md"
+    folder = root / "docs" / "bdd"
     if not index.is_file():
-        _fail("BDD.md não encontrado na raiz do repositório. Crie o arquivo (pode ficar em branco).")
+        _fail("docs/BDD.md não encontrado. Crie o arquivo (pode ficar em branco).")
     listed = set(_INDEX_LINK.findall(index.read_text(encoding="utf-8")))
     present = {path.name for path in folder.glob("*.md")} if folder.is_dir() else set()
     missing_files = sorted(listed - present)
     if missing_files:
-        _fail(f"O índice do BDD.md aponta para arquivos que não existem em bdd/: {', '.join(missing_files)}.")
+        _fail(f"O índice do BDD.md aponta para arquivos que não existem em docs/bdd/: {', '.join(missing_files)}.")
     unlisted = sorted(present - listed)
     if unlisted:
-        _fail(f"Arquivos em bdd/ fora do índice do BDD.md: {', '.join(unlisted)}. Acrescente uma linha ao índice.")
+        _fail(f"Arquivos em docs/bdd/ fora do índice do BDD.md: {', '.join(unlisted)}. Acrescente uma linha ao índice.")
     scenarios: list[Scenario] = []
     for name in sorted(present):
-        scenarios.extend(read_scenarios((folder / name).read_text(encoding="utf-8"), f"bdd/{name}"))
+        scenarios.extend(read_scenarios((folder / name).read_text(encoding="utf-8"), f"docs/bdd/{name}"))
     return scenarios
 
 
@@ -135,7 +135,7 @@ def main() -> None:
         print("\nTestes apontando para cenário inexistente no BDD:", file=sys.stderr)
         for sid, files in sorted(unknown.items()):
             print(f"  - {sid} em {', '.join(files)}", file=sys.stderr)
-        _fail("Corrija o ID no teste ou adicione o cenário em bdd/.")
+        _fail("Corrija o ID no teste ou adicione o cenário em docs/bdd/.")
     if missing and args.strict:
         _fail("Há cenários sem teste. Escreva os testes ou marque o cenário como @manual.")
 

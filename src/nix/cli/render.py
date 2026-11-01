@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from nix.config.editor import ConfigEntry
-    from nix.config.schema import VaultSettings
+    from nix.config.schema import WikiSettings
     from nix.config.store import SettingsChange
     from nix.core.admin.doctor import DoctorReport
     from nix.core.admin.setup import InitResult
 
-# Cores do DESIGN.md: Rausch como destaque e as cores de status. O texto normal e o
-# `dim` seguem o tema do terminal, porque o fundo é do usuário.
+# Cores do docs/DESIGN.md: acento e cores de status. O texto normal e o `dim` seguem o
+# tema do terminal, porque o fundo é do usuário.
 NIX_THEME = Theme(
     {
         "accent": "#FF385C",
@@ -119,7 +119,7 @@ def print_header(detail: str | None = None) -> None:
     console.print()
 
 
-def print_status(status: IndexStatus, *, vault: str | None = None) -> None:
+def print_status(status: IndexStatus, *, wiki: str | None = None) -> None:
     if status.errors:
         state = _state_line("fail", f"{status.errors} nota(s) com erro")
     elif status.stale:
@@ -136,14 +136,14 @@ def print_status(status: IndexStatus, *, vault: str | None = None) -> None:
     grid.add_row("Trechos", _count(status.chunks))
     grid.add_row("Último sync", _cell(status.last_sync_at or "nunca"))
     grid.add_row("Embedding", _cell(status.embedding_model or "—"))
-    grid.add_row("Vault", _cell(status.vault_path or "—"))
+    grid.add_row("Wiki", _cell(status.wiki_path or "—"))
     grid.add_row("Dados", _cell(status.data_dir or "—"))
 
-    heading = Text.assemble((f"{_marks()['run']} ", "accent"), ("Índice" if not vault else f"Índice · {vault}", "bold"))
+    heading = Text.assemble((f"{_marks()['run']} ", "accent"), ("Índice" if not wiki else f"Índice · {wiki}", "bold"))
     console.print(_panel(Group(state, Text(), grid), heading))
 
     if status.stale or not status.last_sync_at:
-        target = f" --vault {escape(vault)}" if vault else ""
+        target = f" --wiki {escape(wiki)}" if wiki else ""
         console.print(f" [dim]Próximo passo:[/dim] nix sync{target}")
 
 
@@ -164,14 +164,14 @@ def print_doctor(report: DoctorReport) -> None:
     else:
         env.add_row("Config", Text(f"{report.settings_path} (não existe)", style="warning"))
     if report.initialized and report.config is not None and not report.config_error:
-        listed = report.config.get("vaults")
+        listed = report.config.get("wikis")
         if isinstance(listed, list) and listed:
             for item in listed:
                 if isinstance(item, dict):
                     tail = "  (padrão)" if item.get("is_default") else ""
-                    env.add_row("Vault", _cell(f"{item.get('name')} · {item.get('path')}{tail}"))
+                    env.add_row("Wiki", _cell(f"{item.get('name')} · {item.get('path')}{tail}"))
         else:
-            env.add_row("Vault", _cell(report.vault_path or "(vazio)"))
+            env.add_row("Wiki", _cell(report.wiki_path or "(vazio)"))
         env.add_row("Embedding", _cell(report.embedding_model or "—"))
         env.add_row("Dados", _cell(f"{report.data_dir} → {report.data_path}"))
     console.print(_panel(env, "Ambiente"))
@@ -211,7 +211,7 @@ def print_sync_report(
     events: list[SyncProgress],
     dry_run: bool,
 ) -> None:
-    """Resultado de um vault: situação, contagens, arquivos tocados e erros."""
+    """Resultado de uma wiki: situação, contagens, arquivos tocados e erros."""
     seconds = f"{report.elapsed_seconds:.1f}".replace(".", ",")
     if dry_run:
         state = _state_line("run", "Pré-visualização")
@@ -236,7 +236,7 @@ def print_sync_report(
                 style="dim",
             )
         grid.add_row("Trechos", chunks)
-    grid.add_row("Vault", _cell(root))
+    grid.add_row("Wiki", _cell(root))
 
     console.print(_panel(Group(state, Text(), grid), name))
     print_tokenizer_warning(approximate=report.tokenizer_approximate)
@@ -246,16 +246,16 @@ def print_sync_report(
         console.print(" [dim]Arquivos[/dim]")
         for event in touched:
             sign, style = _ACTION_STYLE.get(event.action, ("·", "dim"))
-            where = f"{event.vault} " if event.vault else ""
+            where = f"{event.wiki} " if event.wiki else ""
             console.print(Text.assemble(("  ", ""), (sign, style), (f" {where}{event.rel_path}", "")))
     for err in report.errors:
         console.print(Text.assemble((f" {_marks()['fail']} ", "error"), (err, "error")))
     if excludes:
-        console.print(f" [dim]Pastas ignoradas (vault.exclude): {escape(', '.join(excludes))}[/dim]")
+        console.print(f" [dim]Pastas ignoradas (wiki.exclude): {escape(', '.join(excludes))}[/dim]")
 
 
 def highlight(text: str) -> str:
-    """Nome de campo ou de vault em destaque, com o texto do usuário escapado."""
+    """Nome de campo ou de wiki em destaque, com o texto do usuário escapado."""
     return f"[accent]{escape(text)}[/accent]"
 
 
@@ -342,9 +342,9 @@ def print_history(rows: Sequence[SettingsChange]) -> None:
     console.print(" [dim]Desfazer:[/dim] nix config undo [dim]#id[/dim]")
 
 
-def print_vaults(rows: Sequence[VaultSettings]) -> None:
-    """Vaults cadastrados, com o padrão marcado."""
-    print_header("vaults")
+def print_wikis(rows: Sequence[WikiSettings]) -> None:
+    """Wikis cadastradas, com o padrão marcado."""
+    print_header("wikis")
     grid = Table.grid(padding=(0, 2))
     grid.add_column(no_wrap=True)
     grid.add_column(no_wrap=True, style="bold")
@@ -352,8 +352,8 @@ def print_vaults(rows: Sequence[VaultSettings]) -> None:
     for row in rows:
         mark = Text(_marks()["run"], style="accent") if row.is_default else Text(" ")
         grid.add_row(mark, _cell(row.name), Text(row.path, style="dim"))
-    console.print(_panel(grid, "Vaults"))
-    console.print(f" [dim]{_marks()['run']} vault padrão[/dim]")
+    console.print(_panel(grid, "Wikis"))
+    console.print(f" [dim]{_marks()['run']} wiki padrão[/dim]")
 
 
 _PLAN_STYLE = {"criar": "success", "alterar": "accent", "sem mudança": "dim"}
@@ -409,8 +409,8 @@ def apply_sync_progress(progress: Progress, event: SyncProgress) -> None:
         description = f"Carregando {model}{size_bit}; em CPU pode demorar"
         completed = 0
     else:
-        vault = f"{event.vault} " if event.vault else ""
-        description = f"{vault}{event.action} {event.rel_path}"
+        wiki = f"{event.wiki} " if event.wiki else ""
+        description = f"{wiki}{event.action} {event.rel_path}"
         completed = event.current
     progress.update(
         task_id,
@@ -457,7 +457,7 @@ def print_init_result(result: InitResult) -> None:
     """Resultado do `nix init`: o que foi gravado e o próximo passo."""
     grid = _kv_grid()
     grid.add_row("Configuração", _cell(result.settings_path))
-    grid.add_row("Vault", Text.assemble((result.vault_name, "accent"), (f" · {result.vault_path}", "")))
+    grid.add_row("Wiki", Text.assemble((result.wiki_name, "accent"), (f" · {result.wiki_path}", "")))
     if result.embedding_written:
         grid.add_row("Embedding", _cell(result.embedding_model))
     print_success("[bold]Configuração concluída.[/bold]")

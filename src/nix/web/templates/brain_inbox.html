@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Caixa de entrada</h1>
+    <p class="sub">Mensagens entre agentes. Cada uma é entregue uma única vez.</p>
+  </div>
+</div>
+
+{% if not messages %}
+<div class="card empty">Nenhuma mensagem na fila.</div>
+{% else %}
+<div class="table-box">
+  <table>
+    <thead><tr><th>Projeto</th><th>Destinatário</th><th>Texto</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for item in messages %}
+      <tr>
+        <td>{{ item.project }}</td>
+        <td>{{ item.recipient }}</td>
+        <td>{{ item.body }}</td>
+        <td>{{ item.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

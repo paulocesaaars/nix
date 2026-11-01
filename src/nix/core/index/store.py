@@ -197,7 +197,7 @@ class IndexStore:
         return int(row["n"]) if row else 0
 
     def indexed_bodies(self) -> list[tuple[str, str, str]]:
-        """Título e corpo concatenado dos chunks, sem ler o vault."""
+        """Título e corpo concatenado dos chunks, sem ler a wiki."""
         parts: dict[str, list[str]] = {}
         titles: dict[str, str] = {}
         rows = self._conn.execute(

@@ -8,9 +8,9 @@ from pathlib import Path
 
 import typer
 
+from nix.core.brain.agents import AGENTS
+from nix.core.brain.events import find_project
 from nix.core.errors import ConfigError
-from nix.core.sessions.agents import AGENTS
-from nix.core.sessions.events import find_project
 
 
 def choose_agents(

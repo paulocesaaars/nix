@@ -1,15 +1,20 @@
-"""Hooks de sessão por projeto: gerar, instalar, remover e consultar (RF-120 a RF-126).
+"""Hooks de captura do Mega Brain: gerar, instalar, remover e consultar.
 
-Cada agente lê um arquivo de hook diferente, dentro do repositório. A Nix só
-escreve nesses arquivos, nunca na pasta da conta (RF-122). As entradas que ela
-cria são reconhecidas pelo comando `nix hook --event E --agent A` (ou
-`nix-hook hook`, no binário publicado), uma marca que não polui o esquema de
-nenhum agente (RF-123).
+O escopo `project` usa a raiz do repositório. O escopo `global` usa a pasta
+da conta. Instalar, remover e o status leem essa mesma base. O global avisa
+sobre privacidade e só grava arquivo quando o caminho está confirmado; nos
+demais, registra o consentimento e deixa a captura parcial. A captura continua
+exigindo esse consentimento. A marca do comando é `nix brain --event E --agent A`
+(ou `nix-hook brain` no binário). A marca antiga `hook` ainda é reconhecida
+para ser substituída.
 
-Os nomes de evento e os formatos vêm da documentação de cada agente, conferida
-em outubro de 2026. O hook de `PreToolUse` fica de fora de propósito: ele roda
-antes de cada ferramenta e dobraria o custo por chamada, e o resultado já chega
-no `PostToolUse`.
+Os formatos de Cursor, VS Code, Claude Code e Codex vêm da documentação
+conferida. O Codex grava `.codex/hooks.json` no projeto e na conta, com a
+chave `hooks` e o comando aninhado. Caminhos globais também nomeados pela
+documentação, relativos à pasta da conta: Cursor `.cursor/hooks.json`, Claude
+`.claude/settings.json` e Codex `.codex/hooks.json`. O VS Code não tem um
+arquivo único sob a home no mesmo formato: no escopo global a captura fica
+parcial e nenhum JSON é inventado.
 """
 
 from __future__ import annotations
@@ -27,15 +32,15 @@ from pathlib import Path
 from typing import Any
 
 from nix.core.admin.empty_dirs import prune_empty_dirs
+from nix.core.brain.agents import AGENT_LABELS, AGENTS
+from nix.core.brain.store import BrainStore
 from nix.core.errors import ConfigError
-from nix.core.sessions.agents import AGENTS
-from nix.core.sessions.store import SessionStore
 
 _HOOK_TIMEOUT_S = 10
 
-# `nix hook` no checkout e `nix-hook hook` no binário. O executável pode vir entre aspas ou depois de `& `.
+# `nix brain` no checkout e `nix-hook brain` no binário. `hook` antigo ainda é reconhecido.
 _MARK = re.compile(
-    r"(?i)\bnix(?:-hook)?(?:\.exe|\.cmd)?['\"]?\s+hook\s+--event\s+[\w-]+\s+--agent\s+[\w-]+"
+    r"(?i)\bnix(?:-hook)?(?:\.exe|\.cmd)?['\"]?\s+(?:hook|brain)\s+--event\s+[\w-]+\s+--agent\s+[\w-]+"
 )
 
 # O Claude Code ignora `settings.local.json` no Git sozinho. Nos demais, o arquivo leva o caminho desta máquina.
@@ -50,27 +55,16 @@ class AgentSpec:
     layout: str
     events: tuple[tuple[str, str], ...]
     note: str = ""
+    # Caminho global confirmado, relativo à pasta da conta. Vazio: não gravamos arquivo.
+    global_rel: str = ""
+    # Sem arquivo: o formato não foi confirmado. O consentimento ainda pode ser registrado.
+    partial: bool = False
 
 
 SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
-        key="claude",
-        label="Claude Code",
-        rel_path=".claude/settings.local.json",
-        layout="claude",
-        events=(
-            ("SessionStart", "session-start"),
-            ("UserPromptSubmit", "user-prompt"),
-            ("PostToolUse", "post-tool"),
-            ("PostToolUseFailure", "post-tool"),
-            ("PreCompact", "compact"),
-            ("Stop", "stop"),
-            ("SessionEnd", "session-end"),
-        ),
-    ),
-    AgentSpec(
         key="cursor",
-        label="Cursor",
+        label=AGENT_LABELS["cursor"],
         rel_path=".cursor/hooks.json",
         layout="cursor",
         events=(
@@ -83,10 +77,11 @@ SPECS: tuple[AgentSpec, ...] = (
             ("sessionEnd", "session-end"),
         ),
         note="No agente na nuvem do Cursor esse hook não dispara.",
+        global_rel=".cursor/hooks.json",
     ),
     AgentSpec(
         key="copilot",
-        label="Copilot (VS Code e CLI)",
+        label=AGENT_LABELS["copilot"],
         rel_path=".github/hooks/nix.json",
         layout="copilot",
         events=(
@@ -100,37 +95,42 @@ SPECS: tuple[AgentSpec, ...] = (
         note="No Copilot na nuvem o binário da Nix não existe e o hook termina em silêncio.",
     ),
     AgentSpec(
-        key="devin",
-        label="Devin CLI",
-        rel_path=".devin/hooks.v1.json",
-        layout="devin",
+        key="claude",
+        label=AGENT_LABELS["claude"],
+        rel_path=".claude/settings.local.json",
+        layout="claude",
         events=(
             ("SessionStart", "session-start"),
             ("UserPromptSubmit", "user-prompt"),
             ("PostToolUse", "post-tool"),
+            ("PostToolUseFailure", "post-tool"),
+            ("PreCompact", "compact"),
             ("Stop", "stop"),
-            ("PostCompaction", "compact"),
             ("SessionEnd", "session-end"),
         ),
+        global_rel=".claude/settings.json",
     ),
     AgentSpec(
-        key="devin-desktop",
-        label="Devin Desktop",
-        rel_path=".devin/hooks.json",
-        layout="devin-desktop",
+        key="codex",
+        label=AGENT_LABELS["codex"],
+        rel_path=".codex/hooks.json",
+        layout="codex",
         events=(
-            ("pre_user_prompt", "user-prompt"),
-            ("post_cascade_response", "stop"),
-            ("post_run_command", "post-tool"),
-            ("post_write_code", "post-tool"),
-            ("post_mcp_tool_use", "post-tool"),
+            ("SessionStart", "session-start"),
+            ("UserPromptSubmit", "user-prompt"),
+            ("PostToolUse", "post-tool"),
+            ("PreCompact", "compact"),
+            ("Stop", "stop"),
+            ("SessionEnd", "session-end"),
         ),
-        note=(
-            "O Devin Desktop não tem evento de início nem de fim de sessão e não injeta o stdout na conversa: "
-            "o handoff chega só pela ferramenta MCP `session_handoff`."
-        ),
+        global_rel=".codex/hooks.json",
+        note="O Codex só executa o hook depois de confiar em /hooks.",
     ),
 )
+
+
+# `nix brain hooks install --all` usa esta ordem, a mesma de `AGENTS`.
+CONFIRMED_CLIENTS: tuple[str, ...] = AGENTS
 
 
 def spec_for(key: str) -> AgentSpec:
@@ -145,23 +145,23 @@ def spec_for(key: str) -> AgentSpec:
 
 def _unix_command(exe: str, event: str, agent: str) -> str:
     quoted = shlex.quote(exe)
-    return f"[ -x {quoted} ] && {quoted} hook --event {event} --agent {agent} || true"
+    return f"[ -x {quoted} ] && {quoted} brain --event {event} --agent {agent} || true"
 
 
 def _powershell_command(exe: str, event: str, agent: str) -> str:
     safe = exe.replace("'", "''")
-    return f"if (Test-Path -LiteralPath '{safe}') {{ & '{safe}' hook --event {event} --agent {agent} }}"
+    return f"if (Test-Path -LiteralPath '{safe}') {{ & '{safe}' brain --event {event} --agent {agent} }}"
 
 
 def _single_command(exe: str, event: str, agent: str) -> str:
     """Um só `command` para agentes sem campo por sistema. No Windows não há `[ -x ]`."""
     if sys.platform == "win32":
-        return f'"{exe}" hook --event {event} --agent {agent}'
+        return f'"{exe}" brain --event {event} --agent {agent}'
     return _unix_command(exe, event, agent)
 
 
 def _entry_nested(exe: str, event: str, agent: str) -> dict[str, Any]:
-    """Claude Code e Devin CLI: o comando fica dentro de uma lista `hooks`."""
+    """Claude Code e Codex: o comando fica dentro de uma lista `hooks`."""
     handler = {"type": "command", "command": _single_command(exe, event, agent), "timeout": _HOOK_TIMEOUT_S}
     return {"hooks": [handler]}
 
@@ -179,21 +179,12 @@ def _entry_copilot(exe: str, event: str, agent: str) -> dict[str, Any]:
     }
 
 
-def _entry_devin_desktop(exe: str, event: str, agent: str) -> dict[str, Any]:
-    return {
-        "command": _unix_command(exe, event, agent),
-        "powershell": _powershell_command(exe, event, agent),
-        "show_output": False,
-    }
-
-
 # Formato de cada entrada por `layout`: um layout novo entra aqui, sem mexer em `_entry`.
 _ENTRY_BUILDERS: dict[str, Callable[[str, str, str], dict[str, Any]]] = {
     "claude": _entry_nested,
-    "devin": _entry_nested,
+    "codex": _entry_nested,
     "cursor": _entry_cursor,
     "copilot": _entry_copilot,
-    "devin-desktop": _entry_devin_desktop,
 }
 
 
@@ -214,10 +205,8 @@ def _entry_is_nix(entry: Any) -> bool:
     return any(_is_nix(entry.get(key)) for key in ("command", "bash", "powershell"))
 
 
-def _table(doc: dict[str, Any], layout: str, *, create: bool) -> dict[str, Any] | None:
-    """Tabela evento → lista. No Devin CLI o arquivo inteiro é a tabela."""
-    if layout == "devin":
-        return doc
+def _table(doc: dict[str, Any], *, create: bool) -> dict[str, Any] | None:
+    """Tabela evento → lista, na chave `hooks`."""
     table = doc.get("hooks")
     if isinstance(table, dict):
         return table
@@ -230,7 +219,7 @@ def _table(doc: dict[str, Any], layout: str, *, create: bool) -> dict[str, Any] 
 
 def strip_nix(doc: dict[str, Any], layout: str) -> int:
     """Tira as entradas da Nix e devolve quantas saíram. Entradas do usuário ficam."""
-    table = _table(doc, layout, create=False)
+    table = _table(doc, create=False)
     if table is None:
         return 0
     removed = 0
@@ -240,7 +229,8 @@ def strip_nix(doc: dict[str, Any], layout: str) -> int:
             continue
         kept: list[Any] = []
         for item in items:
-            if layout in {"claude", "devin"} and isinstance(item, dict) and isinstance(item.get("hooks"), list):
+            nested = layout in {"claude", "codex"}
+            if nested and isinstance(item, dict) and isinstance(item.get("hooks"), list):
                 inner = [h for h in item["hooks"] if not _entry_is_nix(h)]
                 removed += len(item["hooks"]) - len(inner)
                 if inner:
@@ -253,7 +243,7 @@ def strip_nix(doc: dict[str, Any], layout: str) -> int:
             table[event] = kept
         else:
             del table[event]
-    if layout != "devin" and not table:
+    if not table:
         doc.pop("hooks", None)
     return removed
 
@@ -269,7 +259,7 @@ def build_document(existing: dict[str, Any] | None, spec: AgentSpec, exe: str) -
     strip_nix(doc, spec.layout)
     if spec.layout in {"cursor", "copilot"}:
         doc.setdefault("version", 1)
-    table = _table(doc, spec.layout, create=True)
+    table = _table(doc, create=True)
     if table is None:
         raise ConfigError(f"Não foi possível montar a tabela de hooks de {spec.label}. Reporte este erro.")
     for agent_event, nix_event in spec.events:
@@ -309,9 +299,10 @@ class AgentPlan:
     spec: AgentSpec
     path: Path
     exists: bool
-    action: str  # criar | alterar | sem mudança
+    action: str  # criar | alterar | sem mudança | parcial
     new_text: str
     events: int
+    scope: str = "project"
 
 
 def hook_executable(command: str | None, problem: str | None) -> str:
@@ -320,11 +311,27 @@ def hook_executable(command: str | None, problem: str | None) -> str:
     return command.replace("\\", "/")
 
 
-def plan_install(root: Path, agents: list[str], exe: str) -> list[AgentPlan]:
+def _scope_base(root: Path, scope: str) -> Path:
+    """Pasta da conta no global; raiz do repositório no project."""
+    return Path.home() if scope == "global" else root
+
+
+def _scope_relative(spec: AgentSpec, scope: str) -> str:
+    return spec.global_rel if scope == "global" else spec.rel_path
+
+
+def plan_install(root: Path, agents: list[str], exe: str, *, scope: str = "project") -> list[AgentPlan]:
+    if scope not in {"project", "global"}:
+        raise ConfigError("Escopo inválido. Use global ou project.")
     plans: list[AgentPlan] = []
     for key in agents:
         spec = spec_for(key)
-        path = root / spec.rel_path
+        if _fileless(spec, scope):
+            plans.append(AgentPlan(spec, root, False, "parcial", "", 0, scope))
+            continue
+        rel = _scope_relative(spec, scope)
+        base = _scope_base(root, scope)
+        path = base / rel
         existing = _load(path)
         doc = build_document(existing, spec, exe)
         text = _dump(doc)
@@ -335,8 +342,17 @@ def plan_install(root: Path, agents: list[str], exe: str) -> list[AgentPlan]:
             action = "sem mudança"
         else:
             action = "alterar"
-        plans.append(AgentPlan(spec, path, existing is not None, action, text, len(spec.events)))
+        plans.append(AgentPlan(spec, path, existing is not None, action, text, len(spec.events), scope))
     return plans
+
+
+def _fileless(spec: AgentSpec, scope: str) -> bool:
+    """Sem arquivo confirmado: agente parcial, ou global sem caminho conhecido."""
+    if spec.partial or not spec.layout:
+        return True
+    if scope == "global" and not spec.global_rel:
+        return True
+    return not spec.rel_path
 
 
 def backup_file(path: Path, root: Path, backup_dir: Path) -> Path:
@@ -354,16 +370,33 @@ def backup_file(path: Path, root: Path, backup_dir: Path) -> Path:
     return dest
 
 
-def apply_install(plans: list[AgentPlan], root: Path, project: str, backup_dir: Path, store: SessionStore) -> list[str]:
-    """Escreve os arquivos e registra o projeto para os agentes escolhidos. Devolve os backups feitos."""
+def _write_utf8(path: Path, text: str) -> None:
+    """Grava UTF-8 com quebra LF.
+
+    `open()` no lugar de `Path.write_text(newline=)`: esse argumento só existe no
+    Python 3.13, e o binário publicado é compilado com 3.12.
+    """
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
+def apply_install(plans: list[AgentPlan], root: Path, project: str, backup_dir: Path, store: BrainStore) -> list[str]:
+    """Escreve os arquivos confirmados e registra o consentimento. Devolve os backups feitos."""
     backups: list[str] = []
     for plan in plans:
-        if plan.action != "sem mudança":
+        if plan.action not in {"sem mudança", "parcial"}:
+            anchor = _scope_base(root, plan.scope)
             if plan.exists:
-                backups.append(backup_file(plan.path, root, backup_dir).as_posix())
+                backups.append(backup_file(plan.path, anchor, backup_dir).as_posix())
             plan.path.parent.mkdir(parents=True, exist_ok=True)
-            plan.path.write_text(plan.new_text, encoding="utf-8", newline="\n")
-        store.register_project(project, plan.spec.key, plan.spec.rel_path)
+            _write_utf8(plan.path, plan.new_text)
+        hook_file = "" if plan.action == "parcial" else plan.spec.rel_path
+        store.register_hook(
+            scope=plan.scope,
+            agent=plan.spec.key,
+            project_key="" if plan.scope == "global" else project,
+            hook_file=hook_file,
+        )
     return backups
 
 
@@ -376,34 +409,45 @@ class RemoveResult:
 
 
 def remove_hooks(
-    root: Path, agents: list[str], project: str, backup_dir: Path, store: SessionStore
+    root: Path,
+    agents: list[str],
+    project: str,
+    backup_dir: Path,
+    store: BrainStore,
+    *,
+    scope: str = "project",
 ) -> list[RemoveResult]:
-    """Tira só as entradas marcadas pela Nix (RF-123). O projeto deixa de aceitar eventos (RN-S1)."""
+    """Tira só as entradas marcadas pela Nix e o consentimento daquele escopo."""
+    if scope not in {"project", "global"}:
+        raise ConfigError("Escopo inválido. Use global ou project.")
     results: list[RemoveResult] = []
     for key in agents:
         spec = spec_for(key)
-        result = _remove_one(root, spec, backup_dir)
-        # O registro só sai depois do arquivo: se o backup ou a escrita falharem, nada fica desalinhado.
-        store.unregister_project(project, key)
+        if _fileless(spec, scope):
+            result = RemoveResult(spec, 0, False, None)
+        else:
+            result = _remove_one(root, spec, backup_dir, scope)
+        store.unregister_hook(scope=scope, agent=key, project_key="" if scope == "global" else project)
         results.append(result)
     return results
 
 
-def _remove_one(root: Path, spec: AgentSpec, backup_dir: Path) -> RemoveResult:
-    path = root / spec.rel_path
+def _remove_one(root: Path, spec: AgentSpec, backup_dir: Path, scope: str) -> RemoveResult:
+    base = _scope_base(root, scope)
+    path = base / _scope_relative(spec, scope)
     doc = _load(path)
     if doc is None:
         return RemoveResult(spec, 0, False, None)
     removed = strip_nix(doc, spec.layout)
     if removed == 0:
         return RemoveResult(spec, 0, False, None)
-    backup = backup_file(path, root, backup_dir).as_posix()
+    backup = backup_file(path, base, backup_dir).as_posix()
     leftovers = {k: v for k, v in doc.items() if k not in {"version"} and v not in ({}, [])}
     if leftovers:
-        path.write_text(_dump(doc), encoding="utf-8", newline="\n")
+        _write_utf8(path, _dump(doc))
         return RemoveResult(spec, removed, False, backup)
     path.unlink()
-    prune_empty_dirs(path.parent, root)
+    prune_empty_dirs(path.parent, base)
     return RemoveResult(spec, removed, True, backup)
 
 
@@ -413,32 +457,75 @@ class AgentStatus:
     file_exists: bool
     entries: int
     registered: bool
+    mismatched_scopes: tuple[str, ...] = ()
+    fileless_consent: bool = False
 
     @property
     def state(self) -> str:
+        if self.mismatched_scopes:
+            return "desalinhado"
         if self.entries and self.registered:
             return "ativo"
-        if self.entries or self.registered:
-            return "desalinhado"
+        if self.fileless_consent or (self.spec.partial and self.registered):
+            return "parcial"
         return "inativo"
 
     @property
     def hint(self) -> str:
-        if self.state == "desalinhado":
-            return f"Rode `nix hooks install --agent {self.spec.key}` para alinhar o arquivo e o registro."
-        return ""
+        if not self.mismatched_scopes:
+            return ""
+        names = " e ".join(self.mismatched_scopes)
+        steps = " ".join(
+            (
+                f"Rode `nix brain hooks install --scope {scope} --agent {self.spec.key}` "
+                f"para alinhar o escopo {scope}."
+            )
+            for scope in self.mismatched_scopes
+        )
+        return f"O arquivo e o consentimento divergem no escopo {names}. {steps}"
 
 
-def status(root: Path, project: str, store: SessionStore) -> list[AgentStatus]:
+def _nix_entries(path: Path, layout: str) -> int:
+    """Entradas da Nix no arquivo. JSON ilegível conta como zero, para o status não abortar."""
+    if not path.is_file():
+        return 0
+    try:
+        doc = _load(path)
+    except ConfigError:
+        return 0
+    if not doc:
+        return 0
+    return count_nix(doc, layout)
+
+
+def status(root: Path, project: str, store: BrainStore) -> list[AgentStatus]:
+    """Confronta, em cada escopo, o arquivo daquela base com o consentimento daquele escopo."""
+    consents = {(agent, item_scope) for agent, item_scope in store.installed_agents(project)}
     found: list[AgentStatus] = []
     for spec in SPECS:
-        path = root / spec.rel_path
-        try:
-            doc = _load(path)
-        except ConfigError:
-            doc = None
-        entries = count_nix(doc, spec.layout) if doc else 0
-        found.append(AgentStatus(spec, path.is_file(), entries, store.has_hooks(project, spec.key)))
+        mismatched: list[str] = []
+        entries = 0
+        file_exists = False
+        registered = False
+        fileless_consent = False
+        for item_scope in ("project", "global"):
+            has_consent = (spec.key, item_scope) in consents
+            registered = registered or has_consent
+            if _fileless(spec, item_scope):
+                if has_consent:
+                    fileless_consent = True
+                continue
+            path = _scope_base(root, item_scope) / _scope_relative(spec, item_scope)
+            file_exists = file_exists or path.is_file()
+            count = _nix_entries(path, spec.layout)
+            entries += count
+            if count and has_consent:
+                continue
+            if count or has_consent:
+                mismatched.append(item_scope)
+        found.append(
+            AgentStatus(spec, file_exists, entries, registered, tuple(mismatched), fileless_consent)
+        )
     return found
 
 
@@ -447,7 +534,7 @@ def unignored_files(root: Path, plans: list[AgentPlan]) -> list[str]:
     out: list[str] = []
     for plan in plans:
         rel = plan.spec.rel_path
-        if rel in _SELF_IGNORED:
+        if not rel or plan.scope != "project" or plan.action == "parcial" or rel in _SELF_IGNORED:
             continue
         try:
             done = subprocess.run(
@@ -468,6 +555,8 @@ def unignored_files(root: Path, plans: list[AgentPlan]) -> list[str]:
 
 def command_preview(spec: AgentSpec, exe: str) -> str:
     """Uma linha de comando de exemplo, para a tela Conectar clientes."""
+    if spec.partial or not spec.events or not spec.layout:
+        return ""
     first_event = spec.events[0][1]
     entry = _entry(spec, exe, first_event)
     if "hooks" in entry:

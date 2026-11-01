@@ -35,8 +35,8 @@ class Gated(Generic[T]):
 
 
 def request_vault(request: Request) -> str | None:
-    """Nome em `?vault=`. Vazio ou `*` significa o vault padrão."""
-    raw = query(request, "vault")
+    """Nome em `?wiki=`. Vazio ou `*` significa a wiki padrão."""
+    raw = query(request, "wiki") or query(request, "vault")
     if not raw or raw == "*":
         return None
     return raw
@@ -46,10 +46,10 @@ def gated(
     gate: RuntimeGate,
     fn: Callable[[Runtime], T],
     *,
-    vault: str | None = None,
+    wiki: str | None = None,
     busy: str = BUSY_READ,
 ) -> Gated[T]:
-    with gate.borrow(vault) as borrowed:
+    with gate.borrow(wiki) as borrowed:
         if borrowed.error:
             return Gated(None, borrowed.notice, borrowed.error)
         if not borrowed.runtimes:
@@ -68,11 +68,11 @@ async def run_gated(
     request: Request,
     fn: Callable[[Runtime], T],
     *,
-    vault: str | None = None,
+    wiki: str | None = None,
     busy: str = BUSY_READ,
 ) -> Gated[T]:
-    chosen = request_vault(request) if vault is None else vault
-    return await asyncio.to_thread(partial(gated, web_state(request).gate, fn, vault=chosen, busy=busy))
+    chosen = request_vault(request) if wiki is None else wiki
+    return await asyncio.to_thread(partial(gated, web_state(request).gate, fn, wiki=chosen, busy=busy))
 
 
 async def form_data(request: Request) -> dict[str, str]:

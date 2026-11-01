@@ -1,9 +1,10 @@
 {% from "_ui.html" import icon %}
 {% set nav_groups = [
   ("Operação", [("status", "/", "Status"), ("sync", "/sync", "Sincronizar"), ("doctor", "/doctor", "Diagnóstico")]),
-  ("Vault", [("search", "/search", "Busca"), ("notes", "/notes", "Notas"), ("tags", "/tags", "Tags"), ("insights", "/insights", "Insights")]),
-  ("Integração", [("connect", "/connect", "Conectar cliente"), ("traffic", "/traffic", "Tráfego MCP"), ("sessions", "/sessions", "Sessões")]),
-  ("Manutenção", [("backups", "/backups", "Backups"), ("vaults", "/vaults", "Vaults"), ("settings", "/settings", "Configuração"), ("history", "/history", "Histórico")]),
+  ("Wiki", [("search", "/search", "Busca"), ("notes", "/notes", "Notas"), ("tags", "/tags", "Tags"), ("insights", "/insights", "Insights")]),
+  ("Mega Brain", [("brain", "/brain", "Painel"), ("inbox", "/brain/inbox", "Caixa de entrada"), ("profile", "/brain/profile", "Perfil")]),
+  ("Integração", [("connect", "/connect", "Conectar cliente"), ("traffic", "/traffic", "Tráfego MCP")]),
+  ("Manutenção", [("backups", "/backups", "Backups"), ("wikis", "/wikis", "Wikis"), ("settings", "/settings", "Configuração"), ("history", "/history", "Histórico")]),
 ] %}
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -24,23 +25,23 @@
         <strong>nix</strong>
         <span class="ver">v{{ nix_version }}</span>
       </div>
-      {% if vaults %}
+      {% if wikis %}
       <form class="vsw" method="get" action="{{ request.url.path }}">
         {% for key, value in kept_params %}
         <input type="hidden" name="{{ key }}" value="{{ value }}">
         {% endfor %}
-        <label class="lbl" for="vault-select">Vault ativo</label>
-        <select class="input vsw-sel" id="vault-select" name="vault" onchange="this.form.submit()">
-          {% for item in vaults %}
-          <option value="{{ item.name }}" {% if item.name == selected_vault %}selected{% endif %}>{{ item.name }}{% if item.is_default %} · padrão{% endif %}</option>
+        <label class="lbl" for="wiki-select">Wiki ativo</label>
+        <select class="input vsw-sel" id="wiki-select" name="wiki" onchange="this.form.submit()">
+          {% for item in wikis %}
+          <option value="{{ item.name }}" {% if item.name == selected_wiki %}selected{% endif %}>{{ item.name }}{% if item.is_default %} · padrão{% endif %}</option>
           {% endfor %}
         </select>
-        {% if vault_label %}<span class="mono muted vsw-path">{{ vault_label }}</span>{% endif %}
+        {% if wiki_label %}<span class="mono muted vsw-path">{{ wiki_label }}</span>{% endif %}
       </form>
-      {% elif vault_label %}
+      {% elif wiki_label %}
       <div class="vsw">
-        <span class="lbl">Vault ativo</span>
-        <span class="mono vsw-path">{{ vault_label }}</span>
+        <span class="lbl">Wiki ativo</span>
+        <span class="mono vsw-path">{{ wiki_label }}</span>
       </div>
       {% endif %}
       <nav class="navs">
@@ -48,7 +49,7 @@
         <div class="group">
           <span class="nav-label">{{ label }}</span>
           {% for key, href, text in items %}
-          <a class="nav" href="{{ vault_url(href) }}" {% if active == key %}aria-current="page"{% endif %}>{{ icon(key) }}{{ text }}</a>
+          <a class="nav" href="{{ wiki_url(href) }}" {% if active == key %}aria-current="page"{% endif %}>{{ icon(key) }}{{ text }}</a>
           {% endfor %}
         </div>
         {% endfor %}
@@ -62,7 +63,7 @@
     </aside>
     <main class="main">
       <div class="wrap">
-        {% if vault_error %}<div class="alert alert-err" role="alert">{{ vault_error }}</div>{% endif %}
+        {% if wiki_error %}<div class="alert alert-err" role="alert">{{ wiki_error }}</div>{% endif %}
         {% block content %}{% endblock %}
       </div>
     </main>

@@ -10,7 +10,7 @@ from nix.config.embedding_present import embedding_choice_label
 from nix.core.errors import ConfigError
 
 _SECTIONS = {
-    "vault": "Vault",
+    "wiki": "Wiki",
     "index": "Índice",
     "retrieval": "Busca",
     "safety": "Segurança",

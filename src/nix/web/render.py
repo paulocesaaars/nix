@@ -26,7 +26,7 @@ def _vault_url(path: str, name: str) -> str:
     if not name:
         return path
     joiner = "&" if "?" in path else "?"
-    return f"{path}{joiner}vault={quote(name)}"
+    return f"{path}{joiner}wiki={quote(name)}"
 
 
 def _csrf(request: Request) -> dict[str, Any]:
@@ -38,12 +38,12 @@ def _csrf(request: Request) -> dict[str, Any]:
     context: dict[str, Any] = {
         "csrf_token": token,
         "nix_version": __version__,
-        "vault_label": "",
-        "vaults": [],
-        "selected_vault": "",
-        "vault_error": "",
+        "wiki_label": "",
+        "wikis": [],
+        "selected_wiki": "",
+        "wiki_error": "",
         "kept_params": [],
-        "vault_url": lambda path, vault=None: path,  # noqa: ARG005
+        "wiki_url": lambda path, wiki=None: path,  # noqa: ARG005
     }
     if not isinstance(state, WebState):
         return context
@@ -51,39 +51,39 @@ def _csrf(request: Request) -> dict[str, Any]:
     try:
         host.before_call()
         config = host.config
-        if not config.vaults:
+        if not config.wikis:
             return context
-        default_name = config.default_vault.name
+        default_name = config.default_wiki.name
     except NixError as exc:
-        context["vault_error"] = exc.message
+        context["wiki_error"] = exc.message
         return context
     except Exception:  # noqa: BLE001
         return context
-    raw = request.query_params.get("vault", "").strip()
+    raw = request.query_params.get("wiki", "").strip() or request.query_params.get("vault", "").strip()
     selected = default_name
     if raw and raw != "*":
         try:
-            selected = config.get_vault(raw).name
+            selected = config.get_wiki(raw).name
         except NixError as exc:
-            context["vault_error"] = exc.message
+            context["wiki_error"] = exc.message
     label = ""
     try:
-        label = config.get_vault(selected).path
+        label = config.get_wiki(selected).path
     except NixError:
         label = ""
-    kept = [(key, value) for key, value in request.query_params.multi_items() if key != "vault"]
+    kept = [(key, value) for key, value in request.query_params.multi_items() if key not in {"wiki", "vault"}]
 
-    def vault_url(path: str, vault: str | None = None) -> str:
-        return _vault_url(path, (vault or selected).strip())
+    def wiki_url(path: str, wiki: str | None = None) -> str:
+        return _vault_url(path, (wiki or selected).strip())
 
     context.update(
-        vault_label=label,
-        vaults=[
-            {"name": vault.name, "path": vault.path, "is_default": vault.is_default} for vault in config.vaults
+        wiki_label=label,
+        wikis=[
+            {"name": wiki.name, "path": wiki.path, "is_default": wiki.is_default} for wiki in config.wikis
         ],
-        selected_vault=selected,
+        selected_wiki=selected,
         kept_params=kept,
-        vault_url=vault_url,
+        wiki_url=wiki_url,
     )
     return context
 

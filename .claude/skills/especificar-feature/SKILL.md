@@ -6,7 +6,8 @@ description: >-
   críticos e entrega uma especificação alinhada ao AGENTS.md, ao PRD.md, ao
   TDD.md e, se houver, ao DESIGN.md. Não implementa. Use quando o usuário pedir para
   especificar, detalhar, escrever a spec, levantar requisitos ou desenhar uma
-  funcionalidade nova.
+  funcionalidade nova. No início, roda os testes: sem suíte, avisa e segue;
+  se falharem, pergunta se a correção entra na especificação atual.
 ---
 
 # Especificar Funcionalidade
@@ -32,6 +33,7 @@ Produz a especificação de uma funcionalidade. Toda a saída é em
 
 ```
 Progresso:
+- [ ] 0. Rodar os testes
 - [ ] 1. Perguntar sobre o modelo
 - [ ] 2. Ler a documentação
 - [ ] 3. Entrevistar até ter contexto
@@ -40,10 +42,31 @@ Progresso:
 - [ ] 6. Oferecer o plano
 ```
 
+### 0. Rodar os testes
+
+Antes de qualquer outra ação, descubra o comando de teste do projeto (CI,
+Makefile, manifesto ou script) e rode-o.
+
+Se quem chamou esta skill já rodou os testes nesta conversa, não rode de
+novo. Use o resultado que ele registrou.
+
+- Suíte passando: siga.
+- Projeto sem testes (nenhum comando, nenhum arquivo de teste, ou o runner
+  não coletou nenhum): alerte que o projeto não possui testes e que não foi
+  possível validar o funcionamento. Não pare por isso.
+- Suíte falhando: mostre o erro e pergunte:
+  - **Adicionar a correção na especificação atual**
+  - **Seguir sem adicionar**
+
+  Não pare nas duas respostas. Não altere código nem teste para a suíte
+  passar. Se o usuário aceitar, a especificação desta conversa inclui a
+  correção: o que falhou e o comportamento esperado. Se o esperado não estiver
+  claro na falha, pergunte antes de escrever. Se ele recusar, a especificação
+  não cobre essa falha.
+
 ### 1. Perguntar sobre o modelo
 
-Antes de qualquer outra ação, pergunte se o usuário quer trocar o modelo para
-esta especificação:
+Pergunte se o usuário quer trocar o modelo para esta especificação:
 
 - **Manter o modelo atual**
 - **Trocar o modelo**
@@ -88,7 +111,7 @@ Monte a especificação com o modelo abaixo. Ao encontrar um ponto crítico ou
 importante sem resposta, pare e pergunte. Apresente as alternativas com
 impactos e uma recomendação. Registre cada decisão na seção **Decisões**.
 
-Se o projeto usa BDD (existe `BDD.md`), especifique também os **cenários BDD**: leia o índice `BDD.md` e os
+Se o projeto usa BDD (`BDD.md` está preenchido com índice de cenários), especifique também os **cenários BDD**: leia o índice `BDD.md` e os
 arquivos de `bdd/` que a funcionalidade toca, e sugira, em Gherkin português, os cenários novos e os que mudam por causa da
 funcionalidade. Cada cenário novo recebe o próximo ID livre da história
 (por exemplo `@US-03.4`), no arquivo daquele caso de uso, ou de uma história nova (arquivo novo
@@ -109,8 +132,8 @@ caminho e o nome. Não grave sem autorização.
 Ao terminar, pergunte se o usuário quer gerar um plano de implementação a
 partir da especificação.
 
-- **Se sim:** o plano sai do **modo de planejamento nativo do agente** em uso,
-  com a especificação como insumo.
+- **Se sim:** o plano sai do **modo de planejamento nativo do agente**
+  em uso, com a especificação como insumo.
   - **Agente que entra no modo sozinho:** entre no modo de planejamento.
   - **Agente que não entra no modo sozinho:** **não** escreva o plano. Pare,
     informe o comando do agente e entregue a especificação pronta para colar

@@ -4,7 +4,9 @@ description: >-
   Publica uma release do projeto: confere que não há mudanças pendentes de
   commit, que a versão do manifesto é nova e que as checagens passam, cria a tag
   vX.Y.Z e a envia ao remoto para disparar o pipeline de publicação. Não faz
-  commit nem sobe a versão: isso é da skill de commits. Use quando o usuário
+  commit nem sobe a versão: isso é da skill de commits. No início, roda os
+  testes. Sem suíte, avisa que não foi possível validar o funcionamento e
+  segue. Use quando o usuário
   pedir para gerar, criar, cortar ou publicar uma release, versão ou tag.
 ---
 
@@ -12,7 +14,7 @@ description: >-
 
 Cria e envia a tag que dispara o pipeline de release do repositório. **Não faz
 commit e não altera arquivos**: as mudanças e a subida de versão já precisam
-estar commitadas (skill `commitar`, ou o equivalente do projeto). Explicações ao
+estar commitadas (skill `versionar`, ou o equivalente do projeto). Explicações ao
 usuário e notas da tag em **português (Brasil)**.
 
 Nada aqui é específico de um projeto: branch, checagens, arquivo de versão e
@@ -53,6 +55,15 @@ Progresso:
 
 ### 2. Pré-checagens
 
+A primeira ação é rodar os testes. Descubra o comando (CI, Makefile, manifesto
+ou script) e execute-o.
+
+- Suíte passando: siga.
+- Suíte falhando: mostre os erros e pare. Release não sai com teste quebrado.
+- Projeto sem testes (nenhum comando, nenhum arquivo de teste, ou o runner
+  não coletou nenhum): alerte que o projeto não possui testes e que não foi
+  possível validar o funcionamento. Não pare por isso.
+
 ```bash
 git branch --show-current
 git fetch origin --tags
@@ -67,7 +78,7 @@ git tag --sort=-v:refname | head -1
 linha é uma pendência: arquivo modificado, no stage ou novo e não ignorado.
 
 - Com pendência, **não publique**. Liste os arquivos, explique que a release só
-  sai de um working tree limpo e peça ao usuário para rodar a skill `commitar`
+  sai de um working tree limpo e peça ao usuário para rodar a skill `versionar`
   (ou o equivalente do projeto). Encerre; não ofereça commitar por aqui.
 - Arquivos que o `.gitignore` já exclui não contam.
 - Commits **locais ainda não enviados** não bloqueiam: eles vão ao remoto junto
@@ -78,26 +89,27 @@ Demais verificações:
 - Atrás do remoto, com merge/rebase em andamento ou conflito: pare e informe a
   ação corretiva. Não faça `pull`, `rebase` nem `reset` por conta própria.
 - Rode localmente as checagens que o pipeline de release roda antes de compilar
-  (lint, tipos, validações) e os testes do projeto (ex.: `pytest`). Se falharem,
-  mostre os erros e pare — release não sai com checagem ou teste quebrado.
-  "Nenhum teste coletado" não é falha.
-- Se existir `BDD.md` (índice) com a pasta `bdd/`, rode o verificador de
-  cobertura do projeto (procure em scripts, Makefile, manifesto ou CI). ID
-  inexistente para a release. Mostre ao usuário os cenários sem teste e o
+  (lint, tipos, validações). Se falharem, mostre os erros e pare — release não
+  sai com checagem quebrada.
+- Se `BDD.md` estiver preenchido e houver cenários em `bdd/`, rode o verificador de
+  cobertura do projeto (procure em scripts, Makefile, manifesto ou CI). Um ID inexistente bloqueia a release. Mostre ao usuário os cenários sem teste e o
   checklist dos cenários `@manual`, e peça que confirme o checklist antes de
   seguir.
 - Se a documentação estiver defasada, avise e sugira rodar a skill de
-  atualização de documentação e depois `commitar`. Isso não bloqueia a release
+  atualização de documentação e depois `versionar`. Isso não bloqueia a release
   por si só.
 
 ### 3. Levantar o que entra na release
 
 ```bash
-git log --oneline "$(git describe --tags --abbrev=0)"..HEAD
+git log --oneline "$(git describe --tags --abbrev=0)"..HEAD  # se existir tag anterior
 git log origin/<branch>..HEAD --oneline      # commits locais ainda não enviados
 ```
 
-- Sem commits desde a última tag, não há o que publicar: informe e encerre.
+- Na primeira release, sem tag anterior, use `git log --oneline HEAD` para
+  levantar os commits alcançáveis, valide a versão inicial do manifesto e
+  apresente o plano como primeira release.
+- Com tag anterior e sem commits desde ela, não há o que publicar: informe e encerre.
 - Os commits entram na release como estão; não os reescreva.
 
 ### 4. Conferir a versão
@@ -108,15 +120,17 @@ A versão vive no arquivo de versão do passo 1; a tag é `v<versão>`. Esta ski
 | Situação | Ação |
 |----------|------|
 | A versão do manifesto é maior que a última tag | Siga: a tag será `v<versão>` |
-| A versão do manifesto é igual à da última tag | Não há versão nova. Peça ao usuário para rodar `commitar`, que sobe a versão em um commit próprio, e encerre |
-| O usuário pediu uma versão diferente da do manifesto | Pare e explique: a versão sai do manifesto. Peça para rodar `commitar` com a versão desejada |
+| A versão do manifesto é igual à da última tag | Não há versão nova. Peça ao usuário para rodar `versionar`, que sobe a versão em um commit próprio, e encerre |
+| O usuário pediu uma versão diferente da do manifesto | Pare e explique: a versão sai do manifesto. Peça para rodar `versionar` com a versão desejada |
 | A tag `vX.Y.Z` já existe (`git tag -l`, local e remoto) | Pare: uma tag publicada não se recria |
 
-Confira também que a versão acompanha o conteúdo, por SemVer sobre os commits do
-passo 3: **major** para quebra de contrato (capacidade, parâmetro, chave de
+Confira também a compatibilidade da API pública e a versão conforme SemVer.
+Os tipos de Conventional Commits são indícios, não prova de compatibilidade;
+considere também as regras de versões `0.y.z` e pré-lançamentos. Como política
+usual sobre os commits do passo 3: **major** para quebra de contrato (capacidade, parâmetro, chave de
 configuração ou comando removido/renomeado), **minor** se houver `feat`,
 **patch** nos demais casos. Se a versão do manifesto for menor do que isso exige,
-avise e deixe o usuário decidir se segue ou se volta ao `commitar`.
+avise e deixe o usuário decidir se segue ou se volta ao `versionar`.
 
 Se o repositório tiver validação de versão (script chamado pelo pipeline de
 release), rode-a com a versão do manifesto.
@@ -147,7 +161,8 @@ tiver pedido para seguir direto):
 
 ### 6. Criar a tag
 
-Tag anotada, com as notas agrupadas a partir dos commits desde a última tag:
+Tag anotada, com notas dos commits desde a última tag; na primeira release,
+use o histórico alcançável levantado no passo 3:
 
 ```bash
 git tag -a vX.Y.Z -F /tmp/tag.txt
@@ -187,11 +202,12 @@ outro host: o CLI ou a tela do host).
 Relate ao usuário:
 
 ```markdown
-# Release vX.Y.Z publicada
+# Tag vX.Y.Z enviada
 
 - **Commits:** <n> (<lista de assuntos>)
 - **Tag:** vX.Y.Z → <hash curto>
-- **Pipeline:** <link do run ou "disparado">
+- **Pipeline:** <link e estado confirmado | não identificado>
+- **Release / artefatos:** <publicação confirmada | pendente | não configurada>
 - **Testes:** <n passaram | nenhum teste> · **BDD:** <x/y cenários com teste, checklist manual confirmado>
 ```
 

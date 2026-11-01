@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from nix.core.index.store import IndexStore
 from nix.core.models import LinkDirection, NoteRef
-from nix.core.vault.paths import to_posix
+from nix.core.wiki.paths import to_posix
 
 T = TypeVar("T")
 

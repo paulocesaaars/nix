@@ -1,4 +1,4 @@
-"""Sincronização em segundo plano e uma trava de leitura por vault."""
+"""Sincronização em segundo plano e uma trava de leitura por wiki."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from nix.core.errors import NixError
 from nix.core.index.lock import mark_sync_job, unmark_sync_job
 from nix.core.index.sync import combine_sync_reports
 from nix.core.models import SyncProgress, SyncReport
-from nix.core.runtime import Runtime, RuntimeHost, VaultSpec
+from nix.core.runtime import Runtime, RuntimeHost, WikiSpec
 from nix.observability.logging import get_logger
 
 logger = get_logger("nix.web")
@@ -22,7 +22,7 @@ SyncItem = SyncProgress | SyncReport | NixError
 
 @dataclass(frozen=True)
 class BorrowedVaults:
-    """Runtimes com a trava do vault segurada. `skipped` é quem estava sincronizando."""
+    """Runtimes com a trava da wiki segurada. `skipped` é quem estava sincronizando."""
 
     runtimes: list[Runtime]
     skipped: list[dict[str, str]]
@@ -31,7 +31,7 @@ class BorrowedVaults:
 
 
 class RuntimeGate:
-    """Uma trava por vault, para ler um enquanto outro sincroniza.
+    """Uma trava por wiki, para ler um enquanto outro sincroniza.
 
     A conexão SQLite de cada runtime não é compartilhada entre threads.
     """
@@ -67,8 +67,8 @@ class RuntimeGate:
         return self.host.restart_notice
 
     @contextmanager
-    def borrow(self, spec: VaultSpec) -> Iterator[BorrowedVaults]:
-        """Segura a trava dos vaults livres. Quem está em sync entra em `skipped`."""
+    def borrow(self, spec: WikiSpec) -> Iterator[BorrowedVaults]:
+        """Segura a trava das wikis livres. Quem está em sync entra em `skipped`."""
         notice = self.before_call()
         locks: list[threading.Lock] = []
         try:
@@ -77,19 +77,19 @@ class RuntimeGate:
             except NixError as exc:
                 yield BorrowedVaults([], [], notice, exc.message)
                 return
-            selected = sorted(selected, key=lambda vault: vault.name.casefold())
+            selected = sorted(selected, key=lambda wiki: wiki.name.casefold())
             runtimes: list[Runtime] = []
             skipped: list[dict[str, str]] = []
-            for vault in selected:
-                lock = self.lock_for(vault.name)
+            for wiki in selected:
+                lock = self.lock_for(wiki.name)
                 if not lock.acquire(blocking=False):
-                    skipped.append({"vault": vault.name, "message": vault_busy_message(vault.name)})
+                    skipped.append({"wiki": wiki.name, "message": vault_busy_message(wiki.name)})
                     continue
                 locks.append(lock)
                 try:
-                    runtimes.append(self.host.resolve(vault.name))
+                    runtimes.append(self.host.resolve(wiki.name))
                 except NixError as exc:
-                    skipped.append({"vault": vault.name, "message": exc.message})
+                    skipped.append({"wiki": wiki.name, "message": exc.message})
                     lock.release()
                     locks.pop()
             yield BorrowedVaults(runtimes, skipped, notice, None)
@@ -100,7 +100,7 @@ class RuntimeGate:
 
 def vault_busy_message(name: str) -> str:
     return (
-        f"O índice do vault {name} está em uso por uma sincronização. "
+        f"O índice da wiki {name} está em uso por uma sincronização. "
         "Espere ela terminar e atualize a página."
     )
 
@@ -114,8 +114,8 @@ class SyncRun:
         self._wake = asyncio.Event()
         self.events: list[SyncItem] = []
         self.finished = False
-        self.selected_vault = ""
-        self.all_vaults = False
+        self.selected_wiki = ""
+        self.all_wikis = False
 
     def add(self, event: SyncProgress) -> None:
         def _append() -> None:
@@ -201,8 +201,8 @@ class SyncJobs:
             thread.join()
 
 
-def launch_sync(jobs: SyncJobs, gate: RuntimeGate, run: SyncRun, *, full: bool, spec: VaultSpec) -> None:
-    """Dispara o sync numa thread, um vault por vez. O progresso cita o vault atual."""
+def launch_sync(jobs: SyncJobs, gate: RuntimeGate, run: SyncRun, *, full: bool, spec: WikiSpec) -> None:
+    """Dispara o sync numa thread, uma wiki por vez. O progresso cita a wiki atual."""
 
     def worker() -> None:
         outcome: SyncReport | NixError | None = None
@@ -214,39 +214,39 @@ def launch_sync(jobs: SyncJobs, gate: RuntimeGate, run: SyncRun, *, full: bool, 
             except NixError as exc:
                 outcome = exc
                 selected = []
-            for vault in selected:
-                lock = gate.lock_for(vault.name)
+            for wiki in selected:
+                lock = gate.lock_for(wiki.name)
                 lock.acquire()
                 try:
-                    mark_sync_job(vault.name)
+                    mark_sync_job(wiki.name)
                     gate.host.before_call()
-                    runtime = gate.host.resolve(vault.name)
+                    runtime = gate.host.resolve(wiki.name)
                     report = runtime.indexer.sync(full=full, progress=run.add, trigger="manual")
-                    report.vault_name = vault.name
-                    reports.append((vault.name, report))
+                    report.wiki_name = wiki.name
+                    reports.append((wiki.name, report))
                 except NixError as exc:
-                    reports.append((vault.name, SyncReport(failed=1, errors=[exc.message])))
+                    reports.append((wiki.name, SyncReport(failed=1, errors=[exc.message])))
                 except Exception:
-                    logger.exception("Falha ao sincronizar o vault %s pela interface.", vault.name)
+                    logger.exception("Falha ao sincronizar a wiki %s pela interface.", wiki.name)
                     reports.append(
                         (
-                            vault.name,
+                            wiki.name,
                             SyncReport(
                                 failed=1,
                                 errors=[
-                                    f"A sincronização do vault {vault.name} falhou. "
+                                    f"A sincronização da wiki {wiki.name} falhou. "
                                     "Rode `nix doctor` e tente de novo."
                                 ],
                             ),
                         )
                     )
                 finally:
-                    unmark_sync_job(vault.name)
+                    unmark_sync_job(wiki.name)
                     lock.release()
             if outcome is None:
                 if not reports:
                     outcome = NixError(
-                        "Nenhum vault foi sincronizado. Cadastre um com `nix vault add` ou rode `nix init`."
+                        "Nenhuma wiki foi sincronizado. Cadastre um com `nix wiki add` ou rode `nix init`."
                     )
                 else:
                     outcome = combine_sync_reports(reports)

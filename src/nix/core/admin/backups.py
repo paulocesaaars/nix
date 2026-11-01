@@ -1,4 +1,4 @@
-"""Backups de notas gravados pelo VaultWriter: listar, comparar e restaurar."""
+"""Backups de notas gravados pelo WikiWriter: listar, comparar e restaurar."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from nix.config.schema import BACKUP_STAMP_PATTERN, NixConfig, VaultSettings
-from nix.core.errors import PathEscapeError, VaultError
+from nix.config.schema import BACKUP_STAMP_PATTERN, NixConfig, WikiSettings
+from nix.core.errors import PathEscapeError, WikiError
 from nix.core.models import WriteResult
 from nix.core.runtime import Runtime
-from nix.core.vault.paths import to_posix
+from nix.core.wiki.paths import to_posix
 
 _MAX_DIFF_LINES = 2000
 _MAX_DIFF_BYTES = 512 * 1024
@@ -44,12 +44,12 @@ class BackupDiff:
 
 
 def list_backups(
-    config: NixConfig, limit: int = 200, *, vault: VaultSettings | None = None
+    config: NixConfig, limit: int = 200, *, wiki: WikiSettings | None = None
 ) -> list[BackupEntry]:
-    root = _backup_root(config, vault)
+    root = _backup_root(config, wiki)
     if not root.is_dir():
         return []
-    vault_root = _vault_root(config, vault)
+    vault_root = _vault_root(config, wiki)
     entries: list[BackupEntry] = []
     stamps = sorted(
         (child for child in root.iterdir() if child.is_dir() and BACKUP_STAMP_PATTERN.fullmatch(child.name)),
@@ -75,18 +75,18 @@ def list_backups(
 
 
 def backup_file(
-    config: NixConfig, stamp: str, rel_path: str, *, vault: VaultSettings | None = None
+    config: NixConfig, stamp: str, rel_path: str, *, wiki: WikiSettings | None = None
 ) -> Path:
-    """Resolve o arquivo sem sair da pasta de backups do vault."""
+    """Resolve o arquivo sem sair da pasta de backups da wiki."""
     if not BACKUP_STAMP_PATTERN.fullmatch(stamp):
-        raise VaultError(f"Backup {stamp!r} inválido. Abra a lista de backups de novo.")
-    root = _backup_root(config, vault).resolve()
+        raise WikiError(f"Backup {stamp!r} inválido. Abra a lista de backups de novo.")
+    root = _backup_root(config, wiki).resolve()
     posix = to_posix(rel_path)
     candidate = (root / stamp / posix).resolve()
     if not candidate.is_relative_to(root / stamp):
         raise PathEscapeError(f"{posix} sai da pasta de backups. Abra a lista de backups de novo.")
     if not candidate.is_file():
-        raise VaultError(
+        raise WikiError(
             f"O backup {stamp}/{posix} não existe mais. "
             "Pode ter expirado por safety.backup_retention_days; abra a lista de novo."
         )
@@ -94,11 +94,11 @@ def backup_file(
 
 
 def diff_backup(
-    config: NixConfig, stamp: str, rel_path: str, *, vault: VaultSettings | None = None
+    config: NixConfig, stamp: str, rel_path: str, *, wiki: WikiSettings | None = None
 ) -> BackupDiff:
-    source = backup_file(config, stamp, rel_path, vault=vault)
+    source = backup_file(config, stamp, rel_path, wiki=wiki)
     posix = to_posix(rel_path)
-    vault_root = _vault_root(config, vault)
+    vault_root = _vault_root(config, wiki)
     current_path = vault_root / posix if vault_root is not None else None
     exists = current_path is not None and current_path.is_file()
     size = source.stat().st_size
@@ -153,8 +153,8 @@ def restore_backup(runtime: Runtime, stamp: str, rel_path: str) -> WriteResult:
     """Grava o backup por cima da nota. O estado atual ganha o próprio backup antes."""
     posix = to_posix(rel_path)
     if not posix.lower().endswith(".md"):
-        raise VaultError(f"Só notas .md podem ser restauradas pela UI. Copie {posix} à mão.")
-    content = _read(backup_file(runtime.config, stamp, posix, vault=runtime.vault))
+        raise WikiError(f"Só notas .md podem ser restauradas pela UI. Copie {posix} à mão.")
+    content = _read(backup_file(runtime.config, stamp, posix, wiki=runtime.wiki))
     writer = runtime.writer
     if writer.resolve(posix).is_file():
         written = writer.update_note(posix, content, mode="replace", confirm=True)
@@ -163,16 +163,16 @@ def restore_backup(runtime: Runtime, stamp: str, rel_path: str) -> WriteResult:
     return runtime.writeback.after_write(written)
 
 
-def _backup_root(config: NixConfig, vault: VaultSettings | None = None) -> Path:
-    if not config.vaults:
+def _backup_root(config: NixConfig, wiki: WikiSettings | None = None) -> Path:
+    if not config.wikis:
         return config.safety.backup_path
-    return config.vault_backup_dir(vault)
+    return config.wiki_backup_dir(wiki)
 
 
-def _vault_root(config: NixConfig, vault: VaultSettings | None = None) -> Path | None:
-    if not config.vaults:
+def _vault_root(config: NixConfig, wiki: WikiSettings | None = None) -> Path | None:
+    if not config.wikis:
         return None
-    chosen = vault if vault is not None else config.default_vault
+    chosen = wiki if wiki is not None else config.default_wiki
     return chosen.root
 
 
@@ -180,7 +180,7 @@ def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
-        raise VaultError(f"Não foi possível ler {path}: {exc}. Verifique as permissões.") from exc
+        raise WikiError(f"Não foi possível ler {path}: {exc}. Verifique as permissões.") from exc
 
 
 def _stamp_iso(stamp: str) -> str:

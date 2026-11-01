@@ -1,4 +1,4 @@
-"""Ferramentas de escrita no vault com write-through no índice."""
+"""Ferramentas de escrita na wiki com write-through no índice."""
 
 from __future__ import annotations
 
@@ -7,23 +7,23 @@ from typing import Any, Literal
 from pydantic import Field
 
 from nix.core.runtime import Runtime
-from nix.core.tools.args import VaultArgs
-from nix.core.vault.paths import to_posix
+from nix.core.tools.args import WikiArgs
+from nix.core.wiki.paths import to_posix
 
 
-class CreateNoteArgs(VaultArgs):
+class CreateNoteArgs(WikiArgs):
     rel_path: str = Field(description="Caminho relativo da nova nota, ex. Inbox/ideia.md")
     content: str = Field(description="Corpo Markdown da nota")
     frontmatter: dict[str, Any] | None = None
 
 
-class AppendNoteArgs(VaultArgs):
+class AppendNoteArgs(WikiArgs):
     rel_path: str
     content: str
     section: str | None = Field(default=None, description="Cabeçalho de seção opcional")
 
 
-class UpdateNoteArgs(VaultArgs):
+class UpdateNoteArgs(WikiArgs):
     rel_path: str
     content: str
     mode: Literal["replace", "patch", "prepend"] = "replace"
@@ -33,7 +33,7 @@ class UpdateNoteArgs(VaultArgs):
     )
 
 
-class UpdateFrontmatterArgs(VaultArgs):
+class UpdateFrontmatterArgs(WikiArgs):
     rel_path: str
     set: dict[str, Any] | None = Field(
         default=None,
@@ -42,15 +42,15 @@ class UpdateFrontmatterArgs(VaultArgs):
     remove: list[str] | None = Field(default=None, description="Chaves de topo a apagar")
 
 
-class ManageTagsArgs(VaultArgs):
+class ManageTagsArgs(WikiArgs):
     rel_path: str
     add: list[str] = Field(default_factory=list, description="Tags a acrescentar (com ou sem #)")
     remove: list[str] = Field(default_factory=list, description="Tags a remover do frontmatter")
 
 
-class MoveNoteArgs(VaultArgs):
+class MoveNoteArgs(WikiArgs):
     src: str = Field(description="Caminho atual da nota .md")
-    dest: str = Field(description="Novo caminho relativo no vault")
+    dest: str = Field(description="Novo caminho relativo na wiki")
     update_links: bool = Field(
         default=True,
         description="Reescreve wikilinks e links Markdown que apontam para a nota",
@@ -62,9 +62,9 @@ class MoveNoteArgs(VaultArgs):
     )
 
 
-class MoveFileArgs(VaultArgs):
+class MoveFileArgs(WikiArgs):
     src: str = Field(description="Caminho atual do anexo ou arquivo que não é nota")
-    dest: str = Field(description="Novo caminho relativo no vault")
+    dest: str = Field(description="Novo caminho relativo na wiki")
     update_links: bool = Field(
         default=True,
         description="Reescreve ![[alvo]], [[alvo]] e links Markdown relativos",
@@ -76,7 +76,7 @@ class MoveFileArgs(VaultArgs):
     )
 
 
-class DeleteNoteArgs(VaultArgs):
+class DeleteNoteArgs(WikiArgs):
     rel_path: str
     confirm: bool = False
 
@@ -103,7 +103,7 @@ def _result_dict(result: object) -> dict[str, object]:
 
 
 def create_note(runtime: Runtime, args: CreateNoteArgs) -> dict[str, object]:
-    folder = runtime.vault.default_new_note_folder
+    folder = runtime.wiki.default_new_note_folder
     rel = to_posix(args.rel_path)
     if "/" not in rel and folder:
         rel = f"{folder.rstrip('/')}/{rel}"
