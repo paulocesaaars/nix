@@ -226,7 +226,7 @@ def nuitka_command(product: str, filename: str) -> list[str]:
                 "--windows-console-mode=force",
                 "--company-name=Nix",
                 f"--file-version={file_version(product)}",
-                "--file-description=Servidor MCP stdio para wikis do Obsidian",
+                "--file-description=Servidor MCP stdio para wikis em Markdown",
             ]
         )
     command.append(str(ENTRY))

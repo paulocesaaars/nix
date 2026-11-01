@@ -5,8 +5,8 @@
     {
       "id": "wikiPath",
       "type": "promptString",
-      "description": "Caminho da wiki do Obsidian (use barras /)",
-      "default": "C:/Obsidian/MinhaWiki"
+      "description": "Caminho da wiki (use barras /)",
+      "default": "C:/Notas/MinhaWiki"
     }
   ],
   "configurations": [

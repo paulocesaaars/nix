@@ -21,7 +21,7 @@ foreach ($arg in $args) {
 Remove NIX_HOME e {NIX_HOME}\bin do PATH se apontarem para esta instalação,
 apaga o binário, o cache de extração (onefile-* e hook-*) e, salvo --keep-data,
 apaga settings.db e .nix. Se a pasta da instalação ficar vazia, ela também sai.
-O vault do Obsidian não é alterado.
+A pasta da wiki não é alterada.
 
 Uso:
   .\uninstall.ps1

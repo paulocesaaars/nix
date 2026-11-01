@@ -21,7 +21,7 @@ from typing import Any
 
 SERVER_NAME = "io.github.paulocesaaars/nix"
 SCHEMA_URL = "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
-DESCRIPTION = "Servidor MCP stdio para wikis do Obsidian"
+DESCRIPTION = "Servidor MCP stdio para wikis em Markdown"
 REPOSITORY = "paulocesaaars/nix"
 MANIFEST_VERSION = "0.3"
 
