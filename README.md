@@ -9,6 +9,10 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B%20%2F%203.14-blue?style=for-the-badge" alt="Python 3.11+ / 3.14"></a>
 </p>
 
+<p align="center">
+  <a href="https://paulocesaaars.github.io/nix/">https://paulocesaaars.github.io/nix/</a>
+</p>
+
 Servidor [MCP](https://modelcontextprotocol.io/) que expõe wikis em Markdown a agentes de desenvolvimento (Cursor, VS Code, Claude Code e Codex). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas. O Mega Brain, desligado por padrão, guarda memória entre agentes na wiki que você escolher.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
