@@ -9,6 +9,11 @@ from nix.config.loader import require_initialized
 from nix.web.server import serve
 
 
+def open_interface() -> None:
+    """Abre a interface. Não exige a wiki cadastrada."""
+    serve(port=None, open_browser=True)
+
+
 @with_errors
 def cmd_ui(
     no_browser: bool = typer.Option(False, "--no-browser", help="Não abre o navegador, só imprime a URL"),

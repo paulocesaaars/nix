@@ -19,7 +19,7 @@ from nix.cli.render import print_banner
 
 app = typer.Typer(
     name="nix",
-    help="Servidor MCP para wikis de notas. Sem subcomando, inicia o servidor stdio.",
+    help="Wikis de notas para agentes. No terminal, sem subcomando, abre a interface.",
     invoke_without_command=True,
     pretty_exceptions_enable=False,
     pretty_exceptions_show_locals=False,
@@ -37,11 +37,18 @@ def _root(
         typer.echo(__version__)
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
-        if sys.stdin.isatty():
-            typer.echo(
-                "Servidor MCP Nix (stdio). O cliente MCP inicia este processo; Ctrl+C encerra.",
-                err=True,
-            )
+        # Terminal: a pessoa digitou `nix`. O cliente MCP não tem TTY e segue no stdio.
+        if sys.stdin is not None and sys.stdin.isatty():
+            from nix.cli.commands.ui_cmd import open_interface
+            from nix.cli.render import print_error
+            from nix.core.errors import NixError
+
+            try:
+                open_interface()
+            except NixError as exc:
+                print_error(exc.message)
+                raise typer.Exit(code=1) from exc
+            return
         from nix.mcp.server import run_server
 
         run_server()
