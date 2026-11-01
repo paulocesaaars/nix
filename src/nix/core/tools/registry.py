@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from nix.core.errors import ConfigError
 from nix.core.runtime import RuntimeHost, WikiOpenError
 from nix.core.tools import brain, maintenance, notes, search
-from nix.core.tools.args import LEGACY_WIKI_PARAM_WARNING, used_legacy_wiki_param
 
 _SINGLE_WIKI = (
     "Esta operação usa uma única wiki. Informe um nome só, ou omita para usar o padrão. "
@@ -36,8 +35,6 @@ class ToolSpec:
     host_only: bool = False
     # Só existe com `brain.enabled` ligado.
     needs_brain: bool = False
-    # Nome novo desta ferramenta. Preenchido, a chamada devolve o resultado e avisa.
-    legacy_of: str | None = None
 
 
 SPECS: tuple[ToolSpec, ...] = (
@@ -272,28 +269,6 @@ SPECS: tuple[ToolSpec, ...] = (
         multi_wiki=True,
     ),
     ToolSpec(
-        name="list_vaults",
-        description=(
-            "Obsoleto: use list_wikis. Lista as wikis cadastradas: nome, caminho, "
-            "se é o padrão e se o índice está desatualizado."
-        ),
-        args_model=maintenance.ListWikisArgs,
-        handler=maintenance.list_wikis,
-        read_only=True,
-        multi_wiki=True,
-        legacy_of="list_wikis",
-    ),
-    ToolSpec(
-        name="vault_insights",
-        description=(
-            "Obsoleto: use wiki_insights. Qualidade da wiki: kind=orphans|duplicates|links|summary."
-        ),
-        args_model=maintenance.InsightsArgs,
-        handler=maintenance.wiki_insights,
-        read_only=True,
-        legacy_of="wiki_insights",
-    ),
-    ToolSpec(
         name="brain_query",
         description=(
             "Busca na wiki do Mega Brain (híbrida) e nas observações da sessão. "
@@ -491,23 +466,11 @@ def call_tool(host: RuntimeHost, name: str, payload: dict[str, Any]) -> Any:
         if spec.name == name:
             if not spec.multi_wiki and not spec.host_only:
                 _reject_multi_wiki(payload.get("wiki"))
-                _reject_multi_wiki(payload.get("vault"))
             args = spec.args_model.model_validate(payload)
-            return _with_legacy_warnings(_dispatch(host, spec, args), spec, args)
+            return _dispatch(host, spec, args)
     raise KeyError(
         f"Ferramenta {name!r} desconhecida. Ferramentas: {', '.join(s.name for s in SPECS)}."
     )
-
-
-def _with_legacy_warnings(payload: Any, spec: ToolSpec, args: Any) -> Any:
-    parts: list[str] = []
-    if used_legacy_wiki_param(args):
-        parts.append(LEGACY_WIKI_PARAM_WARNING)
-    if spec.legacy_of:
-        parts.append(f"A ferramenta {spec.name} está obsoleta. Use {spec.legacy_of}.")
-    if not parts:
-        return payload
-    return _attach_warning(payload, " ".join(parts))
 
 
 def _reject_multi_wiki(value: object) -> None:
@@ -562,7 +525,7 @@ def _attach_open_errors(tool: str, payload: Any, errors: list[WikiOpenError]) ->
                 }
             )
         return {**payload, "wiki": names, "wikis": wikis}
-    if tool in {"list_wikis", "list_vaults"}:
+    if tool == "list_wikis":
         wikis = _dict_list(payload.get("wikis"))
         for item in errors:
             wikis.append(
@@ -625,9 +588,8 @@ def _callable_from_spec(host: RuntimeHost, spec: ToolSpec) -> Callable[..., str]
         warning = host.before_call()
         if not spec.multi_wiki and not spec.host_only:
             _reject_multi_wiki(kwargs.get("wiki"))
-            _reject_multi_wiki(kwargs.get("vault"))
         args = spec.args_model.model_validate(kwargs)
-        payload = _with_legacy_warnings(_dispatch(host, spec, args), spec, args)
+        payload = _dispatch(host, spec, args)
         if warning:
             payload = _attach_warning(payload, warning)
         return _json(payload)

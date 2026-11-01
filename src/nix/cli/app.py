@@ -61,7 +61,6 @@ app.command("doctor", help="Diagnóstico de ambiente, config e índice")(cmd_doc
 app.command("ui", help="Abre a interface local de configuração e operação")(cmd_ui)
 app.add_typer(config_app, name="config")
 app.add_typer(wiki_app, name="wiki")
-app.add_typer(wiki_app, name="vault", hidden=True)
 app.add_typer(brain_app, name="brain")
 app.command(
     "run",

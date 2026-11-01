@@ -17,7 +17,6 @@ from nix.cli.render import (
     print_init_result,
     print_problem,
     print_step,
-    print_warning,
 )
 from nix.config.embedding_models import (
     EMBEDDING_MODELS,
@@ -133,12 +132,6 @@ def cmd_init(
         "--wiki",
         help="Caminho da wiki; se omitido, pergunta no terminal",
     ),
-    legacy_vault: str | None = typer.Option(
-        None,
-        "--vault",
-        hidden=True,
-        help="Obsoleto. Use --wiki.",
-    ),
     embedding_model: str | None = typer.Option(
         None,
         "--embedding-model",
@@ -156,10 +149,6 @@ def cmd_init(
         "[dim]Vamos apontar a wiki e indexar as notas.[/dim]"
     )
     creating = force or not SettingsStore().is_initialized()
-    if legacy_vault and legacy_vault.strip():
-        print_warning("A opção `--vault` está obsoleta. Use `--wiki`.")
-        if wiki is None or not wiki.strip():
-            wiki = legacy_vault
     explicit_model = embedding_model is not None and bool(embedding_model.strip())
     # Só as perguntas que vão aparecer entram na contagem das etapas.
     interactive = sys.stdin.isatty()

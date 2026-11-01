@@ -13,7 +13,6 @@ from nix.cli.render import (
     print_header,
     print_status,
     print_sync_report,
-    print_warning,
     sync_progress,
 )
 from nix.config.embedding_present import sync_model_hint
@@ -40,17 +39,6 @@ def _status_from_payload(payload: object) -> IndexStatus:
     )
 
 
-def _resolve_wiki_option(wiki: list[str] | None, legacy_vault: list[str] | None) -> list[str] | None:
-    """`--vault` continua aceito e avisa. `--wiki` ganha quando os dois vêm juntos."""
-    legacy = [item.strip() for item in (legacy_vault or []) if item.strip()]
-    current = [item.strip() for item in (wiki or []) if item.strip()]
-    if legacy:
-        print_warning("A opção `--vault` está obsoleta. Use `--wiki`.")
-    if current:
-        return current
-    return legacy or None
-
-
 def _wiki_spec(wiki: list[str] | None, all_wikis: bool) -> str | list[str] | None:
     names = [item.strip() for item in (wiki or []) if item.strip()]
     if all_wikis and names:
@@ -70,13 +58,10 @@ def cmd_sync(
     dry_run: bool = typer.Option(False, "--dry-run", help="Só mostra o que mudaria"),
     as_json: bool = typer.Option(False, "--json", help="Saída JSON"),
     wiki: list[str] | None = typer.Option(None, "--wiki", help="Nome da wiki. Repita para vários."),
-    legacy_vault: list[str] | None = typer.Option(
-        None, "--vault", hidden=True, help="Obsoleto. Use --wiki."
-    ),
     all_wikis: bool = typer.Option(False, "--all", help="Sincroniza todas as wikis, em sequência."),
 ) -> None:
     host = get_host(capture_embedder_stdout=as_json)
-    spec = _wiki_spec(_resolve_wiki_option(wiki, legacy_vault), all_wikis)
+    spec = _wiki_spec(wiki, all_wikis)
     events: list[SyncProgressEvent] = []
     reports: list[tuple[str, SyncReport]] = []
     failures: list[str] = []
@@ -135,13 +120,10 @@ def cmd_sync(
 def cmd_status(
     as_json: bool = typer.Option(False, "--json"),
     wiki: list[str] | None = typer.Option(None, "--wiki", help="Nome da wiki. Repita para vários."),
-    legacy_vault: list[str] | None = typer.Option(
-        None, "--vault", hidden=True, help="Obsoleto. Use --wiki."
-    ),
     all_wikis: bool = typer.Option(False, "--all", help="Mostra o estado de todas as wikis."),
 ) -> None:
     host = get_host()
-    spec = _wiki_spec(_resolve_wiki_option(wiki, legacy_vault), all_wikis)
+    spec = _wiki_spec(wiki, all_wikis)
     try:
         payload = call_tool(host, "index_status", {"wiki": spec} if spec is not None else {})
     finally:

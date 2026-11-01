@@ -18,13 +18,6 @@ wiki_app = typer.Typer(
 )
 
 
-@wiki_app.callback()
-def _wiki_group(ctx: typer.Context) -> None:
-    """Avisa quando a invocação usou o comando antigo `nix vault`."""
-    if ctx.info_name == "vault":
-        print_warning("O comando `nix vault` está obsoleto. Use `nix wiki`.")
-
-
 def _service() -> WikiService:
     require_initialized()
     return WikiService()

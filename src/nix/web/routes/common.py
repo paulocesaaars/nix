@@ -36,7 +36,7 @@ class Gated(Generic[T]):
 
 def request_vault(request: Request) -> str | None:
     """Nome em `?wiki=`. Vazio ou `*` significa a wiki padrão."""
-    raw = query(request, "wiki") or query(request, "vault")
+    raw = query(request, "wiki")
     if not raw or raw == "*":
         return None
     return raw

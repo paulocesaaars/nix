@@ -64,9 +64,8 @@ def split_key(dotted: str) -> tuple[str, str]:
 
 
 def require_field(section: str, key: str) -> ConfigField:
-    if section in {"wiki", "vault"}:
-        notice = "O nome vault está obsoleto. Use wiki. " if section == "vault" else ""
-        raise ConfigError(notice + _wiki_field_message(key))
+    if section == "wiki":
+        raise ConfigError(_wiki_field_message(key))
     try:
         return config_field(section, key)
     except KeyError:

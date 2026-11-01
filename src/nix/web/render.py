@@ -59,7 +59,7 @@ def _csrf(request: Request) -> dict[str, Any]:
         return context
     except Exception:  # noqa: BLE001
         return context
-    raw = request.query_params.get("wiki", "").strip() or request.query_params.get("vault", "").strip()
+    raw = request.query_params.get("wiki", "").strip()
     selected = default_name
     if raw and raw != "*":
         try:
@@ -71,7 +71,7 @@ def _csrf(request: Request) -> dict[str, Any]:
         label = config.get_wiki(selected).path
     except NixError:
         label = ""
-    kept = [(key, value) for key, value in request.query_params.multi_items() if key not in {"wiki", "vault"}]
+    kept = [(key, value) for key, value in request.query_params.multi_items() if key != "wiki"]
 
     def wiki_url(path: str, wiki: str | None = None) -> str:
         return _vault_url(path, (wiki or selected).strip())

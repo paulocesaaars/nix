@@ -13,11 +13,4 @@ Funcionalidade: Wiki genérica
     Quando a Nix atualizada abre a configuração
     Então `nix wiki list` mostra a wiki "Default" com a mesma pasta
     E a busca nela devolve as notas já indexadas
-
-  @HU-16.2
-  Cenário: Aceitar o nome antigo com aviso
-    Dado a wiki "Default" cadastrada
-    Quando chamo `search_notes` com o parâmetro `vault`
-    Então recebo o resultado da wiki "Default"
-    E a resposta avisa para usar o parâmetro `wiki`
 ```

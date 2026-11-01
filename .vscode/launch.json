@@ -3,10 +3,10 @@
   "version": "0.2.0",
   "inputs": [
     {
-      "id": "vaultPath",
+      "id": "wikiPath",
       "type": "promptString",
-      "description": "Caminho do vault do Obsidian (use barras /)",
-      "default": "C:/Obsidian/MeuVault"
+      "description": "Caminho da wiki do Obsidian (use barras /)",
+      "default": "C:/Obsidian/MinhaWiki"
     }
   ],
   "configurations": [
@@ -23,12 +23,12 @@
       "justMyCode": true
     },
     {
-      "name": "Nix: init (--vault)",
+      "name": "Nix: init (--wiki)",
       "type": "debugpy",
       "request": "launch",
       "python": "${command:python.interpreterPath}",
       "module": "nix",
-      "args": ["init", "--vault", "${input:vaultPath}"],
+      "args": ["init", "--wiki", "${input:wikiPath}"],
       "pythonArgs": ["-P"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",

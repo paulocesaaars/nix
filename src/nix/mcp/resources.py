@@ -1,7 +1,4 @@
-"""Recursos MCP: nota na wiki padrão ou numa wiki nomeada.
-
-`nix://vault/...` continua aceito por uma versão e registra o aviso para usar `nix://wiki/`.
-"""
+"""Recursos MCP: nota na wiki padrão ou numa wiki nomeada."""
 
 from __future__ import annotations
 
@@ -49,10 +46,4 @@ def register_resources(server: Any, host: RuntimeHost) -> None:
     @server.resource("nix://wiki/{name}/note/{+rel_path}")  # type: ignore[untyped-decorator]
     def wiki_note_resource(name: str, rel_path: str) -> str:
         """Nota numa wiki nomeada. Nome desconhecido lista as wikis e o padrão."""
-        return _read_note(unquote(name), rel_path)
-
-    @server.resource("nix://vault/{name}/note/{+rel_path}")  # type: ignore[untyped-decorator]
-    def legacy_vault_note_resource(name: str, rel_path: str) -> str:
-        """Obsoleto. Use nix://wiki/{name}/note/.... Devolve a mesma nota e avisa no log."""
-        logger.warning("O recurso nix://vault/ está obsoleto. Use nix://wiki/.")
         return _read_note(unquote(name), rel_path)
