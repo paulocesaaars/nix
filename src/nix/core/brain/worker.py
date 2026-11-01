@@ -12,8 +12,10 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
+from datetime import UTC, datetime
 from typing import IO
 
+from nix.config.executables import cli_to_launch
 from nix.config.paths import default_state_dir
 from nix.core.brain.limits import load_brain_flags
 from nix.core.brain.pages import build_session_page, page_path_for
@@ -27,8 +29,10 @@ def schedule(session_key: str) -> None:
     if os.environ.get("NIX_BRAIN_WORK_INLINE") == "1":
         run_work(session_key)
         return
-    with suppress(OSError):
+    try:
         _spawn(session_key)
+    except OSError as exc:
+        _log_spawn(f"Não abri o processo da página ({exc}). Rode o instalador de novo.")
 
 
 def run_work(session_key: str | None = None) -> None:
@@ -78,8 +82,17 @@ def _write_pages(store: BrainStore, wiki_name: str, pending: list[SessionRecord]
 
 
 def _spawn(session_key: str) -> None:
-    if "__compiled__" in globals() or getattr(sys, "frozen", False):
-        cmd = [sys.executable, "brain", "work", "--session", session_key]
+    """Abre o binário completo. O `nix-hook` só recebe eventos e não grava a página."""
+    if _packaged():
+        program = cli_to_launch(sys.argv[0] if sys.argv else "", sys.executable)
+        if not program.is_file():
+            name = "nix.exe" if sys.platform == "win32" else "nix"
+            _log_spawn(
+                f"Não achei o binário completo em {program}. "
+                f"Confira se {name} está em NIX_HOME/bin e rode o instalador de novo."
+            )
+            return
+        cmd = [str(program), "brain", "work", "--session", session_key]
     else:
         cmd = [sys.executable, "-m", "nix", "brain", "work", "--session", session_key]
     subprocess.Popen(
@@ -90,6 +103,23 @@ def _spawn(session_key: str) -> None:
         start_new_session=True,
         close_fds=True,
     )
+
+
+def _packaged() -> bool:
+    """True no binário Nuitka. `__compiled__` existe neste módulo compilado."""
+    return "__compiled__" in globals() or getattr(sys, "frozen", False)
+
+
+def _log_spawn(message: str) -> None:
+    """Mesmo arquivo do hook, para a falha aparecer sem o agente aberto."""
+    try:
+        directory = default_state_dir() / "logs"
+        directory.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).isoformat(timespec="seconds")
+        with (directory / "brain-hook.log").open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp} {message}\n")
+    except OSError:
+        return
 
 
 @contextmanager

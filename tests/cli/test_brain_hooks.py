@@ -293,8 +293,11 @@ def test_global_hook_without_file_is_not_a_project_mismatch(
     assert "project" not in cursor.hint
 
 
-def test_project_hook_without_file_cites_project_scope(configured: Path, tmp_path: Path) -> None:
+def test_project_hook_without_file_cites_project_scope(
+    configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     del configured
+    _home(tmp_path, monkeypatch)
     repo = _repo(tmp_path)
     root, key = project_root(str(repo))
     BrainStore().register_hook(

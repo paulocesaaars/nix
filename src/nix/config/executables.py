@@ -14,6 +14,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from nix.config.paths import env_home
+
 
 def _split(program: Path) -> tuple[str, str]:
     name = program.name
@@ -42,6 +44,44 @@ def cli_binary_beside(program: Path) -> Path:
     if stem.startswith("nix-hook-"):
         return program.with_name("nix-" + stem[len("nix-hook-") :] + ext)
     return program
+
+
+def cli_to_launch(argv0: str, executable: str) -> Path:
+    """Binário completo que grava a página. No hook, o irmão; no completo, ele mesmo."""
+    programs = [Path(raw) for raw in (argv0, executable) if raw]
+    for program in programs:
+        stem, _ext = _split(program)
+        if _is_hook_stem(stem):
+            sibling = cli_binary_beside(program)
+            if sibling.is_file():
+                return sibling
+        elif program.is_file() and _is_cli_stem(stem):
+            return program
+    installed = _installed_cli()
+    if installed is not None:
+        return installed
+    for program in programs:
+        stem, _ext = _split(program)
+        if _is_hook_stem(stem):
+            return cli_binary_beside(program)
+    return cli_binary_beside(Path(executable or argv0))
+
+
+def _is_hook_stem(stem: str) -> bool:
+    return stem == "nix-hook" or stem.startswith("nix-hook-")
+
+
+def _is_cli_stem(stem: str) -> bool:
+    return stem == "nix" or (stem.startswith("nix-") and not _is_hook_stem(stem))
+
+
+def _installed_cli() -> Path | None:
+    home = env_home()
+    if home is None:
+        return None
+    name = "nix.exe" if sys.platform == "win32" else "nix"
+    candidate = home / "bin" / name
+    return candidate if candidate.is_file() else None
 
 
 def packaged_hook_executable() -> Path | None:
