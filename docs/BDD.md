@@ -40,3 +40,4 @@ histórias e o porquê de cada uma ficam no [PRD.md](./PRD.md), com o mesmo ID.
 | HU-21 | Contagem de tokens | [`bdd/HU-21-tokens.md`](./bdd/HU-21-tokens.md) |
 | HU-22 | Painel do Mega Brain | [`bdd/HU-22-painel-mega-brain.md`](./bdd/HU-22-painel-mega-brain.md) |
 | HU-23 | Cota de wikis | [`bdd/HU-23-cota-de-wikis.md`](./bdd/HU-23-cota-de-wikis.md) |
+| HU-24 | Ficha no MCP Registry | [`bdd/HU-24-registro-mcp.md`](./bdd/HU-24-registro-mcp.md) |

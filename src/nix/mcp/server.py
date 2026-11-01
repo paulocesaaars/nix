@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import sys
+from importlib.resources import files
 from typing import Any
 
 from nix import __version__
@@ -53,6 +55,65 @@ def _emit_error(message: str) -> None:
     sys.stderr.flush()
 
 
+# O initialize manda este PNG pequeno, derivado do nix.png fonte. O MCPB segue com o fonte.
+_INITIALIZE_ICON = "nix-48.png"
+
+
+def _server_icons() -> list[Any]:
+    """PNG pequeno do pacote como data URI. O initialize publica isso em serverInfo.icons."""
+    try:
+        from mcp.types import Icon
+    except ImportError as exc:
+        raise ConfigError(
+            "SDK MCP incompatível: o initialize não aceita ícones. "
+            "Atualize com `pip install 'mcp>=1.9.0'`."
+        ) from exc
+    try:
+        png = files("nix.mcp").joinpath(_INITIALIZE_ICON).read_bytes()
+    except (FileNotFoundError, OSError) as exc:
+        raise ConfigError(
+            f"Não achei o ícone {_INITIALIZE_ICON} nos dados do pacote. Reinstale com `pip install .`."
+        ) from exc
+    if len(png) < 24 or not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ConfigError(
+            f"O arquivo {_INITIALIZE_ICON} do pacote não é um PNG válido. Reinstale com `pip install .`."
+        )
+    width = int.from_bytes(png[16:20], "big")
+    height = int.from_bytes(png[20:24], "big")
+    if width <= 0 or height <= 0:
+        raise ConfigError(
+            f"O arquivo {_INITIALIZE_ICON} do pacote não tem tamanho válido. Reinstale com `pip install .`."
+        )
+    encoded = base64.b64encode(png).decode("ascii")
+    return [
+        Icon(
+            src=f"data:image/png;base64,{encoded}",
+            mime_type="image/png",
+            sizes=[f"{width}x{height}"],
+        )
+    ]
+
+
+def build_server() -> Any:
+    """Cria o servidor MCP. O initialize leva o ícone em serverInfo.icons.
+
+    O SDK instalado (MCPServer, o FastMCP do mcp 2.x) recebe `icons` no construtor.
+    As ferramentas não recebem ícone próprio.
+    """
+    cls = _server_class()
+    icons = _server_icons()
+    try:
+        return cls("nix", version=__version__, log_level="ERROR", icons=icons)
+    except TypeError:
+        try:
+            return cls("nix", log_level="ERROR", icons=icons)
+        except TypeError as exc:
+            raise ConfigError(
+                "Não foi possível instanciar o servidor MCP. "
+                "Atualize com `pip install 'mcp>=1.9.0'`."
+            ) from exc
+
+
 def run_server() -> None:
     silence_progress_env()
     try:
@@ -69,17 +130,7 @@ def _serve() -> None:
     config = load_config()
     host = RuntimeHost(config)
     log = get_logger("nix.mcp")
-    cls = _server_class()
-    try:
-        server = cls("nix", version=__version__, log_level="ERROR")
-    except TypeError:
-        try:
-            server = cls("nix", log_level="ERROR")
-        except TypeError as exc:
-            raise ConfigError(
-                "Não foi possível instanciar o servidor MCP. "
-                "Atualize com `pip install 'mcp>=1.9.0'`."
-            ) from exc
+    server = build_server()
     register_tools(server, host)
     register_resources(server, host)
     install_traffic_logging(server, log_prompts=config.logging.log_prompts)
