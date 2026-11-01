@@ -17,16 +17,16 @@ class SchemaVersionError(ConfigError):
     """`settings.db` foi gravado por um esquema que este processo não abre."""
 
 
-class VaultError(NixError):
-    """Falha de leitura, escrita ou varredura do vault."""
+class WikiError(NixError):
+    """Falha de leitura, escrita ou varredura da wiki."""
 
 
-class PathEscapeError(VaultError):
-    """Tentativa de acessar caminho fora do vault."""
+class PathEscapeError(WikiError):
+    """Tentativa de acessar caminho fora da wiki."""
 
 
-class NoteNotFoundError(VaultError):
-    """Nota inexistente no vault."""
+class NoteNotFoundError(WikiError):
+    """Nota inexistente na wiki."""
 
 
 class ConfirmationRequiredError(NixError):

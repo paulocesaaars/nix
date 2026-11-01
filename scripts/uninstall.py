@@ -20,7 +20,7 @@ Remove o Nix de um checkout de desenvolvimento: tira NIX_HOME e o comando nix
 do PATH se apontarem para esta pasta, apaga .venv, o cache de extração
 (onefile-* e hook-*) e, salvo --keep-data, apaga também .nix (índice, backups,
 logs) e settings.db.
-O vault do Obsidian e o código-fonte não são alterados.
+A wiki e o código-fonte não são alterados.
 O binário instalado na máquina usa uninstall.ps1, uninstall.sh ou uninstall.bat.
 
 Uso:
@@ -161,7 +161,7 @@ def _print_plan(*, keep_data: bool) -> None:
         print("  - settings.db")
     print()
     print("Não será alterado:")
-    print("  - o vault do Obsidian")
+    print("  - a wiki")
     print("  - o código-fonte desta pasta")
     print()
     print("O modelo de embedding (~2,3 GB) pode permanecer no cache do Hugging Face.")

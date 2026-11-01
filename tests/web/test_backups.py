@@ -14,12 +14,12 @@ _RESTORED = "Decidimos validar CEP no cadastro."
 @pytest.mark.bdd("HU-08.10")
 def test_restore_backup_reverts_note_and_updates_index(client: WebClient) -> None:
     host = client.gate.host
-    vault = host.config.default_vault
-    note = vault.root / _REL
+    wiki = host.config.default_wiki
+    note = wiki.root / _REL
     original = note.read_text(encoding="utf-8")
     assert _RESTORED in original
 
-    backup = host.config.vault_backup_dir(vault) / _STAMP / _REL
+    backup = host.config.wiki_backup_dir(wiki) / _STAMP / _REL
     backup.parent.mkdir(parents=True)
     backup.write_text(original, encoding="utf-8")
     note.write_text(_MODIFIED, encoding="utf-8")
@@ -33,7 +33,7 @@ def test_restore_backup_reverts_note_and_updates_index(client: WebClient) -> Non
     assert "Índice atualizado." in restored.text
     assert note.read_text(encoding="utf-8") == original
 
-    copies = [path.read_text(encoding="utf-8") for path in host.config.vault_backup_dir(vault).rglob("*.md")]
+    copies = [path.read_text(encoding="utf-8") for path in host.config.wiki_backup_dir(wiki).rglob("*.md")]
     assert previous in copies
 
     page = client.get("/search", params={"q": "cadastro", "top_k": "8"})

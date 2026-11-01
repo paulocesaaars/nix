@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+{% if missing %}
+{{ alert("err", "Esse projeto não está no Mega Brain. Volte ao painel e escolha um cartão.") }}
+{% else %}
+<div class="head">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p class="sub mono">{{ project.key }}</p>
+  </div>
+</div>
+
+<nav class="seg" aria-label="Seções do projeto">
+  {% for item in tabs %}
+  <a href="{{ wiki_url(item.href) }}" {% if item.id == tab %}aria-current="page"{% endif %}>{{ item.label }}</a>
+  {% endfor %}
+</nav>
+
+{% if tab == "visao" %}
+<section class="kpis">
+  <div class="card"><div class="kpi-label">Sessões</div><div class="kpi-value">{{ project.sessions }}</div></div>
+  <div class="card"><div class="kpi-label">Abertas</div><div class="kpi-value">{{ project.open_sessions }}</div></div>
+  <div class="card"><div class="kpi-label">Mensagens</div><div class="kpi-value">{{ project.messages }}</div></div>
+</section>
+{% if project.handoff %}
+<section class="card stack">
+  <h2>Handoff aberto</h2>
+  <p>{{ project.handoff }}</p>
+</section>
+{% else %}
+<div class="card empty">Nenhum handoff aberto.</div>
+{% endif %}
+{% elif tab == "agentes" %}
+<section class="card stack">
+  <h2>Quem conversou</h2>
+  {% if project.agents %}
+  {% for agent in project.agents %}
+  <div class="list-row"><span class="grow">{{ agent.name }}</span><span class="muted">{{ agent.sessions }} sessão(ões)</span></div>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Nenhuma sessão.</p>
+  {% endif %}
+  <h2>Hooks</h2>
+  {% if project.hooks %}
+  {% for hook in project.hooks %}
+  <div class="list-row"><span class="grow">{{ hook.agent }}</span><span class="muted">{{ hook.scope }}</span></div>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Nenhum hook registrado para este projeto.</p>
+  {% endif %}
+</section>
+{% elif tab == "tokens" %}
+{% if project.tokens %}
+<div class="table-box">
+  <table>
+    <thead><tr><th>IA</th><th>Entrada</th><th>Saída</th></tr></thead>
+    <tbody>
+      {% for row in project.tokens %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td>{{ row.input_tokens }}</td>
+        <td>{{ row.output_tokens }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td>Total</td>
+        <td>{{ project.tokens | sum(attribute='input_tokens') }}</td>
+        <td>{{ project.tokens | sum(attribute='output_tokens') }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">Uso desconhecido. Nenhum evento trouxe números de tokens.</div>
+{% endif %}
+{% elif tab == "sessoes" %}
+{% if project.session_rows %}
+<div class="table-box">
+  <table>
+    <thead><tr><th>Agente</th><th>Id</th><th>Estado</th><th>Atualizada</th></tr></thead>
+    <tbody>
+      {% for row in project.session_rows %}
+      <tr>
+        <td>{{ row.agent }}</td>
+        <td class="mono">{{ row.external_id }}</td>
+        <td>{{ row.status }}</td>
+        <td class="mono">{{ row.updated }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">Nenhuma sessão.</div>
+{% endif %}
+{% elif tab == "conhecimento" %}
+{% if project.pages %}
+<div class="stack">
+  {% for item in project.pages %}
+  <article class="card">
+    <p class="kpi-label">{{ item.agent }}</p>
+    <p><a href="{{ wiki_url(item.href) }}">{{ item.path }}</a></p>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">Nenhuma página de sessão gravada. As páginas curadas ficam em projects/{{ project.name }}/.</div>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

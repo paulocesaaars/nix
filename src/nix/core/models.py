@@ -89,7 +89,7 @@ class RetrievedChunk:
     tags: list[str] = field(default_factory=list)
     folder: str = ""
     mtime: float = 0.0
-    vault: str = ""
+    wiki: str = ""
 
     def citation(self) -> str:
         if self.heading_path:
@@ -129,8 +129,8 @@ class SyncReport:
     dry_run: bool = False
     trigger: SyncTrigger = "manual"
     tokenizer_approximate: bool = False
-    vault_name: str = ""
-    # Quando vários vaults entram num relatório só, o resumo já vem pronto.
+    wiki_name: str = ""
+    # Quando várias wikis entram num relatório só, o resumo já vem pronto.
     headline: str = ""
 
     def summary_pt(self) -> str:
@@ -145,8 +145,8 @@ class SyncReport:
         )
         if self.chunks_reused:
             text += f" ({self.chunks_reused} chunks reaproveitados, {self.chunks_embedded} vetorizados)"
-        if self.vault_name:
-            return f"{self.vault_name}: {text}"
+        if self.wiki_name:
+            return f"{self.wiki_name}: {text}"
         return text
 
 
@@ -157,7 +157,7 @@ class IndexStatus:
     errors: int
     last_sync_at: str | None
     embedding_model: str | None
-    vault_path: str | None
+    wiki_path: str | None
     stale: bool
     stale_reason: str | None = None
     data_dir: str = ""
@@ -215,7 +215,7 @@ class SyncProgress:
     rel_path: str
     action: str
     detail: str = ""
-    vault: str = ""
+    wiki: str = ""
 
 
 @dataclass(frozen=True)

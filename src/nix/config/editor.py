@@ -17,8 +17,8 @@ from nix.config.loader import (
     load_config,
 )
 from nix.config.paths import app_root
-from nix.config.schema import VAULT_SETTING_KEYS, ConfigField, NixConfig, config_field, iter_config_fields
-from nix.config.store import VAULTS_SECTION, SettingsChange, SettingsStore
+from nix.config.schema import WIKI_SETTING_KEYS, ConfigField, NixConfig, config_field, iter_config_fields
+from nix.config.store import WIKIS_SECTION, SettingsChange, SettingsStore
 from nix.core.errors import ConfigError
 
 Source = str
@@ -64,8 +64,9 @@ def split_key(dotted: str) -> tuple[str, str]:
 
 
 def require_field(section: str, key: str) -> ConfigField:
-    if section == "vault":
-        raise ConfigError(_vault_field_message(key))
+    if section in {"wiki", "vault"}:
+        notice = "O nome vault está obsoleto. Use wiki. " if section == "vault" else ""
+        raise ConfigError(notice + _wiki_field_message(key))
     try:
         return config_field(section, key)
     except KeyError:
@@ -74,29 +75,29 @@ def require_field(section: str, key: str) -> ConfigField:
         ) from None
 
 
-def _vault_field_message(key: str) -> str:
+def _wiki_field_message(key: str) -> str:
     if key == "path":
         return (
-            "vault.path não é um campo da configuração global. "
-            "Troque a pasta com `nix vault path NOME CAMINHO`."
+            "wiki.path não é um campo da configuração global. "
+            "Troque a pasta com `nix wiki path NOME CAMINHO`."
         )
     if key == "legacy_layout":
         return (
             "legacy_layout é gravado na migração do settings.db e não se edita. "
-            "O índice e os backups desse vault continuam na pasta de origem."
+            "O índice e os backups dessa wiki continuam na pasta de origem."
         )
     if key == "name":
-        return "O nome do vault muda com `nix vault rename ANTIGO NOVO`."
+        return "O nome da wiki muda com `nix wiki rename ANTIGO NOVO`."
     if key == "is_default":
-        return "O vault padrão muda com `nix vault default NOME`."
-    if key in VAULT_SETTING_KEYS:
+        return "A wiki padrão muda com `nix wiki default NOME`."
+    if key in WIKI_SETTING_KEYS:
         return (
-            f"vault.{key} é um ajuste de um vault, não da configuração global. "
-            f"Rode `nix vault set NOME {key} VALOR`."
+            f"wiki.{key} é um ajuste de uma wiki, não da configuração global. "
+            f"Rode `nix wiki set NOME {key} VALOR`."
         )
     return (
-        f"Campo vault.{key} não existe. Os vaults não se editam com `nix config set`. "
-        "Rode `nix vault list`."
+        f"Campo wiki.{key} não existe. As wikis não se editam com `nix config set`. "
+        "Rode `nix wiki list`."
     )
 
 
@@ -199,10 +200,10 @@ def revert_change(change_id: int, *, source: Source) -> SetResult:
     change = SettingsStore().get_change(change_id)
     if change is None:
         raise ConfigError(f"Alteração {change_id} não está no histórico. Rode `nix config history`.")
-    if change.section == VAULTS_SECTION:
+    if change.section == WIKIS_SECTION:
         raise ConfigError(
-            "Mudanças de vault não se desfazem com `nix config undo`. "
-            "Use `nix vault` para renomear, remover, trocar a pasta, gravar um ajuste ou escolher o padrão."
+            "Mudanças de wiki não se desfazem com `nix config undo`. "
+            "Use `nix wiki` para renomear, remover, trocar a pasta, gravar um ajuste ou escolher o padrão."
         )
     if change.old_value is None:
         result = unset_value(change.section, change.key, source=source)
@@ -252,8 +253,8 @@ def _reject_locked(field: ConfigField) -> None:
 def _validate_overrides(overrides: dict[str, dict[str, Any]]) -> NixConfig:
     _db, env, merged = config_document(SettingsStore())
     candidate = deep_merge(overrides, env)
-    candidate.pop("vault", None)
-    candidate["vaults"] = merged["vaults"]
+    candidate.pop("wiki", None)
+    candidate["wikis"] = merged["wikis"]
     try:
         return NixConfig.model_validate(candidate, context={"path_anchor": app_root()})
     except ValidationError as exc:

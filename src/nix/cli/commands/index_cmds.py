@@ -13,6 +13,7 @@ from nix.cli.render import (
     print_header,
     print_status,
     print_sync_report,
+    print_warning,
     sync_progress,
 )
 from nix.config.embedding_present import sync_model_hint
@@ -32,20 +33,31 @@ def _status_from_payload(payload: object) -> IndexStatus:
         errors=int(data.get("errors") or 0),
         last_sync_at=data.get("last_sync_at") if isinstance(data.get("last_sync_at"), str) else None,
         embedding_model=(data.get("embedding_model") if isinstance(data.get("embedding_model"), str) else None),
-        vault_path=data.get("vault_path") if isinstance(data.get("vault_path"), str) else None,
+        wiki_path=data.get("wiki_path") if isinstance(data.get("wiki_path"), str) else None,
         stale=bool(data.get("stale")),
         stale_reason=(data.get("stale_reason") if isinstance(data.get("stale_reason"), str) else None),
         data_dir=str(data.get("data_dir") or ""),
     )
 
 
-def _vault_spec(vault: list[str] | None, all_vaults: bool) -> str | list[str] | None:
-    names = [item.strip() for item in (vault or []) if item.strip()]
-    if all_vaults and names:
+def _resolve_wiki_option(wiki: list[str] | None, legacy_vault: list[str] | None) -> list[str] | None:
+    """`--vault` continua aceito e avisa. `--wiki` ganha quando os dois vêm juntos."""
+    legacy = [item.strip() for item in (legacy_vault or []) if item.strip()]
+    current = [item.strip() for item in (wiki or []) if item.strip()]
+    if legacy:
+        print_warning("A opção `--vault` está obsoleta. Use `--wiki`.")
+    if current:
+        return current
+    return legacy or None
+
+
+def _wiki_spec(wiki: list[str] | None, all_wikis: bool) -> str | list[str] | None:
+    names = [item.strip() for item in (wiki or []) if item.strip()]
+    if all_wikis and names:
         raise ConfigError(
-            "Use `--all` ou `--vault NOME`, não os dois. Omita os dois para usar só o vault padrão."
+            "Use `--all` ou `--wiki NOME`, não os dois. Omita os dois para usar só a wiki padrão."
         )
-    if all_vaults:
+    if all_wikis:
         return "*"
     if names:
         return names
@@ -57,11 +69,14 @@ def cmd_sync(
     full: bool = typer.Option(False, "--full", help="Reconstrói o índice inteiro"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Só mostra o que mudaria"),
     as_json: bool = typer.Option(False, "--json", help="Saída JSON"),
-    vault: list[str] | None = typer.Option(None, "--vault", help="Nome do vault. Repita para vários."),
-    all_vaults: bool = typer.Option(False, "--all", help="Sincroniza todos os vaults, em sequência."),
+    wiki: list[str] | None = typer.Option(None, "--wiki", help="Nome da wiki. Repita para vários."),
+    legacy_vault: list[str] | None = typer.Option(
+        None, "--vault", hidden=True, help="Obsoleto. Use --wiki."
+    ),
+    all_wikis: bool = typer.Option(False, "--all", help="Sincroniza todas as wikis, em sequência."),
 ) -> None:
     host = get_host(capture_embedder_stdout=as_json)
-    spec = _vault_spec(vault, all_vaults)
+    spec = _wiki_spec(_resolve_wiki_option(wiki, legacy_vault), all_wikis)
     events: list[SyncProgressEvent] = []
     reports: list[tuple[str, SyncReport]] = []
     failures: list[str] = []
@@ -87,15 +102,15 @@ def cmd_sync(
                 try:
                     report = runtime.indexer.sync(full=full, dry_run=dry_run, progress=on_progress)
                 except NixError as exc:
-                    failures.append(f"{runtime.vault.name}: {exc.message}")
+                    failures.append(f"{runtime.wiki.name}: {exc.message}")
                     continue
-                report.vault_name = runtime.vault.name
-                reports.append((runtime.vault.name, report))
+                report.wiki_name = runtime.wiki.name
+                reports.append((runtime.wiki.name, report))
                 if not as_json:
                     print_sync_report(
-                        runtime.vault.name,
-                        runtime.vault.root,
-                        list(runtime.vault.exclude),
+                        runtime.wiki.name,
+                        runtime.wiki.root,
+                        list(runtime.wiki.exclude),
                         report,
                         events,
                         dry_run,
@@ -105,33 +120,36 @@ def cmd_sync(
     combined = combine_sync_reports(reports)
     if as_json:
         payload = {
-            "vault": [name for name, _report in reports],
-            "reports": [{**json_safe(report), "vault": name} for name, report in reports],
-            "vault_errors": failures,
+            "wiki": [name for name, _report in reports],
+            "reports": [{**json_safe(report), "wiki": name} for name, report in reports],
+            "wiki_errors": failures,
             "summary": combined.summary_pt() if reports else "",
         }
         console.print_json(json.dumps(payload, ensure_ascii=False))
     if failures:
         detail = " ".join(failures)
-        raise ConfigError(f"A sincronização falhou em algum vault. {detail}")
+        raise ConfigError(f"A sincronização falhou em alguma wiki. {detail}")
 
 
 @with_errors
 def cmd_status(
     as_json: bool = typer.Option(False, "--json"),
-    vault: list[str] | None = typer.Option(None, "--vault", help="Nome do vault. Repita para vários."),
-    all_vaults: bool = typer.Option(False, "--all", help="Mostra o estado de todos os vaults."),
+    wiki: list[str] | None = typer.Option(None, "--wiki", help="Nome da wiki. Repita para vários."),
+    legacy_vault: list[str] | None = typer.Option(
+        None, "--vault", hidden=True, help="Obsoleto. Use --wiki."
+    ),
+    all_wikis: bool = typer.Option(False, "--all", help="Mostra o estado de todas as wikis."),
 ) -> None:
     host = get_host()
-    spec = _vault_spec(vault, all_vaults)
+    spec = _wiki_spec(_resolve_wiki_option(wiki, legacy_vault), all_wikis)
     try:
-        payload = call_tool(host, "index_status", {"vault": spec} if spec is not None else {})
+        payload = call_tool(host, "index_status", {"wiki": spec} if spec is not None else {})
     finally:
         host.close()
     if as_json:
         console.print_json(json.dumps(payload, ensure_ascii=False))
         return
-    rows = payload.get("vaults") if isinstance(payload, dict) else None
+    rows = payload.get("wikis") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         print_header()
         print_status(_status_from_payload(payload))
@@ -139,4 +157,4 @@ def cmd_status(
     print_header()
     for item in rows:
         if isinstance(item, dict):
-            print_status(_status_from_payload(item), vault=str(item.get("vault") or "") or None)
+            print_status(_status_from_payload(item), wiki=str(item.get("wiki") or "") or None)

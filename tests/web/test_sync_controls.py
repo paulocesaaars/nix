@@ -13,7 +13,7 @@ from nix.web.jobs import SyncJobs
 from nix.web.state import WebState
 
 _CONTROLS = re.compile(r'<fieldset id="sync-controls"[^>]*>')
-_LABELS = ("Prévia", "Incremental", "Reindexação completa", "Todos os vaults")
+_LABELS = ("Prévia", "Incremental", "Reindexação completa", "Todas as wikis")
 _WAIT = "Espere ela terminar"
 
 

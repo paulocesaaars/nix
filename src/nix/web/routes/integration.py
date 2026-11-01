@@ -15,8 +15,9 @@ from nix.core.admin import agent_hooks
 from nix.core.admin.client_config import client_snippets
 from nix.core.admin.doctor import nix_command
 from nix.core.admin.traffic import TrafficCall, TrafficStore, TrafficSummary
-from nix.core.sessions.events import find_project
-from nix.core.sessions.store import SessionStore
+from nix.core.brain.agents import AGENTS
+from nix.core.brain.events import find_project
+from nix.core.brain.store import BrainStore
 from nix.core.tools.registry import active_specs
 from nix.web.render import page
 from nix.web.routes.common import query
@@ -52,7 +53,7 @@ class TrafficView:
 async def connect_page(request: Request) -> Response:
     command, problem = await asyncio.to_thread(nix_command)
     host = web_state(request).gate.host
-    specs = active_specs(host.config.sessions.enabled)
+    specs = active_specs(host.config.brain.enabled)
     project = await asyncio.to_thread(_hooks_project, query(request, "project"))
     return page(
         request,
@@ -63,6 +64,7 @@ async def connect_page(request: Request) -> Response:
             "command": command,
             "problem": problem,
             "snippets": client_snippets(command) if command else [],
+            "agent_count": len(AGENTS),
             "hooks_project": project,
             "hooks": await asyncio.to_thread(_hooks, _hook_command(command), project),
             "tools": [_tool_view(spec.name, spec.description, spec.read_only, spec.destructive) for spec in specs],
@@ -98,7 +100,7 @@ def _hooks_project(requested: str) -> str:
     here = find_project("")[0]
     if requested and requested != here:
         try:
-            known = {item.project for item in SessionStore().projects()}
+            known = {item.key for item in BrainStore().list_projects()}
         except sqlite3.Error:
             known = set()
         if requested in known:
@@ -107,7 +109,7 @@ def _hooks_project(requested: str) -> str:
 
 
 def _hook_command(fallback: str | None) -> str | None:
-    """Prévia do comando que `nix hooks install` grava. No binário, é o `nix-hook`."""
+    """Prévia do comando que `nix brain hooks install` grava. No binário, é o `nix-hook`."""
     found = packaged_hook_executable()
     if found is not None:
         return str(found)
@@ -115,9 +117,9 @@ def _hook_command(fallback: str | None) -> str | None:
 
 
 def _hooks(command: str | None, project: str) -> list[HookView]:
-    """Por agente, o arquivo de hook que `nix hooks install` criaria e o estado neste projeto (RF-141)."""
+    """Por agente, o arquivo de hook que `nix brain hooks install` criaria e o estado neste projeto (RF-141)."""
     try:
-        states = {item.spec.key: item.state for item in agent_hooks.status(Path(project), project, SessionStore())}
+        states = {item.spec.key: item.state for item in agent_hooks.status(Path(project), project, BrainStore())}
     except (sqlite3.Error, OSError):
         states = {}
     exe = command.replace("\\", "/") if command else ""

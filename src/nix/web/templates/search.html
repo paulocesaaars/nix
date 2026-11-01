@@ -13,12 +13,12 @@
     <input class="input" id="q" type="search" name="q" value="{{ form.q }}" placeholder="Pergunte como o agente perguntaria…" aria-label="Consulta" autofocus required>
     <button class="btn btn-primary" type="submit">{{ icon("search", 16, "2") }}Buscar</button>
   </div>
-  <fieldset class="vault-picks">
-    <legend class="lbl">Vaults</legend>
-    <label class="check"><input type="checkbox" name="vault" value="*" {% if all_vaults %}checked{% endif %}><span>Todos</span></label>
-    {% for item in vaults %}
+  <fieldset class="wiki-picks">
+    <legend class="lbl">Wikis</legend>
+    <label class="check"><input type="checkbox" name="wiki" value="*" {% if all_wikis %}checked{% endif %}><span>Todos</span></label>
+    {% for item in wikis %}
     <label class="check">
-      <input type="checkbox" name="vault" value="{{ item.name }}" {% if all_vaults or (not chosen_vaults and item.is_default) or item.name.casefold() in chosen_vaults %}checked{% endif %}>
+      <input type="checkbox" name="wiki" value="{{ item.name }}" {% if all_wikis or (not chosen_wikis and item.is_default) or item.name.casefold() in chosen_wikis %}checked{% endif %}>
       <span>{{ item.name }}{% if item.is_default %} (padrão){% endif %}</span>
     </label>
     {% endfor %}

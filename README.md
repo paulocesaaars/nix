@@ -9,7 +9,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B%20%2F%203.14-blue?style=for-the-badge" alt="Python 3.11+ / 3.14"></a>
 </p>
 
-Servidor [MCP](https://modelcontextprotocol.io/) que expõe vaults do Obsidian a agentes de desenvolvimento (Cursor, Claude Code, Copilot, Devin CLI e Devin Desktop). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas.
+Servidor [MCP](https://modelcontextprotocol.io/) que expõe wikis em Markdown a agentes de desenvolvimento (Cursor, VS Code, Claude Code e Codex). Busca híbrida, leitura e escrita nas notas — com embeddings e banco vetorial **locais e gratuitos**. O raciocínio fica no cliente; o Nix só entrega ferramentas. O Mega Brain, desligado por padrão, guarda memória entre agentes na wiki que você escolher.
 
 Transporte: **MCP stdio**. Sem subcomando, `nix` inicia o servidor.
 
@@ -55,7 +55,7 @@ A pasta da instalação é `%LOCALAPPDATA%\nix` no Windows, `~/Library/Applicati
 A primeira execução descompacta o binário num cache (`%LOCALAPPDATA%\nix\onefile-<versão>` no Windows, `~/Library/Caches/nix/onefile-<versão>` no macOS, `~/.cache/nix/onefile-<versão>` no Linux). O instalador já faz essa partida. As seguintes reutilizam o cache. O `nix-hook` fica ao lado de `nix`: o binário completo confere o CRC de todo o payload a cada partida e não cabe no orçamento de 300 ms do hook de sessão. O `nix hooks install` aponta os agentes para o `nix-hook`, cujo cache fica em `hook-<versão>` na mesma pasta.
 
 <p>
-  <img src="nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
+  <img src="src/nix/mcp/nix.png" alt="Nix, a Lulu da Pomerânia que inspirou o nome do projeto" width="280">
 </p>
 
 Depois registre o servidor no editor — veja [Registro no cliente MCP](#registro-no-cliente-mcp). O instalador grava `NIX_HOME` e coloca `nix` no PATH. Abra um novo terminal e rode `nix doctor` / `nix sync`. Se o registro automático falhar, veja [Registrar NIX_HOME e o PATH à mão](#registrar-nix_home-e-o-path-à-mão). Se o gerenciador Nix (NixOS) já estiver no PATH, o instalador avisa: este `nix` passa a ter prioridade.
@@ -127,59 +127,41 @@ O mesmo fluxo, com registro de PATH, é `python scripts/bootstrap.py`. Para desf
 
 ### Skills de agente (desenvolvedor)
 
-As skills de desenvolvimento (implementar SDD pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, gerar uma skill, iniciar o projeto e publicar a release) ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor, Copilot e Devin). O `skills-lock.json` registra a origem das que estão sincronizadas.
+As skills de desenvolvimento (implementar SDD pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, gerar uma skill, iniciar o projeto e publicar a release) ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor e VS Code). O `skills-lock.json` registra a origem das que estão sincronizadas.
 
-## Sessões
+## Mega Brain
 
-Opcional e por repositório. Os hooks gravam a conversa daquele projeto; a skill `sessoes-nix` ensina o agente a consultar o que ficou gravado. Essa skill vem com a Nix e não entra no repositório de skills de desenvolvimento.
-
-Rode estes comandos **na pasta do projeto** em que a conversa acontece. Um hook ou uma skill na pasta da conta (configuração global do Claude ou do Devin) não registra o projeto: a Nix descarta o evento e não há sessão para retomar. A conversa anterior a esse `install` também não fica gravada.
+Desligado por padrão. Escolha a wiki das páginas e ligue:
 
 ```bash
-nix config set sessions.enabled true
-nix hooks install --agent claude --agent devin --yes
-nix skills install --agent claude --agent devin --yes
+nix brain enable --wiki Default
 ```
 
-`sessions.enabled` vem desligado. Com ele desligado os hooks ainda podem gravar, mas `nix session` e as ferramentas `list_sessions`, `read_session` e `session_handoff` ficam indisponíveis. Depois de ligar, reinicie o cliente MCP.
-
-Os agentes aceitos em `--agent` são `cursor`, `claude`, `copilot`, `devin` e `devin-desktop`. Repita a opção para vários. Sem `--agent`, cada comando pergunta um a um e só escreve depois de confirmar. `--yes` pula a confirmação. `--dry-run` só mostra o que seria escrito. `--project PASTA` escolhe outro repositório sem sair da pasta atual.
-
-O hook fica no repositório, nunca na pasta da conta:
-
-| Agente | Arquivo do hook | Pasta da skill |
-| --- | --- | --- |
-| Claude Code | `.claude/settings.local.json` | `.claude/skills/sessoes-nix/` |
-| Cursor | `.cursor/hooks.json` | `.agents/skills/sessoes-nix/` |
-| Copilot | `.github/hooks/nix.json` | `.agents/skills/sessoes-nix/` |
-| Devin CLI | `.devin/hooks.v1.json` | `.agents/skills/sessoes-nix/` |
-| Devin Desktop | `.devin/hooks.json` | `.agents/skills/sessoes-nix/` |
-
-Dois agentes que leem a mesma pasta de skill geram uma cópia só. `nix hooks status` e `nix skills status` mostram o que está ativo. `remove` apaga só o que a Nix marcou.
-
-### Continuar uma sessão em outro agente
-
-Encerre a sessão no agente de origem (no Claude Code, saia da conversa naquele repositório). O fim da sessão deixa um handoff pendente. Há no máximo um por projeto, e ele é entregue uma única vez.
+Essa wiki conta no limite de 100 e não pode ser removida enquanto o Mega Brain estiver ligado. A captura ainda exige um hook. Nenhum agente vem marcado. Há prévia, confirmação e backup antes de alterar um arquivo que já existe. O escopo global avisa que eventos de outros repositórios podem ser gravados.
 
 ```bash
-nix session handoff
+nix brain hooks install --scope project
+nix brain hooks install --scope global
 ```
 
-Se não houver pendente, crie a partir da sessão mais recente:
+O projeto é a raiz Git, ou a pasta se não houver repositório. Um `.nix.toml` pode definir `project`, `[capture] enabled` / `exclude` e `[profile] contribute` / `consume`. Toml ilegível desliga a captura.
 
-```bash
-nix session handoff --create
-```
+| Agente | Arquivo do hook no projeto |
+| --- | --- |
+| Cursor | `.cursor/hooks.json` |
+| VS Code | `.github/hooks/nix.json` |
+| Claude Code | `.claude/settings.local.json` |
+| Codex | `.codex/hooks.json` (só executa depois de confiar em `/hooks`) |
 
-`--cancel` descarta o pendente. `--agent NOME`, junto com `--create`, tira da origem a sessão que esse agente acabou de abrir.
+`nix brain hooks install --all` instala esses clientes, nesta ordem. O escopo global grava arquivo só quando o caminho está confirmado; nos demais, a captura fica parcial e nenhum JSON é inventado.
 
-No **Devin CLI**, abra o mesmo repositório. O início da sessão recebe o handoff. Peça para continuar.
+A página da sessão vai para `projects/<projeto>/sessions/` na wiki do Mega Brain. O perfil fica em `profile/<categoria>/`. `nix brain profile rebuild` aprende sem modelo de linguagem; `forget` vira lápide e a passada seguinte não recria a entrada.
 
-No **Devin Desktop** não há evento de início nem de fim de sessão, e o stdout do hook não entra na conversa. Com o MCP da Nix ligado, peça para continuar. A skill chama `session_handoff` com `agent` igual a `devin-desktop` e `accept=true`. `accept=false` só mostra, sem consumir.
+`nix brain handoff create --text "..."` abre no máximo um handoff por projeto. `nix brain handoff accept --agent NOME` reivindica uma única vez. O início da sessão mostra o briefing como histórico, não como ordem.
 
-O Devin na nuvem não alcança a Nix desta máquina. O MCP precisa estar no Devin CLI ou no Devin Desktop local.
+`nix run claude` (ou outro agente) instala o hook e o MCP se faltarem. `--no-autowire` desliga isso. Para Claude Code e Codex, uma cópia só leitura do histórico anterior fica em `NIX_PREVIOUS_SESSION_HISTORY` e some quando o agente termina. Sem leitor, o comando segue com aviso.
 
-`nix session list` mostra as sessões do projeto. `nix session show ID` lê uma. `nix session render` grava a nota no vault. Os detalhes de cada comando estão em [CLI](#cli).
+`remember` continua gravando na wiki padrão e não faz parte do Mega Brain.
 
 ## Desinstalar
 
@@ -285,7 +267,7 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
-O mesmo padrão vale para Claude Code, Copilot e o Devin CLI (`devin mcp add`). O Devin na nuvem não alcança o nix desta máquina. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+O mesmo padrão vale para Claude Code e o VS Code. O Codex usa `~/.codex/config.toml`. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 Na instalação por Python, sem `nix.exe`, use o interpretador do `.venv` como em [Quando o executável, o PowerShell e os links de download estão bloqueados](#quando-o-executável-o-powershell-e-os-links-de-download-estão-bloqueados).
 
@@ -411,16 +393,15 @@ Estes são os comandos que você roda no terminal. `nix --help` lista os grupos.
 | --- | --- |
 | `nix` | O editor sobe o servidor MCP. No terminal, sem cliente, o processo espera o protocolo e encerra com Ctrl+C |
 | `nix --version` | Mostra a versão e sai |
-| `nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]` | Primeira configuração: grava o vault e o modelo |
-| `nix vault list\|add\|rename\|remove\|default\|path\|set` | Até 5 vaults: cadastra, renomeia, remove, escolhe o padrão, troca a pasta e grava os ajustes daquele vault |
+| `nix init [--name NOME] [--wiki PATH] [--embedding-model NOME] [--force]` | Primeira configuração: grava a wiki e o modelo. `--vault` ainda funciona e avisa |
+| `nix wiki list\|add\|rename\|remove\|default\|path\|set` | Até 100 wikis. `nix vault` faz o mesmo e avisa |
 | `nix config list\|get\|set\|unset\|history\|undo` | Lê, grava e desfaz a configuração global da instalação |
 | `nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]` | Atualiza o índice depois de editar no Obsidian |
 | `nix status [--json] [--vault NOME]... [--all]` | Vê se o índice está atrás do vault |
 | `nix doctor [--json]` | Descobre por que o editor não acha o Nix ou o índice falhou |
 | `nix ui [--no-browser] [--port N]` | As mesmas operações no navegador, sem agente |
-| `nix session list\|show\|handoff\|render` | Lê sessões do repositório atual, cria ou cancela o handoff e grava a nota |
-| `nix hooks install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Liga, tira e consulta os hooks **deste** repositório |
-| `nix skills install\|remove\|status [--agent A] [--yes] [--project PASTA]` | Copia, tira e consulta a skill `sessoes-nix` **deste** repositório |
+| `nix brain enable\|status\|hooks\|handoff\|profile` | Liga o Mega Brain, instala hooks, abre o handoff e reaprende o perfil |
+| `nix run AGENTE [--no-autowire]` | Sobe o agente com hook e MCP, e com o histórico anterior quando há leitor |
 
 ### Servidor
 
@@ -437,7 +418,7 @@ Estes são os comandos que você roda no terminal. `nix --help` lista os grupos.
 
 ### Vaults
 
-De 1 a 5 vaults na mesma instalação. Omitir o vault no `sync` e no `status` usa o padrão.
+De 1 a 100 vaults na mesma instalação. Omitir o vault no `sync` e no `status` usa o padrão.
 
 - `nix vault list` mostra nome, pasta e qual é o padrão. `--json` entrega a mesma lista em JSON.
 - `nix vault add NOME CAMINHO` cadastra outro. Um nome no formato `AAAAMMDDTHHMMSS` é recusado.
@@ -461,7 +442,7 @@ Os campos ficam no `settings.db` da instalação (`NIX_HOME`; no checkout por Py
 - `nix config history` mostra as alterações. `--limit N` corta a lista (padrão 20).
 - `nix config undo` desfaz a última. `nix config undo ID` desfaz uma entrada do histórico.
 
-Para as ferramentas de sessão: `nix config set sessions.enabled true`. Reinicie o cliente MCP em seguida.
+Para o Mega Brain: `nix brain enable --wiki NOME`. Reinicie o cliente MCP em seguida para as ferramentas `brain_*` aparecerem.
 
 Uma variável `NIX_SECAO__CAMPO` ganha do banco naquele campo e o trava no `nix config` e na interface. O cadastro dos vaults não usa essa variável.
 
@@ -479,31 +460,21 @@ Editar no Obsidian não atualiza o índice. Rode `nix sync` quando quiser alinha
 
 ### Interface
 
-`nix ui` abre o navegador em `127.0.0.1` com status, sync, diagnóstico, busca, conexão dos clientes, sessões, tráfego MCP, backups, vaults e configuração. Exige o `nix init`. Encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL. `--port N` fixa a porta.
+`nix ui` abre o navegador em `127.0.0.1` com status, sync, diagnóstico, busca, Mega Brain (painel, caixa de entrada e perfil), conexão dos clientes, tráfego MCP, backups, wikis e configuração. Exige o `nix init`. Encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL. `--port N` fixa a porta.
 
-### Sessões
+### Mega Brain
 
-Exige `sessions.enabled`. Rode na pasta do repositório, ou passe `--project PASTA`. O passo a passo para continuar uma conversa em outro agente está em [Sessões](#sessões).
+O passo a passo está em [Mega Brain](#mega-brain).
 
-- `nix session list` lista as sessões, da mais recente para a mais antiga. `--agent NOME` filtra. `--limit N` corta (padrão 20, no máximo 500). `--json` muda o formato.
-- `nix session show ID` imprime uma sessão. O id pode ser o curto que aparece na lista.
-- `nix session handoff` mostra o pendente. `--create` monta um a partir da sessão mais recente. `--cancel` descarta. `--agent NOME` com `--create` não usa a sessão que esse agente acabou de abrir.
-- `nix session render` grava ou atualiza a nota no vault. Com um id, só aquela sessão. Sem id, as do projeto.
-
-### Hooks e skills
-
-Os dois grupos só escrevem no repositório. Não existe instalação global: a pasta da conta não registra o projeto.
-
-`--agent` aceita `cursor`, `claude`, `copilot`, `devin` e `devin-desktop`, e pode repetir. `--yes` não pergunta. `--dry-run` não escreve. `--project PASTA` aponta outro repositório.
-
-- `nix hooks install` ativa a captura. `remove` tira só o que a Nix marcou. `status` mostra o que está ativo.
-- `nix skills install` copia a `sessoes-nix`. `remove` apaga só a pasta com a marca da Nix. `status` mostra as pastas.
-
-Os arquivos e o handoff entre agentes estão em [Sessões](#sessões).
+- `nix brain enable --wiki NOME` liga e escolhe a wiki. `status` mostra o estado.
+- `nix brain hooks install --scope project|global` pede os agentes. `remove` e `status` usam o mesmo `--scope`.
+- `nix brain handoff create --text "..."` abre o handoff. `list`, `accept --agent NOME` e `cancel` completam o ciclo.
+- `nix brain profile rebuild` reaprende. `list`, `review`, `forget CAMINHO` e `apply` consultam e regravam.
+- `nix run AGENTE` encaminha os argumentos seguintes ao executável. `--no-autowire` não mexe em hook nem MCP. `--project PASTA` escolhe o repositório.
 
 ## Ferramentas MCP
 
-Vinte ferramentas de vault e, com `sessions.enabled`, três de sessão. A definição fica em `src/nix/core/tools/registry.py`. Notas do vault padrão aparecem como recurso `nix://note/{+rel_path}`; um vault nomeado, como `nix://vault/{name}/note/{+rel_path}`.
+As ferramentas de wiki ficam sempre disponíveis. As `brain_*` só entram no MCP com o Mega Brain ligado. A definição está em `src/nix/core/tools/registry.py`. Notas da wiki padrão aparecem como recurso `nix://note/{+rel_path}`; uma wiki nomeada, como `nix://wiki/{name}/note/{+rel_path}`. `nix://vault/...` ainda resolve e registra o aviso.
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -539,14 +510,14 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 
 - **Operação:** status, sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
 - **Vault (somente leitura):** busca em um, em vários ou em todos, notas (com outline e trechos), tags e insights. O seletor "Vault ativo", no topo da barra lateral, usa `?vault=`; sem ele, vale o padrão.
-- **Integração:** trechos prontos para conectar Cursor, Claude Code, VS Code, Devin CLI e Devin Desktop; sessões do projeto (lista, nota e handoff pendente); tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
+- **Integração:** trechos prontos para conectar Cursor, VS Code, Claude Code e Codex; sessões do projeto (lista, nota e handoff pendente); tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita no vault feita pela interface, com confirmação; tela Vaults; formulário de configuração e histórico.
 
 O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.
 
 | Chave | Padrão | Função |
 | --- | --- | --- |
-| vault (cadastro) | nome `Default` no `nix init` | Pasta de cada vault, via `nix vault`. De 1 a 5, um padrão |
+| vault (cadastro) | nome `Default` no `nix init` | Pasta de cada vault, via `nix vault`. De 1 a 100, um padrão |
 | exclusões do vault | `.obsidian`, `.trash`, `Templates`, `Privado` | Pastas ignoradas daquele vault. Mude com `nix vault set NOME exclude VALOR` |
 | pasta de notas novas | `Inbox` | Destino de notas sem pasta no caminho |
 | pasta do `remember` | `Nix/Memória` | Destino da ferramenta `remember` |
@@ -572,5 +543,5 @@ Para republicar os artefatos de uma tag que já existe, dispare o workflow à m�
 
 ## Documentação
 
-- [PRD.md](PRD.md) — produto, requisitos e regras de negócio
-- [TDD.md](TDD.md) — especificações técnicas: componentes, indexação, recuperação e MCP stdio
+- [PRD.md](docs/PRD.md) — produto, requisitos e regras de negócio
+- [TDD.md](docs/TDD.md) — especificações técnicas: componentes, indexação, recuperação e MCP stdio

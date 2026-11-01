@@ -226,7 +226,7 @@ def nuitka_command(product: str, filename: str) -> list[str]:
                 "--windows-console-mode=force",
                 "--company-name=Nix",
                 f"--file-version={file_version(product)}",
-                "--file-description=Servidor MCP stdio para vaults do Obsidian",
+                "--file-description=Servidor MCP stdio para wikis do Obsidian",
             ]
         )
     command.append(str(ENTRY))
@@ -248,7 +248,7 @@ _HOOK_NOFOLLOW = (
     "nix.core.insights",
     "nix.core.tools",
     "nix.core.runtime",
-    "nix.core.vault",
+    "nix.core.wiki",
     "nix.core.models",
     "nix.config.schema",
     "nix.config.loader",
@@ -289,7 +289,7 @@ def hook_nuitka_command(product: str, filename: str) -> list[str]:
         f"--product-version={product}",
         "--product-name=Nix Hook",
         "--include-module=nix_launch",
-        "--include-module=nix.core.sessions.hook_entry",
+        "--include-module=nix.core.brain.hook_entry",
     ]
     for name in _HOOK_NOFOLLOW:
         command.append(f"--nofollow-import-to={name}")
@@ -299,7 +299,7 @@ def hook_nuitka_command(product: str, filename: str) -> list[str]:
                 "--windows-console-mode=force",
                 "--company-name=Nix",
                 f"--file-version={file_version(product)}",
-                "--file-description=Hook de sessão do Nix",
+                "--file-description=Hook de captura do Nix",
             ]
         )
     command.append(str(HOOK_ENTRY))

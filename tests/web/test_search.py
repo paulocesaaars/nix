@@ -32,7 +32,7 @@ def _visible_token(content: str, query: str) -> str:
 def test_search_page_matches_search_notes(client: WebClient) -> None:
     host = client.gate.host
     host.resolve(None).indexer.sync()
-    vault = host.config.default_vault.name
+    wiki = host.config.default_wiki.name
     found = call_tool(
         host,
         "search_notes",
@@ -43,7 +43,7 @@ def test_search_page_matches_search_notes(client: WebClient) -> None:
             "tags": None,
             "date_from": None,
             "date_to": None,
-            "vault": [vault],
+            "wiki": [wiki],
         },
     )
     results = found["results"]

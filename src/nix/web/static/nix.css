@@ -99,8 +99,8 @@ details > .filters { margin-top: 12px; }
 }
 .vsw-sel { font-weight: 600; cursor: pointer; }
 .vsw-path { font-size: 12px; overflow-wrap: anywhere; }
-.vault-picks { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.vault-picks legend { margin-right: 4px; }
+.wiki-picks { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.wiki-picks legend { margin-right: 4px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .stack-sm { display: flex; flex-direction: column; gap: 6px; }
 .stack-md { display: flex; flex-direction: column; gap: 12px; }

@@ -29,9 +29,9 @@ _idle_listeners: list[Callable[[str], None]] = []
 
 
 @contextmanager
-def index_lock(vault_name: str) -> Iterator[None]:
-    """Trava `{app_root}/.nix/sync-{nome}.lock`. Cada vault sincroniza sem bloquear os outros."""
-    name = _vault_label(vault_name)
+def index_lock(wiki_name: str) -> Iterator[None]:
+    """Trava `{app_root}/.nix/sync-{nome}.lock`. Cada wiki sincroniza sem bloquear os outros."""
+    name = _wiki_label(wiki_name)
     directory = default_state_dir()
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"sync-{name}.lock"
@@ -55,9 +55,9 @@ def index_lock(vault_name: str) -> Iterator[None]:
         handle.close()
 
 
-def sync_in_progress(vault_name: str) -> bool:
-    """True se este processo ou outro está sincronizando o vault."""
-    name = _vault_label(vault_name)
+def sync_in_progress(wiki_name: str) -> bool:
+    """True se este processo ou outro está sincronizando a wiki."""
+    name = _wiki_label(wiki_name)
     key = name.casefold()
     with _guard:
         if _holders.get(key, 0) > 0 or _jobs.get(key, 0) > 0:
@@ -65,19 +65,19 @@ def sync_in_progress(vault_name: str) -> bool:
     return _other_process_holds(name)
 
 
-def mark_sync_job(vault_name: str) -> None:
-    """Marca o vault que o job da interface está sincronizando agora.
+def mark_sync_job(wiki_name: str) -> None:
+    """Marca a wiki que o job da interface está sincronizando agora.
 
     Vale antes mesmo da trava de arquivo, para o runtime não fechar no meio.
     """
-    key = _vault_label(vault_name).casefold()
+    key = _wiki_label(wiki_name).casefold()
     with _guard:
         _jobs[key] = _jobs.get(key, 0) + 1
 
 
-def unmark_sync_job(vault_name: str) -> None:
-    """Solta a marca do job. Se nada mais segura o vault, avisa quem espera fechar o runtime."""
-    name = _vault_label(vault_name)
+def unmark_sync_job(wiki_name: str) -> None:
+    """Solta a marca do job. Se nada mais segura a wiki, avisa quem espera fechar o runtime."""
+    name = _wiki_label(wiki_name)
     key = name.casefold()
     notify = False
     with _guard:
@@ -92,7 +92,7 @@ def unmark_sync_job(vault_name: str) -> None:
 
 
 def add_sync_idle_listener(listener: Callable[[str], None]) -> None:
-    """Chamado quando a trava de sync ou o job da interface solta o vault."""
+    """Chamado quando a trava de sync ou o job da interface solta a wiki."""
     with _guard:
         if listener not in _idle_listeners:
             _idle_listeners.append(listener)
@@ -104,12 +104,12 @@ def remove_sync_idle_listener(listener: Callable[[str], None]) -> None:
             _idle_listeners.remove(listener)
 
 
-def _vault_label(vault_name: str) -> str:
-    name = vault_name.strip()
+def _wiki_label(wiki_name: str) -> str:
+    name = wiki_name.strip()
     if not name or "/" in name or "\\" in name or name in {".", ".."}:
         raise ConfigError(
-            "A trava de sincronização precisa do nome do vault. "
-            "Rode `nix vault list` e tente de novo."
+            "A trava de sincronização precisa do nome da wiki. "
+            "Rode `nix wiki list` e tente de novo."
         )
     return name
 
@@ -142,8 +142,8 @@ def _notify_idle(name: str) -> None:
             listener(name)
         except Exception:
             logger.exception(
-                "Falha ao avisar que a sincronização do vault %s terminou. "
-                "Feche e abra de novo o `nix ui` ou o cliente MCP se um vault removido continuar aberto.",
+                "Falha ao avisar que a sincronização da wiki %s terminou. "
+                "Feche e abra de novo o `nix ui` ou o cliente MCP se uma wiki removido continuar aberto.",
                 name,
             )
 
@@ -172,9 +172,9 @@ def _other_process_holds(name: str) -> bool:
         handle.close()
 
 
-def _busy(vault_name: str) -> IndexBusyError:
+def _busy(wiki_name: str) -> IndexBusyError:
     return IndexBusyError(
-        f"Outro processo do Nix está sincronizando o índice do vault {vault_name}. "
+        f"Outro processo do Nix está sincronizando o índice da wiki {wiki_name}. "
         "Espere ele terminar e tente de novo."
     )
 
@@ -192,14 +192,14 @@ def _try_lock(handle: BinaryIO) -> None:
     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
-def _acquire(handle: BinaryIO, vault_name: str, label: str) -> None:
+def _acquire(handle: BinaryIO, wiki_name: str, label: str) -> None:
     def attempt() -> None:
         _try_lock(handle)
 
-    _spin(vault_name, label, attempt)
+    _spin(wiki_name, label, attempt)
 
 
-def _spin(vault_name: str, label: str, attempt: Callable[[], None]) -> None:
+def _spin(wiki_name: str, label: str, attempt: Callable[[], None]) -> None:
     deadline = time.monotonic() + _TIMEOUT_S
     announced = False
     while True:
@@ -208,10 +208,10 @@ def _spin(vault_name: str, label: str, attempt: Callable[[], None]) -> None:
             return
         except OSError:
             if not announced:
-                logger.info("À espera da trava de sincronização do vault %s em %s", vault_name, label)
+                logger.info("À espera da trava de sincronização da wiki %s em %s", wiki_name, label)
                 announced = True
             if time.monotonic() >= deadline:
-                raise _busy(vault_name) from None
+                raise _busy(wiki_name) from None
             time.sleep(_POLL_S)
 
 

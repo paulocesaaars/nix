@@ -17,6 +17,7 @@ from nix.cli.render import (
     print_init_result,
     print_problem,
     print_step,
+    print_warning,
 )
 from nix.config.embedding_models import (
     EMBEDDING_MODELS,
@@ -27,7 +28,7 @@ from nix.config.embedding_models import (
 from nix.config.store import SettingsStore
 from nix.core.admin.doctor import build_doctor_report
 from nix.core.admin.setup import initialize
-from nix.core.admin.vaults import DEFAULT_VAULT_NAME
+from nix.core.admin.wikis import DEFAULT_WIKI_NAME
 from nix.core.errors import ConfigError
 
 _DEFAULT_EMBEDDING = default_embedding_model()
@@ -52,23 +53,23 @@ def _validate_vault(raw: str) -> Path:
     text = raw.strip().strip('"').strip("'")
     if not text:
         raise ConfigError(
-            "O caminho do vault está vazio. Informe a pasta do Obsidian, por exemplo C:/Obsidian/MeuVault."
+            "O caminho da wiki está vazio. Informe a pasta da wiki, por exemplo C:/Notas/MinhaWiki."
         )
     path = Path(text)
     if not path.exists():
-        raise ConfigError(f"O caminho {path} não existe. Crie a pasta do vault ou informe outro caminho.")
+        raise ConfigError(f"O caminho {path} não existe. Crie a pasta da wiki ou informe outro caminho.")
     if not path.is_dir():
-        raise ConfigError(f"{path} não é um diretório. Aponte para a pasta raiz do vault do Obsidian.")
+        raise ConfigError(f"{path} não é um diretório. Aponte para a pasta raiz da wiki.")
     return path.resolve()
 
 
 def _ask_vault(step: tuple[int, int]) -> Path:
-    print_step(*step, "Vault")
+    print_step(*step, "Wiki")
     console.print(
-        " Informe a pasta do vault do Obsidian. No Windows use [accent]/[/accent] ([dim]C:/Obsidian/MeuVault[/dim])."
+        " Informe a pasta da wiki. No Windows use [accent]/[/accent] ([dim]C:/Notas/MinhaWiki[/dim])."
     )
     while True:
-        raw = typer.prompt("Caminho do vault")
+        raw = typer.prompt("Caminho da wiki")
         try:
             path = Path(raw.strip().strip('"').strip("'"))
         except (OSError, RuntimeError):
@@ -84,7 +85,7 @@ def _ask_vault(step: tuple[int, int]) -> Path:
             else:
                 continue
         if not path.is_dir():
-            print_problem("Não é um diretório. Informe a pasta do vault.")
+            print_problem("Não é um diretório. Informe a pasta da wiki.")
             continue
         return path.resolve()
 
@@ -93,7 +94,7 @@ def _resolve_vault(explicit: str | None, step: tuple[int, int]) -> Path:
     if explicit is not None and explicit.strip():
         return _validate_vault(explicit)
     if not sys.stdin.isatty():
-        raise ConfigError("Sem terminal interativo. Passe o vault com `nix init --vault CAMINHO`.")
+        raise ConfigError("Sem terminal interativo. Passe a wiki com `nix init --wiki CAMINHO`.")
     return _ask_vault(step)
 
 
@@ -127,10 +128,16 @@ def _resolve_embedding(explicit: str | None, *, ask: bool, step: tuple[int, int]
 @with_errors
 def cmd_init(
     force: bool = typer.Option(False, "--force", help="Regrava a configuração do zero"),
-    vault: str | None = typer.Option(
+    wiki: str | None = typer.Option(
+        None,
+        "--wiki",
+        help="Caminho da wiki; se omitido, pergunta no terminal",
+    ),
+    legacy_vault: str | None = typer.Option(
         None,
         "--vault",
-        help="Caminho do vault; se omitido, pergunta no terminal",
+        hidden=True,
+        help="Obsoleto. Use --wiki.",
     ),
     embedding_model: str | None = typer.Option(
         None,
@@ -140,25 +147,29 @@ def cmd_init(
     name: str | None = typer.Option(
         None,
         "--name",
-        help=f"Nome do primeiro vault (sem --name, usa {DEFAULT_VAULT_NAME}). "
-        "Se a configuração já tem vaults, use `nix vault add`.",
+        help=f"Nome da primeira wiki (sem --name, usa {DEFAULT_WIKI_NAME}). "
+        "Se a configuração já tem wikis, use `nix wiki add`.",
     ),
 ) -> None:
     print_banner(
-        "[bold]Olá. Eu sou o Nix[/bold] — ponte MCP entre o vault e os agentes de desenvolvimento.\n"
-        "[dim]Vamos apontar o vault e indexar as notas.[/dim]"
+        "[bold]Olá. Eu sou o Nix[/bold] — ponte MCP entre a wiki e os agentes de desenvolvimento.\n"
+        "[dim]Vamos apontar a wiki e indexar as notas.[/dim]"
     )
     creating = force or not SettingsStore().is_initialized()
+    if legacy_vault and legacy_vault.strip():
+        print_warning("A opção `--vault` está obsoleta. Use `--wiki`.")
+        if wiki is None or not wiki.strip():
+            wiki = legacy_vault
     explicit_model = embedding_model is not None and bool(embedding_model.strip())
     # Só as perguntas que vão aparecer entram na contagem das etapas.
     interactive = sys.stdin.isatty()
-    asks_vault = interactive and not (vault is not None and vault.strip())
+    asks_vault = interactive and not (wiki is not None and wiki.strip())
     asks_model = interactive and creating and not explicit_model
     total = int(asks_vault) + int(asks_model)
-    vault_path = _resolve_vault(vault, (1, total))
+    wiki_path = _resolve_vault(wiki, (1, total))
     model = _resolve_embedding(embedding_model, ask=creating, step=(int(asks_vault) + 1, total))
     result = initialize(
-        vault=vault_path,
+        wiki=wiki_path,
         embedding_model=model,
         force=force,
         update_embedding=creating or explicit_model,

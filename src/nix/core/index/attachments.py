@@ -6,7 +6,7 @@ from pathlib import Path
 
 from nix.core.errors import AttachmentError
 from nix.core.models import ParsedNote
-from nix.core.vault.markdown import extract_attachment_refs, infer_title
+from nix.core.wiki.markdown import extract_attachment_refs, infer_title
 
 
 def extract_pdf_text(data: bytes) -> str:

@@ -9,8 +9,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from nix.config.schema import NixConfig, VaultSettings
-from nix.core.errors import ConfigError, IndexIncompatibleError, PathEscapeError, VaultError
+from nix.config.schema import NixConfig, WikiSettings
+from nix.core.errors import ConfigError, IndexIncompatibleError, PathEscapeError, WikiError
 from nix.core.index.attachments import is_pdf_path, parse_pdf, referenced_pdfs
 from nix.core.index.chunker import Chunker
 from nix.core.index.embedder import Embedder
@@ -19,9 +19,9 @@ from nix.core.index.store import IndexStore
 from nix.core.index.tokenize import approximate_tokenizer_hint
 from nix.core.index.vectorstore import VectorStore
 from nix.core.models import Chunk, FileMeta, ParsedNote, SyncProgress, SyncReport, utc_now_iso
-from nix.core.vault.markdown import parse_markdown
-from nix.core.vault.paths import assert_accessible
-from nix.core.vault.reader import VaultReader
+from nix.core.wiki.markdown import parse_markdown
+from nix.core.wiki.paths import assert_accessible
+from nix.core.wiki.reader import WikiReader
 from nix.observability.logging import get_logger
 
 logger = get_logger("nix.index.sync")
@@ -46,19 +46,19 @@ class Indexer:
     def __init__(
         self,
         config: NixConfig,
-        vault: VaultSettings,
+        wiki: WikiSettings,
         store: IndexStore,
         vectors: VectorStore,
         embedder: Embedder,
-        reader: VaultReader | None = None,
+        reader: WikiReader | None = None,
         on_change: Callable[[], None] | None = None,
     ) -> None:
         self.config = config
-        self.vault = vault
+        self.wiki = wiki
         self.store = store
         self.vectors = vectors
         self.embedder = embedder
-        self.reader = reader or VaultReader(config, vault)
+        self.reader = reader or WikiReader(config, wiki)
         self.chunker = Chunker(config.index)
         self._on_change = on_change
         # Contadores do RF-152, zerados a cada sync.
@@ -87,8 +87,8 @@ class Indexer:
         progress: ProgressCb | None = None,
         trigger: str = "manual",
     ) -> SyncReport:
-        callback = _with_vault(self.vault.name, progress) if progress is not None else None
-        with index_lock(self.vault.name):
+        callback = _with_wiki(self.wiki.name, progress) if progress is not None else None
+        with index_lock(self.wiki.name):
             return self._sync(
                 full=full,
                 dry_run=dry_run,
@@ -221,7 +221,7 @@ class Indexer:
         report.chunks_reused = self._reused
         report.chunks_embedded = self._embedded
         self.store.set_meta("embedding_model", self.config.index.embedding_model)
-        self.store.set_meta("vault_path", str(self.vault.root))
+        self.store.set_meta("wiki_path", str(self.wiki.root))
         self.store.set_meta("last_sync_at", datetime.now(UTC).isoformat())
         if self.embedder.dim:
             self.store.set_meta("dim", str(self.embedder.dim))
@@ -308,8 +308,8 @@ class Indexer:
             try:
                 assert_accessible(
                     rel,
-                    self.vault.include,
-                    self.vault.exclude,
+                    self.wiki.include,
+                    self.wiki.exclude,
                     apply_include=False,
                 )
             except PathEscapeError:
@@ -326,7 +326,7 @@ class Indexer:
                 self.index_file(pdf_meta)
             except ConfigError:
                 raise
-            except (VaultError, Exception) as exc:  # noqa: BLE001
+            except (WikiError, Exception) as exc:  # noqa: BLE001
                 logger.warning("PDF referenciado não indexado (%s): %s", rel, exc)
 
 
@@ -345,12 +345,12 @@ def _chunk_row(chunk: Chunk, embed_hash: str) -> dict[str, Any]:
 
 
 def combine_sync_reports(items: list[tuple[str, SyncReport]]) -> SyncReport:
-    """Soma os relatórios e guarda um resumo por vault."""
+    """Soma os relatórios e guarda um resumo por wiki."""
     if not items:
-        return SyncReport(headline="Nenhum vault foi sincronizado. Escolha um com `nix vault list`.")
+        return SyncReport(headline="Nenhuma wiki foi sincronizado. Escolha um com `nix wiki list`.")
     if len(items) == 1:
         name, report = items[0]
-        report.vault_name = name
+        report.wiki_name = name
         return report
     combined = SyncReport(dry_run=items[0][1].dry_run, trigger=items[0][1].trigger)
     lines: list[str] = []
@@ -371,7 +371,7 @@ def combine_sync_reports(items: list[tuple[str, SyncReport]]) -> SyncReport:
     return combined
 
 
-def _with_vault(vault_name: str, progress: ProgressCb) -> ProgressCb:
+def _with_wiki(wiki_name: str, progress: ProgressCb) -> ProgressCb:
     def tagged(event: SyncProgress) -> None:
         progress(
             SyncProgress(
@@ -380,7 +380,7 @@ def _with_vault(vault_name: str, progress: ProgressCb) -> ProgressCb:
                 rel_path=event.rel_path,
                 action=event.action,
                 detail=event.detail,
-                vault=event.vault or vault_name,
+                wiki=event.wiki or wiki_name,
             )
         )
 

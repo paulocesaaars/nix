@@ -76,7 +76,7 @@ def client(
     fake_embedder: type[FakeEmbedder],
     request: pytest.FixtureRequest,
 ) -> Iterator[WebClient]:
-    """Cliente HTTP autenticado num host novo (`FakeEmbedder`, vault configurado).
+    """Cliente HTTP autenticado num host novo (`FakeEmbedder`, wiki configurado).
 
     Se o teste pede `embed_hold`, o host nasce com esse embedder. O GET
     `/?t=TOKEN` grava o cookie. O POST autenticado é `client.post_csrf`.

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
-from tests.conftest import SECOND_VAULT_NAME
+from tests.conftest import SECOND_WIKI_NAME
 
 from nix.core.errors import ConfigError, ConfirmationRequiredError, PathEscapeError
 from nix.core.runtime import RuntimeHost
@@ -166,15 +166,15 @@ def test_destructive_writes_require_confirm_and_declare_hint(configured: Path, h
 @pytest.mark.bdd("HU-11.1")
 def test_write_rejects_vault_list_and_star(
     configured: Path,
-    second_vault: Path,
+    second_wiki: Path,
     second_registered: RuntimeHost,
 ) -> None:
     host = second_registered
     before_default = _markdowns(configured)
-    before_second = _markdowns(second_vault)
+    before_second = _markdowns(second_wiki)
     payloads = (
-        {"vault": ["Default", SECOND_VAULT_NAME], "rel_path": "nao-grava.md", "content": "não gravar"},
-        {"vault": "*", "rel_path": "nao-grava.md", "content": "não gravar"},
+        {"wiki": ["Default", SECOND_WIKI_NAME], "rel_path": "nao-grava.md", "content": "não gravar"},
+        {"wiki": "*", "rel_path": "nao-grava.md", "content": "não gravar"},
     )
 
     for payload in payloads:
@@ -183,25 +183,25 @@ def test_write_rejects_vault_list_and_star(
         assert "omita para usar o padrão" in caught.value.message
 
     assert _markdowns(configured) == before_default
-    assert _markdowns(second_vault) == before_second
+    assert _markdowns(second_wiki) == before_second
 
 
 @pytest.mark.bdd("HU-11.2")
 def test_write_with_one_name_stays_in_that_vault(
     configured: Path,
-    second_vault: Path,
+    second_wiki: Path,
     second_registered: RuntimeHost,
 ) -> None:
     host = second_registered
     created = call_tool(
         host,
         "create_note",
-        {"vault": SECOND_VAULT_NAME, "rel_path": "Inbox/so-neste.md", "content": "Texto só neste vault.\n"},
+        {"wiki": SECOND_WIKI_NAME, "rel_path": "Inbox/so-neste.md", "content": "Texto só nesta wiki.\n"},
     )
 
     assert isinstance(created, dict)
-    assert created["vault"] == SECOND_VAULT_NAME
+    assert created["wiki"] == SECOND_WIKI_NAME
     assert created["rel_path"] == "Inbox/so-neste.md"
-    written = (second_vault / "Inbox" / "so-neste.md").read_text(encoding="utf-8")
-    assert "Texto só neste vault." in written
+    written = (second_wiki / "Inbox" / "so-neste.md").read_text(encoding="utf-8")
+    assert "Texto só nesta wiki." in written
     assert not (configured / "Inbox" / "so-neste.md").exists()

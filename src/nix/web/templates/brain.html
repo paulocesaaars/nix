@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Mega Brain</h1>
+    <p class="sub">Projetos com sessão capturada. O filtro olha o nome.</p>
+  </div>
+  <form class="row" method="get" action="/brain">
+    <input type="hidden" name="wiki" value="{{ selected_wiki }}">
+    <input class="input" name="q" value="{{ q }}" placeholder="Filtrar pelo nome" aria-label="Filtrar projetos pelo nome">
+    <button class="btn" type="submit">Filtrar</button>
+  </form>
+</div>
+
+{% if not enabled %}
+{{ alert("info", "O Mega Brain está desligado. Rode nix brain enable --wiki NOME para gravar páginas e capturar.") }}
+{% elif wiki_name %}
+<p class="sub">Páginas na wiki {{ wiki_name }}.</p>
+{% endif %}
+
+{% if not cards %}
+<div class="card empty">{% if q %}Nenhum projeto com esse nome.{% else %}Nenhum projeto com sessão.{% endif %}</div>
+{% else %}
+<div class="grid">
+  {% for card in cards %}
+  <a class="card card-link" data-project="{{ card.name }}" href="{{ wiki_url(card.href) }}">
+    <h2>{{ card.name }}</h2>
+    <p class="sub">{{ card.sessions }} sessão(ões) · {{ card.agents }}</p>
+    <p class="kpi-note mono">{{ card.updated }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -17,25 +17,18 @@ from nix.config.embedding_models import (
     unsupported_embedding_message,
 )
 from nix.config.paths import app_root, resolve_app_path, settings_path
-from nix.config.session_defaults import (
-    DEFAULT_FOLDER,
-    DEFAULT_MAX_NOTE_BYTES,
-    DEFAULT_MAX_PROMPT_BYTES,
-    DEFAULT_MAX_TOOL_BYTES,
-    clean_folder,
-)
 from nix.core.errors import ConfigError
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 Widget = Literal["bool", "int", "float", "text", "lines", "json", "choice"]
 
-# Primeiro vault sugerido pelo init. A CLI reutiliza esta constante.
-DEFAULT_VAULT_NAME = "Default"
-MAX_VAULTS = 5
-VAULT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
-# Pasta de backup usa esse carimbo. Um vault com o mesmo formato seria lido como backup.
+# Primeira wiki sugerido pelo init. A CLI reutiliza esta constante.
+DEFAULT_WIKI_NAME = "Default"
+MAX_WIKIS = 100
+WIKI_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+# Pasta de backup usa esse carimbo. Uma wiki com o mesmo formato seria lido como backup.
 BACKUP_STAMP_PATTERN = re.compile(r"^\d{8}T\d{6}$")
-VAULT_SETTING_KEYS: tuple[str, ...] = (
+WIKI_SETTING_KEYS: tuple[str, ...] = (
     "include",
     "exclude",
     "follow_symlinks",
@@ -120,18 +113,18 @@ class AnchoredSettings(BaseModel):
         return resolve_app_path(value, self.path_anchor)
 
 
-class VaultSettings(AnchoredSettings):
-    """Um vault nomeado. `include` e os demais ajustes valem só para ele."""
+class WikiSettings(AnchoredSettings):
+    """Uma wiki nomeada. `include` e os demais ajustes valem só para ela."""
 
     name: str = Field(
-        description="Nome exibido do vault. A comparação ignora maiúsculas; a grafia original é preservada.",
+        description="Nome exibido da wiki. A comparação ignora maiúsculas; a grafia original é preservada.",
     )
     is_default: bool = Field(
         default=False,
-        description="Vault usado quando o nome é omitido. Com vaults cadastrados, exatamente um é o padrão.",
+        description="Wiki usada quando o nome é omitido. Com wikis cadastradas, exatamente uma é a padrão.",
     )
     path: str = Field(
-        description="Diretório raiz do vault do Obsidian. No Windows use barras / (C:/Obsidian/MeuVault).",
+        description="Diretório raiz da wiki. No Windows use barras / (C:/Notas/MinhaWiki).",
     )
     include: list[str] = Field(
         default_factory=lambda: ["**/*.md"],
@@ -139,13 +132,13 @@ class VaultSettings(AnchoredSettings):
         json_schema_extra=_impact(requires_sync=True),
     )
     exclude: list[str] = Field(
-        default_factory=lambda: [".obsidian/**", ".trash/**", "Templates/**", "Privado/**"],
+        default_factory=lambda: [".trash/**", "Templates/**", "Privado/**"],
         description="Padrões ignorados na indexação e na leitura.",
         json_schema_extra=_impact(requires_sync=True),
     )
     follow_symlinks: bool = Field(
         default=False,
-        description="Segue links simbólicos dentro do vault.",
+        description="Segue links simbólicos dentro da wiki.",
         json_schema_extra=_impact(requires_sync=True),
     )
     default_new_note_folder: str = Field(
@@ -171,7 +164,7 @@ class VaultSettings(AnchoredSettings):
     @field_validator("name")
     @classmethod
     def name_is_identifier(cls, value: str) -> str:
-        return validate_vault_name(value)
+        return validate_wiki_name(value)
 
     @field_validator("path")
     @classmethod
@@ -179,7 +172,7 @@ class VaultSettings(AnchoredSettings):
         text = value.strip()
         if not text:
             raise ConfigError(
-                "O caminho do vault está vazio. Informe a pasta com `nix vault add NOME CAMINHO` "
+                "O caminho da wiki está vazio. Informe a pasta com `nix wiki add NOME CAMINHO` "
                 "ou rode `nix init`."
             )
         return text
@@ -354,96 +347,66 @@ class LoggingSettings(AnchoredSettings):
         return self.resolve_path(self.file)
 
 
-SearchDefault = Literal["excluir", "incluir"]
-
-
-class SessionsSettings(BaseModel):
-    """Sessões dos agentes: eventos em `sessions.db`, nota legível no vault."""
+class BrainSettings(BaseModel):
+    """Mega Brain. Desligado por padrão. A wiki das páginas conta no limite de 100."""
 
     enabled: bool = Field(
         default=False,
-        description="Liga as ferramentas e os comandos de sessão.",
+        description="Liga a captura e as ferramentas brain_.",
         json_schema_extra=_impact(requires_restart=True),
     )
-    vault: str = Field(
+    wiki: str = Field(
         default="",
-        description="Vault que recebe as notas de sessão. Vazio usa o vault padrão.",
+        description="Wiki das páginas do Mega Brain. Não pode ser removida enquanto estiver ligado.",
     )
-    folder: str = Field(
-        default=DEFAULT_FOLDER,
-        description="Pasta das notas de sessão, dentro do vault.",
+    briefing_max_bytes: int = Field(
+        default=3000,
+        ge=256,
+        le=65536,
+        description="Teto do perfil no briefing. 6000 quando o projeto ainda não tem memória.",
     )
-    search_default: SearchDefault = Field(
-        default="excluir",
-        description="excluir tira a pasta de sessões do search_notes sem filtro de pasta; incluir mantém.",
-    )
-    retention_days: int = Field(
+    idle_end_after_hours: int = Field(
         default=0,
         ge=0,
-        le=3650,
-        description="Dias até apagar eventos de sessões encerradas. 0 nunca apaga.",
-    )
-    max_prompt_bytes: int = Field(
-        default=DEFAULT_MAX_PROMPT_BYTES,
-        ge=256,
-        le=262144,
-        description="Limite de bytes por pedido e por resumo de compactação.",
-    )
-    max_tool_bytes: int = Field(
-        default=DEFAULT_MAX_TOOL_BYTES,
-        ge=64,
-        le=65536,
-        description="Limite de bytes por trecho de ferramenta.",
-    )
-    max_note_bytes: int = Field(
-        default=DEFAULT_MAX_NOTE_BYTES,
-        ge=16384,
-        le=1048576,
-        description="Tamanho máximo da nota de sessão no vault. Os turnos mais antigos saem da nota.",
-    )
-    extra_redact_patterns: list[str] = Field(
-        default_factory=list,
-        description="Expressões regulares extras que o sanitizador remove antes de gravar.",
+        le=8760,
+        description="Horas sem evento até encerrar a sessão. 0 nunca encerra sozinho.",
     )
 
-    @field_validator("folder")
+    @field_validator("wiki")
     @classmethod
-    def folder_inside_vault(cls, value: str) -> str:
-        cleaned = clean_folder(value)
-        if cleaned is None:
-            raise ConfigError(
-                f"sessions.folder={value!r} é inválida. Use um caminho relativo ao vault, "
-                "como Nix/Sessões, sem '..' e sem unidade."
-            )
+    def wiki_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            return ""
+        validate_wiki_name(cleaned)
         return cleaned
 
-    @field_validator("extra_redact_patterns")
-    @classmethod
-    def patterns_compile(cls, value: list[str]) -> list[str]:
-        for pattern in value:
-            try:
-                re.compile(pattern)
-            except re.error as exc:
-                raise ConfigError(
-                    f"sessions.extra_redact_patterns tem uma expressão inválida ({pattern!r}: {exc}). "
-                    "Corrija a expressão regular ou remova-a."
-                ) from exc
-        return value
+
+class ProfileSettings(BaseModel):
+    """Perfil sem modelo de linguagem. A frase mais nova ganha; forget vira lápide."""
+
+    min_projects: int = Field(
+        default=2,
+        ge=1,
+        le=20,
+        description="Projetos mínimos com a mesma frase antes de ela entrar no perfil.",
+    )
 
 
 class NixConfig(AnchoredSettings):
     """Configuração validada. Carregada exclusivamente por `nix.config.loader`.
 
-    A lista `vaults` pode estar vazia antes do `nix init`. Com vaults cadastrados,
-    vale de 1 a 5, com exatamente um padrão.
+    A lista `wikis` pode estar vazia antes do `nix init`. Com wikis cadastradas,
+    vale de 1 a 100, com exatamente um padrão.
     """
 
-    vaults: list[VaultSettings] = Field(default_factory=list)
+    wikis: list[WikiSettings] = Field(default_factory=list)
     index: IndexSettings = Field(default_factory=IndexSettings)
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
     safety: SafetySettings = Field(default_factory=SafetySettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
-    sessions: SessionsSettings = Field(default_factory=SessionsSettings)
+    brain: BrainSettings = Field(default_factory=BrainSettings)
+    profile: ProfileSettings = Field(default_factory=ProfileSettings)
     settings_path: Path | None = Field(default=None, exclude=True)
     sources: dict[str, str] = Field(default_factory=dict, exclude=True)
 
@@ -458,84 +421,84 @@ class NixConfig(AnchoredSettings):
         else:
             anchor = app_root()
         self.path_anchor = anchor
-        for vault in self.vaults:
-            vault.path_anchor = anchor
+        for wiki in self.wikis:
+            wiki.path_anchor = anchor
         self.index.path_anchor = anchor
         self.safety.path_anchor = anchor
         self.logging.path_anchor = anchor
-        validate_vault_collection(self.vaults)
+        validate_wiki_collection(self.wikis)
         return self
 
     @property
-    def default_vault(self) -> VaultSettings:
-        """Vault usado quando o nome é omitido."""
-        if not self.vaults:
+    def default_wiki(self) -> WikiSettings:
+        """Wiki usada quando o nome é omitido."""
+        if not self.wikis:
             raise ConfigError(
-                f"Nenhum vault configurado ({settings_path()}). Rode `nix init` para cadastrar o primeiro."
+                f"Nenhuma wiki configurada ({settings_path()}). Rode `nix init` para cadastrar a primeira."
             )
-        for vault in self.vaults:
-            if vault.is_default:
-                return vault
-        raise ConfigError("Nenhum vault está marcado como padrão. Use `nix vault default NOME`.")
+        for wiki in self.wikis:
+            if wiki.is_default:
+                return wiki
+        raise ConfigError("Nenhuma wiki está marcado como padrão. Use `nix wiki default NOME`.")
 
-    def get_vault(self, name: str) -> VaultSettings:
-        """Acha o vault pelo nome, sem diferenciar maiúsculas."""
+    def get_wiki(self, name: str) -> WikiSettings:
+        """Acha a wiki pelo nome, sem diferenciar maiúsculas."""
         folded = name.strip().casefold()
-        for vault in self.vaults:
-            if vault.name.casefold() == folded:
-                return vault
-        raise ConfigError(unknown_vault_message(name, [(vault.name, vault.is_default) for vault in self.vaults]))
+        for wiki in self.wikis:
+            if wiki.name.casefold() == folded:
+                return wiki
+        raise ConfigError(unknown_wiki_message(name, [(wiki.name, wiki.is_default) for wiki in self.wikis]))
 
-    def require_vault(self, name: str | None = None) -> Path:
-        """Garante que o vault pedido (ou o padrão) existe e é um diretório."""
-        if not self.vaults:
+    def require_wiki(self, name: str | None = None) -> Path:
+        """Garante que a wiki pedido (ou o padrão) existe e é um diretório."""
+        if not self.wikis:
             raise ConfigError(
-                f"Nenhum vault configurado ({settings_path()}). Rode `nix init` para cadastrar o primeiro."
+                f"Nenhuma wiki configurada ({settings_path()}). Rode `nix init` para cadastrar a primeira."
             )
-        vault = self.default_vault if name is None else self.get_vault(name)
-        root = vault.root
+        wiki = self.default_wiki if name is None else self.get_wiki(name)
+        root = wiki.root
         if not root.exists():
             shown = root.as_posix()
             raise ConfigError(
-                f"O vault {vault.name} aponta para {shown}, que não existe. "
-                f"Crie a pasta (mkdir \"{shown}\") ou ajuste o caminho com `nix vault`."
+                f"A wiki {wiki.name} aponta para {shown}, que não existe. "
+                f"Crie a pasta (mkdir \"{shown}\") ou ajuste o caminho com `nix wiki`."
             )
         if not root.is_dir():
             raise ConfigError(
-                f"O vault {vault.name} aponta para {root.as_posix()}, que não é um diretório. "
-                "Aponte para a pasta do vault do Obsidian com `nix vault`."
+                f"A wiki {wiki.name} aponta para {root.as_posix()}, que não é um diretório. "
+                "Aponte para a pasta da wiki com `nix wiki`."
             )
         return root
 
-    def _named_vault(self, vault: VaultSettings | None) -> VaultSettings:
-        if vault is not None:
-            return vault
-        return self.default_vault
+    def _named_vault(self, wiki: WikiSettings | None) -> WikiSettings:
+        if wiki is not None:
+            return wiki
+        return self.default_wiki
 
-    def vault_index_dir(self, vault: VaultSettings | None = None) -> Path:
-        """Índice do vault: `{index.data_dir}/{nome}`.
+    def wiki_index_dir(self, wiki: WikiSettings | None = None) -> Path:
+        """Índice da wiki: `{index.data_dir}/{nome}`.
 
-        O vault migrado do esquema 1 (`legacy_layout`) continua na raiz de
+        A wiki migrada do esquema 1 (`legacy_layout`) continua na raiz de
         `index.data_dir`, onde já estavam `index.db` e o chroma.
         """
-        chosen = self._named_vault(vault)
+        chosen = self._named_vault(wiki)
         if chosen.legacy_layout:
             return self.index.data_path
         return self.index.data_path / chosen.name
 
-    def vault_backup_dir(self, vault: VaultSettings | None = None) -> Path:
-        """Backups do vault: `{safety.backup_dir}/{nome}`. A base continua global.
+    def wiki_backup_dir(self, wiki: WikiSettings | None = None) -> Path:
+        """Backups da wiki: `{safety.backup_dir}/{nome}`. A base continua global.
 
-        O vault migrado do esquema 1 usa a raiz de `safety.backup_dir`.
+        A wiki migrada do esquema 1 usa a raiz de `safety.backup_dir`.
         """
-        chosen = self._named_vault(vault)
+        chosen = self._named_vault(wiki)
         if chosen.legacy_layout:
             return self.safety.backup_path
         return self.safety.backup_path / chosen.name
 
-    def vault_sync_lock_path(self, vault: VaultSettings | None = None) -> Path:
-        """Trava do vault: `{app_root}/.nix/sync-{nome}.lock`."""
-        chosen = self._named_vault(vault)
+    def wiki_sync_lock_path(self, wiki: WikiSettings | None = None) -> Path:
+        """Trava da wiki: `{app_root}/.nix/sync-{nome}.lock`."""
+        chosen = self._named_vault(wiki)
         anchor = self.path_anchor or app_root()
         return anchor / ".nix" / f"sync-{chosen.name}.lock"
 
@@ -545,37 +508,38 @@ _SECTION_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("retrieval", RetrievalSettings),
     ("safety", SafetySettings),
     ("logging", LoggingSettings),
-    ("sessions", SessionsSettings),
+    ("brain", BrainSettings),
+    ("profile", ProfileSettings),
 )
 
 
-def validate_vault_name(name: str) -> str:
+def validate_wiki_name(name: str) -> str:
     """Aceita o identificador e devolve a grafia original, sem espaços nas pontas."""
     cleaned = name.strip()
-    if VAULT_NAME_PATTERN.fullmatch(cleaned) is None:
+    if WIKI_NAME_PATTERN.fullmatch(cleaned) is None:
         raise ConfigError(
-            f"Nome de vault {name!r} inválido. Use de 1 a 32 caracteres, começando com letra ou dígito, "
+            f"Nome de wiki {name!r} inválido. Use de 1 a 32 caracteres, começando com letra ou dígito, "
             "e depois apenas letras, dígitos, _ ou -. Exemplo: Default."
         )
     if BACKUP_STAMP_PATTERN.fullmatch(cleaned):
         raise ConfigError(
-            f"Nome de vault {cleaned!r} tem o formato de um carimbo de backup (AAAAMMDDTHHMMSS). "
+            f"Nome de wiki {cleaned!r} tem o formato de um carimbo de backup (AAAAMMDDTHHMMSS). "
             "Escolha outro nome, por exemplo Trabalho."
         )
     return cleaned
 
 
-def unknown_vault_message(name: str, vaults: list[tuple[str, bool]]) -> str:
-    known = ", ".join(item[0] for item in vaults) or "(nenhum)"
-    default = next((item[0] for item in vaults if item[1]), None)
+def unknown_wiki_message(name: str, wikis: list[tuple[str, bool]]) -> str:
+    known = ", ".join(item[0] for item in wikis) or "(nenhum)"
+    default = next((item[0] for item in wikis if item[1]), None)
     hint = f" O padrão é {default}." if default else ""
     return (
-        f"Vault {name!r} não existe. Vaults cadastrados: {known}.{hint} "
-        "Veja os nomes com `nix vault list`."
+        f"Wiki {name!r} não existe. Wikis cadastradas: {known}.{hint} "
+        "Veja os nomes com `nix wiki list`."
     )
 
 
-def vault_paths_overlap(left: Path, right: Path) -> bool:
+def wiki_paths_overlap(left: Path, right: Path) -> bool:
     """True se os caminhos resolvidos são o mesmo ou um está dentro do outro."""
     a = os.path.normcase(str(left.resolve()))
     b = os.path.normcase(str(right.resolve()))
@@ -587,45 +551,45 @@ def vault_paths_overlap(left: Path, right: Path) -> bool:
     return a.startswith(b_prefix) or b.startswith(a_prefix)
 
 
-def validate_vault_collection(vaults: list[VaultSettings]) -> None:
+def validate_wiki_collection(wikis: list[WikiSettings]) -> None:
     """Regras do conjunto. Lista vazia é o estado anterior ao init."""
-    if not vaults:
+    if not wikis:
         return
-    if len(vaults) > MAX_VAULTS:
+    if len(wikis) > MAX_WIKIS:
         raise ConfigError(
-            f"O Nix aceita no máximo {MAX_VAULTS} vaults e encontrou {len(vaults)}. "
-            "Remova um com `nix vault remove NOME`."
+            f"O Nix aceita no máximo {MAX_WIKIS} wikis e encontrou {len(wikis)}. "
+            "Remova um com `nix wiki remove NOME`."
         )
-    defaults = [vault.name for vault in vaults if vault.is_default]
+    defaults = [wiki.name for wiki in wikis if wiki.is_default]
     if len(defaults) != 1:
         raise ConfigError(
-            "É preciso haver exatamente um vault padrão. Escolha com `nix vault default NOME`."
+            "É preciso haver exatamente uma wiki padrão. Escolha com `nix wiki default NOME`."
         )
     seen: dict[str, str] = {}
-    for vault in vaults:
-        folded = vault.name.casefold()
+    for wiki in wikis:
+        folded = wiki.name.casefold()
         previous = seen.get(folded)
         if previous is not None:
             raise ConfigError(
-                f"Os nomes {previous!r} e {vault.name!r} coincidem (a comparação ignora maiúsculas). "
-                "Renomeie um com `nix vault rename ANTIGO NOVO`."
+                f"Os nomes {previous!r} e {wiki.name!r} coincidem (a comparação ignora maiúsculas). "
+                "Renomeie um com `nix wiki rename ANTIGO NOVO`."
             )
-        seen[folded] = vault.name
-    for index, left in enumerate(vaults):
-        for right in vaults[index + 1 :]:
-            if vault_paths_overlap(left.root, right.root):
+        seen[folded] = wiki.name
+    for index, left in enumerate(wikis):
+        for right in wikis[index + 1 :]:
+            if wiki_paths_overlap(left.root, right.root):
                 raise ConfigError(
-                    f"Os vaults {left.name!r} ({left.path}) e {right.name!r} ({right.path}) "
+                    f"As wikis {left.name!r} ({left.path}) e {right.name!r} ({right.path}) "
                     "têm caminhos iguais ou um dentro do outro. "
-                    "Separe as pastas com `nix vault`."
+                    "Separe as pastas com `nix wiki`."
                 )
 
 
-def default_vault_settings() -> dict[str, Any]:
-    """Ajustes iniciais gravados em `vaults.settings_json`."""
+def default_wiki_settings() -> dict[str, Any]:
+    """Ajustes iniciais gravados em `wikis.settings_json`."""
     found: dict[str, Any] = {}
-    for key in VAULT_SETTING_KEYS:
-        field = VaultSettings.model_fields[key]
+    for key in WIKI_SETTING_KEYS:
+        field = WikiSettings.model_fields[key]
         value = field.get_default(call_default_factory=True)
         if isinstance(value, list):
             value = list(value)

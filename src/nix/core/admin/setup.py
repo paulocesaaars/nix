@@ -1,4 +1,4 @@
-"""Primeira configuração: grava o vault e o modelo no settings.db."""
+"""Primeira configuração: grava a wiki e o modelo no settings.db."""
 
 from __future__ import annotations
 
@@ -7,17 +7,17 @@ from pathlib import Path
 
 from nix.config.editor import set_value
 from nix.config.loader import clear_config_cache, load_config
-from nix.config.schema import validate_vault_name
+from nix.config.schema import validate_wiki_name
 from nix.config.store import SettingsStore
-from nix.core.admin.vaults import DEFAULT_VAULT_NAME, VaultService
+from nix.core.admin.wikis import DEFAULT_WIKI_NAME, WikiService
 from nix.core.errors import ConfigError
 
 
 @dataclass(frozen=True)
 class InitResult:
     settings_path: Path
-    vault_name: str
-    vault_path: str
+    wiki_name: str
+    wiki_path: str
     embedding_model: str
     embedding_written: bool
     previously_initialized: bool
@@ -25,17 +25,17 @@ class InitResult:
 
 def initialize(
     *,
-    vault: Path,
+    wiki: Path,
     embedding_model: str,
     force: bool,
     update_embedding: bool,
     name: str | None = None,
 ) -> InitResult:
-    if not vault.is_dir():
+    if not wiki.is_dir():
         raise ConfigError(
-            f"{vault} não é um diretório. Aponte para a pasta raiz do vault do Obsidian."
+            f"{wiki} não é um diretório. Aponte para a pasta raiz da wiki."
         )
-    vault_text = vault.resolve().as_posix()
+    vault_text = wiki.resolve().as_posix()
     store = SettingsStore()
     mismatch = store.schema_mismatch()
     if mismatch is not None:
@@ -45,22 +45,22 @@ def initialize(
         previously = True
     else:
         previously = store.is_initialized()
-    service = VaultService(store)
+    service = WikiService(store)
     embedding_written = False
-    vault_name = validate_vault_name(name) if name else DEFAULT_VAULT_NAME
+    wiki_name = validate_wiki_name(name) if name else DEFAULT_WIKI_NAME
     if previously and not force:
-        existing = service.list_vaults()
+        existing = service.list_wikis()
         if name is not None and existing:
             raise ConfigError(
-                "Esta configuração já tem vaults. "
-                "`nix init --name` não cria outro. Use `nix vault add NOME CAMINHO`."
+                "Esta configuração já tem wikis. "
+                "`nix init --name` não cria outro. Use `nix wiki add NOME CAMINHO`."
             )
         if not existing:
-            service.add(vault_name, vault_text, source="init")
+            service.add(wiki_name, vault_text, source="init")
         else:
             default = next((item for item in existing if item.is_default), None)
             if default is None:
-                raise ConfigError("Nenhum vault está marcado como padrão. Use `nix vault default NOME`.")
+                raise ConfigError("Nenhuma wiki está marcada como padrão. Use `nix wiki default NOME`.")
             service.set_path(default.name, vault_text, source="init")
         if update_embedding:
             set_value("index", "embedding_model", embedding_model, source="init", persist=True)
@@ -69,7 +69,7 @@ def initialize(
         if previously and force:
             store.clear_all()
             clear_config_cache()
-        service.add(vault_name, vault_text, source="init")
+        service.add(wiki_name, vault_text, source="init")
         set_value("index", "embedding_model", embedding_model, source="init", persist=True)
         store.mark_initialized()
         embedding_written = True
@@ -77,8 +77,8 @@ def initialize(
     config = load_config()
     return InitResult(
         settings_path=store.path,
-        vault_name=config.default_vault.name,
-        vault_path=config.default_vault.path,
+        wiki_name=config.default_wiki.name,
+        wiki_path=config.default_wiki.path,
         embedding_model=config.index.embedding_model,
         embedding_written=embedding_written,
         previously_initialized=previously,

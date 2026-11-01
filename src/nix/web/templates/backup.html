@@ -3,12 +3,12 @@
 {% block content %}
 <div class="head">
   <div class="shrink">
-    <a class="small" href="{{ vault_url('/backups') }}">← Backups</a>
+    <a class="small" href="{{ wiki_url('/backups') }}">← Backups</a>
     <h1 class="wrap-any">{{ path }}</h1>
     {% if diff %}<p class="sub">Backup de {{ diff.entry.created_at | when }} comparado com a nota atual.</p>{% endif %}
   </div>
   {% if diff %}
-  <a class="btn" href="{{ vault_url('/backups/download?stamp=' ~ stamp ~ '&path=' ~ (path | urlencode)) }}">{{ icon("download", 16, "2") }}Baixar backup</a>
+  <a class="btn" href="{{ wiki_url('/backups/download?stamp=' ~ stamp ~ '&path=' ~ (path | urlencode)) }}">{{ icon("download", 16, "2") }}Baixar backup</a>
   {% endif %}
 </div>
 
@@ -40,12 +40,12 @@
 <section class="card stack" id="restore">
   <div class="row between">
     <h2>Restaurar</h2>
-    <span class="badge b-err">grava no vault</span>
+    <span class="badge b-err">grava na wiki</span>
   </div>
   <p class="muted">O conteúdo do backup substitui a nota{% if not diff.entry.current_exists %} (ela será recriada){% endif %}. O estado atual ganha o próprio backup antes, então dá para voltar.</p>
   <form method="post" action="/backups/restore" hx-post="/backups/restore" hx-target="#restore-result" hx-swap="innerHTML" hx-disabled-elt="find button" class="stack">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <input type="hidden" name="vault" value="{{ selected_vault }}">
+    <input type="hidden" name="wiki" value="{{ selected_wiki }}">
     <input type="hidden" name="stamp" value="{{ stamp }}">
     <input type="hidden" name="path" value="{{ path }}">
     <label class="check"><input type="checkbox" name="confirm" value="on"><span>Confirmo a restauração de <span class="mono">{{ path }}</span></span></label>

@@ -79,7 +79,7 @@ class Embedder:
         self.capture_stdout = capture_stdout
         self._model: object | None = None
         self._dim: int | None = None
-        # Um processo, vários vaults: carrega o ONNX uma vez e não roda duas inferências juntas.
+        # Um processo, várias wikis: carrega o ONNX uma vez e não roda duas inferências juntas.
         self._lock = threading.RLock()
 
     def ensure_loaded(self) -> None:

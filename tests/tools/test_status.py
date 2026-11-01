@@ -40,9 +40,9 @@ def test_index_status_reports_stale_without_embedding(
     status = call_tool(host, "index_status", {})
 
     assert isinstance(status, dict)
-    vaults = status["vaults"]
-    assert isinstance(vaults, list) and len(vaults) == 1
-    row = vaults[0]
+    wikis = status["wikis"]
+    assert isinstance(wikis, list) and len(wikis) == 1
+    row = wikis[0]
     assert isinstance(row, dict)
     assert row["stale"] is True
     assert isinstance(row["stale_reason"], str)

@@ -11,10 +11,10 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, Response
 
 from nix.config.editor import history, revert_change
-from nix.config.schema import MAX_VAULTS, NixConfig, VaultSettings
+from nix.config.schema import MAX_WIKIS, NixConfig, WikiSettings
 from nix.core.admin.backups import BackupDiff, BackupEntry, backup_file, diff_backup, list_backups, restore_backup
-from nix.core.admin.vaults import VaultService
-from nix.core.errors import NixError, VaultError
+from nix.core.admin.wikis import WikiService
+from nix.core.errors import NixError, WikiError
 from nix.core.models import WriteResult
 from nix.core.runtime import Runtime
 from nix.web.render import page
@@ -37,12 +37,12 @@ class HistoryView:
 
 
 async def backups_page(request: Request) -> Response:
-    config, vault, error = _page_vault(request)
-    backup_root = config.vault_backup_dir(vault) if vault is not None else config.safety.backup_path
+    config, wiki, error = _page_vault(request)
+    backup_root = config.wiki_backup_dir(wiki) if wiki is not None else config.safety.backup_path
     entries: list[BackupEntry] = []
     if error is None:
         try:
-            entries = await asyncio.to_thread(list_backups, config, vault=vault)
+            entries = await asyncio.to_thread(list_backups, config, wiki=wiki)
         except OSError as exc:
             entries, error = [], f"Não foi possível ler {backup_root}: {exc}. Verifique safety.backup_dir."
     return page(
@@ -63,12 +63,12 @@ async def backups_page(request: Request) -> Response:
 async def backup_view(request: Request) -> Response:
     stamp = query(request, "stamp")
     path = query(request, "path")
-    config, vault, vault_error = _page_vault(request)
+    config, wiki, wiki_error = _page_vault(request)
     diff: BackupDiff | None = None
-    error: str | None = vault_error
+    error: str | None = wiki_error
     if error is None:
         try:
-            diff = await asyncio.to_thread(diff_backup, config, stamp, path, vault=vault)
+            diff = await asyncio.to_thread(diff_backup, config, stamp, path, wiki=wiki)
         except NixError as exc:
             error = exc.message
     return page(
@@ -81,16 +81,16 @@ async def backup_view(request: Request) -> Response:
 async def backup_download(request: Request) -> Response:
     stamp = query(request, "stamp")
     path = query(request, "path")
-    config, vault, vault_error = _page_vault(request)
-    if vault_error is not None:
+    config, wiki, wiki_error = _page_vault(request)
+    if wiki_error is not None:
         return page(
             request,
             "message.html",
-            {"title": "Backups", "active": "backups", "message": vault_error},
+            {"title": "Backups", "active": "backups", "message": wiki_error},
             status_code=404,
         )
     try:
-        source = await asyncio.to_thread(backup_file, config, stamp, path, vault=vault)
+        source = await asyncio.to_thread(backup_file, config, stamp, path, wiki=wiki)
     except NixError as exc:
         return page(
             request,
@@ -113,7 +113,7 @@ async def backup_restore(request: Request) -> Response:
     result = await run_gated(
         request,
         lambda runtime: _restore(runtime, stamp, path),
-        vault=form.get("vault") or None,
+        wiki=form.get("wiki") or None,
         busy=_RESTORE_BUSY,
     )
     return _restore_result(request, result.value, result.error)
@@ -158,7 +158,7 @@ def _restore(runtime: Runtime, stamp: str, path: str) -> WriteResult:
     try:
         return restore_backup(runtime, stamp, path)
     except OSError as exc:
-        raise VaultError(
+        raise WikiError(
             f"Não foi possível restaurar {path}: {exc}. "
             "Verifique permissões e espaço em disco; a nota atual não foi alterada se o erro veio antes da gravação."
         ) from exc
@@ -215,19 +215,19 @@ def _undo(change_id: int) -> tuple[str | None, str | None, list[HistoryView]]:
     return result.warning, f"Alteração #{change_id} desfeita.", _history_views()
 
 
-def _page_vault(request: Request) -> tuple[NixConfig, VaultSettings | None, str | None]:
-    """Configuração atual e o vault de `?vault=`. O terceiro valor é o erro, se houver."""
+def _page_vault(request: Request) -> tuple[NixConfig, WikiSettings | None, str | None]:
+    """Configuração atual e a wiki de `?wiki=`. O terceiro valor é o erro, se houver."""
     host = web_state(request).gate.host
     host.before_call()
     config = host.config
-    if not config.vaults:
-        return config, None, "Nenhum vault configurado. Rode `nix init` para cadastrar o primeiro."
+    if not config.wikis:
+        return config, None, "Nenhuma wiki configurada. Rode `nix init` para cadastrar a primeira."
     try:
-        raw = query(request, "vault")
-        vault = config.default_vault if not raw else config.get_vault(raw)
+        raw = query(request, "wiki")
+        wiki = config.default_wiki if not raw else config.get_wiki(raw)
     except NixError as exc:
         return config, None, exc.message
-    return config, vault, None
+    return config, wiki, None
 
 
 async def vaults_page(request: Request) -> Response:
@@ -238,8 +238,8 @@ async def vaults_add(request: Request) -> Response:
     form = await form_data(request)
     return await _vault_action(
         request,
-        lambda: VaultService().add(form.get("name", ""), form.get("path", ""), source="ui"),
-        "Vault cadastrado.",
+        lambda: WikiService().add(form.get("name", ""), form.get("path", ""), source="ui"),
+        "Wiki cadastrado.",
     )
 
 
@@ -247,7 +247,7 @@ async def vaults_rename(request: Request) -> Response:
     form = await form_data(request)
     return await _vault_action(
         request,
-        lambda: VaultService().rename(form.get("old", ""), form.get("new", ""), source="ui"),
+        lambda: WikiService().rename(form.get("old", ""), form.get("new", ""), source="ui"),
         "Nome atualizado. O índice e os backups não foram movidos.",
     )
 
@@ -258,12 +258,12 @@ async def vaults_remove(request: Request) -> Response:
         return await _vaults_response(
             request,
             message=None,
-            error='Marque "Confirmo a remoção" para tirar o vault da configuração. As notas não são apagadas.',
+            error='Marque "Confirmo a remoção" para tirar a wiki da configuração. As notas não são apagadas.',
         )
     return await _vault_action(
         request,
-        lambda: VaultService().remove(form.get("name", ""), source="ui"),
-        "Vault removido da configuração. As notas e o índice em disco continuam onde estavam.",
+        lambda: WikiService().remove(form.get("name", ""), source="ui"),
+        "Wiki removido da configuração. As notas e o índice em disco continuam onde estavam.",
     )
 
 
@@ -271,8 +271,8 @@ async def vaults_default(request: Request) -> Response:
     form = await form_data(request)
     return await _vault_action(
         request,
-        lambda: VaultService().set_default(form.get("name", ""), source="ui"),
-        "Vault padrão atualizado.",
+        lambda: WikiService().set_default(form.get("name", ""), source="ui"),
+        "Wiki padrão atualizado.",
     )
 
 
@@ -280,8 +280,8 @@ async def vaults_path(request: Request) -> Response:
     form = await form_data(request)
     return await _vault_action(
         request,
-        lambda: VaultService().set_path(form.get("name", ""), form.get("path", ""), source="ui"),
-        "Pasta do vault atualizada. Rode a sincronização desse vault para alinhar o índice.",
+        lambda: WikiService().set_path(form.get("name", ""), form.get("path", ""), source="ui"),
+        "Pasta da wiki atualizada. Rode a sincronização dessa wiki para alinhar o índice.",
     )
 
 
@@ -289,7 +289,7 @@ async def vaults_set(request: Request) -> Response:
     form = await form_data(request)
 
     def _apply() -> str | None:
-        _vault, warning = VaultService().set_setting(
+        _vault, warning = WikiService().set_setting(
             form.get("name", ""),
             form.get("key", ""),
             form.get("value", ""),
@@ -319,18 +319,18 @@ async def _vaults_response(request: Request, *, message: str | None, error: str 
     host = web_state(request).gate.host
     host.before_call()
     try:
-        rows = await asyncio.to_thread(lambda: VaultService().list_vaults())
+        rows = await asyncio.to_thread(lambda: WikiService().list_wikis())
     except NixError as exc:
         rows = []
         error = exc.message if error is None else f"{error} {exc.message}"
     return page(
         request,
-        "vaults.html",
+        "wikis.html",
         {
-            "title": "Vaults",
-            "active": "vaults",
+            "title": "Wikis",
+            "active": "wikis",
             "rows": rows,
-            "max_vaults": MAX_VAULTS,
+            "max_vaults": MAX_WIKIS,
             "message": message,
             "error": error,
         },

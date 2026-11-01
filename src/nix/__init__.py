@@ -1,4 +1,4 @@
-"""Nix — servidor MCP para vaults do Obsidian."""
+"""Nix — servidor MCP para wikis de notas."""
 
 from typing import Any
 

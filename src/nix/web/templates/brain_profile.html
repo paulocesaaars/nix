@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Perfil</h1>
+    <p class="sub">Preferências repetidas em vários projetos, sem modelo de linguagem.</p>
+  </div>
+</div>
+
+{% if not entries %}
+<div class="card empty">Nenhuma entrada ativa. Rode nix brain profile rebuild depois de capturar pedidos.</div>
+{% else %}
+<div class="stack">
+  {% for item in entries %}
+  <article class="card">
+    <p class="kpi-label">{{ item.category }}</p>
+    <h2>{{ item.sentence }}</h2>
+    <p class="kpi-note"><a href="{{ wiki_url(item.href) }}">{{ item.page }}</a></p>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

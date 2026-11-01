@@ -53,7 +53,7 @@
   <div class="row between">
     <div>
       <h2>Hooks de sessão</h2>
-      <p class="muted small">Opcional e por projeto. Gravam as sessões para outro agente retomar quando a cota acabar. Mostra o projeto da pasta onde o <span class="mono">nix ui</span> roda; para outro projeto com sessões, use <span class="mono">?project=CAMINHO</span>.</p>
+      <p class="muted small">Opcional. Dá para instalar um, alguns ou todos os {{ agent_count }} clientes. O escopo pode ser global ou só o repositório. Esta página não grava arquivo. A tabela mostra o projeto da pasta onde o <span class="mono">nix ui</span> roda; para outro projeto com sessões, use <span class="mono">?project=CAMINHO</span>.</p>
     </div>
     <span class="badge b-n">projeto <span class="mono">{{ hooks_project }}</span></span>
   </div>
@@ -72,14 +72,14 @@
     </table>
   </div>
   <div class="row between">
-    <span class="lbl">Dentro do repositório · nada é escrito antes de você confirmar</span>
+    <span class="lbl">Nada é escrito por esta página</span>
     <button class="btn btn-sm" type="button" data-copy="code-hooks">{{ icon("copy", 14, "2") }}<span data-label>Copiar</span></button>
   </div>
-  <pre class="code" id="code-hooks">nix hooks install --agent claude --agent cursor
-nix hooks install --dry-run --agent devin-desktop
-nix hooks status</pre>
+  <pre class="code" id="code-hooks">nix brain hooks install
+nix brain hooks install --scope project --agent claude
+nix brain hooks install --scope global --all</pre>
   {% for item in hooks if item.note %}<p class="small muted"><strong>{{ item.label }}.</strong> {{ item.note }}</p>{% endfor %}
-  {{ alert("info", "Os hooks ficam só no projeto, nunca na pasta da conta. nix hooks remove apaga apenas o que a Nix marcou. Este comando não escreve skill.") }}
+  {{ alert("info", "A gravação só acontece no terminal, depois da confirmação. nix brain hooks remove apaga apenas o que a Nix marcou. Este comando não escreve skill.") }}
 </section>
 
 <section class="card stack">

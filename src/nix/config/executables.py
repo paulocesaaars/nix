@@ -2,7 +2,7 @@
 
 O Nuitka 4.3, em modo onefile com cache, recalcula o CRC de cada arquivo do
 payload em toda partida. O binário completo tem centenas de MB e passa de 1 s,
-acima dos 300 ms do hook (RF-130). O `nix-hook` leva só `core/sessions`.
+acima dos 300 ms do hook. O `nix-hook` leva só `core/brain`.
 
 O artefato da release usa o nome com versão (`nix-2.4.0-linux-amd64` e
 `nix-hook-2.4.0-linux-amd64`). Instalado, vira `{NIX_HOME}/bin/nix` e

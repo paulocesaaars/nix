@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from nix.core.errors import VaultError
+from nix.core.errors import WikiError
 from nix.core.index.lock import index_lock
 from nix.core.index.sync import Indexer, file_id_for
 from nix.core.models import FileMeta, WriteResult
-from nix.core.vault.paths import to_posix
+from nix.core.wiki.paths import to_posix
 from nix.observability.logging import get_logger
 
 logger = get_logger("nix.index.writeback")
@@ -19,13 +19,13 @@ class Writeback:
     def after_write(self, result: WriteResult) -> WriteResult:
         if not result.written or not self._indexer.config.index.auto_index_agent_writes:
             return result
-        with index_lock(self._indexer.vault.name):
+        with index_lock(self._indexer.wiki.name):
             return self._after_write(result)
 
     def after_move(self, result: WriteResult) -> WriteResult:
         if not self._indexer.config.index.auto_index_agent_writes:
             return result
-        with index_lock(self._indexer.vault.name):
+        with index_lock(self._indexer.wiki.name):
             return self._after_move(result)
 
     def _after_write(self, result: WriteResult) -> WriteResult:
@@ -56,7 +56,7 @@ class Writeback:
                 indexed=False,
                 message=(
                     f"{result.message} A nota foi salva, mas não indexada ({error}). "
-                    f"Rode `nix sync --vault {self._indexer.vault.name}` ou a ferramenta MCP "
+                    f"Rode `nix sync --wiki {self._indexer.wiki.name}` ou a ferramenta MCP "
                     "`sync_index` para corrigir o índice."
                 ),
             )
@@ -103,7 +103,7 @@ class Writeback:
                 indexed=False,
                 message=(
                     f"{result.message} A movimentação foi salva, mas parte do índice falhou ({detail}). "
-                    f"Rode `nix sync --vault {self._indexer.vault.name}` ou a ferramenta MCP "
+                    f"Rode `nix sync --wiki {self._indexer.wiki.name}` ou a ferramenta MCP "
                     "`sync_index` para corrigir o índice."
                 ),
             )
@@ -125,10 +125,10 @@ class Writeback:
         try:
             path = self._indexer.reader.resolve(rel)
             if not path.is_file():
-                raise VaultError(
-                    f"{rel} não está no vault após a operação. "
-                    "Verifique permissões ou antivírus no vault e rode "
-                    f"`nix sync --vault {self._indexer.vault.name}` "
+                raise WikiError(
+                    f"{rel} não está na wiki após a operação. "
+                    "Verifique permissões ou antivírus na wiki e rode "
+                    f"`nix sync --wiki {self._indexer.wiki.name}` "
                     "ou a ferramenta MCP `sync_index`."
                 )
             stat = path.stat()

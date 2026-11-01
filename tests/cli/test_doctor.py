@@ -28,7 +28,7 @@ def test_doctor_points_at_missing_vault(configured: Path) -> None:
     result = runner.invoke(app, ["doctor"])
 
     assert result.exit_code == 0, result.output
-    # Aviso de import no ambiente pode aparecer; o que o cenário pede é o vault.
+    # Aviso de import no ambiente pode aparecer; o que o cenário pede é a wiki.
     flat = _flat(result.output)
     assert "Default" in result.output
     assert expected in flat, flat

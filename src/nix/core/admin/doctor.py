@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import asdict, dataclass
@@ -34,7 +35,7 @@ class DoctorReport:
     settings_path: str
     initialized: bool
     config_error: str | None
-    vault_path: str | None
+    wiki_path: str | None
     embedding_model: str | None
     data_dir: str | None
     data_path: str | None
@@ -65,7 +66,7 @@ def build_doctor_report(
     index_status: IndexStatus | None = None,
     index_problem: str | None = None,
     inspect_index: bool = True,
-    vault_statuses: list[tuple[str, IndexStatus | None, str | None]] | None = None,
+    wiki_statuses: list[tuple[str, IndexStatus | None, str | None]] | None = None,
 ) -> DoctorReport:
     from nix import __version__
 
@@ -97,21 +98,22 @@ def build_doctor_report(
     home_path = env_home()
     command, command_problem = _command(home_path is not None)
     vault_ok = False
-    if nix_config is not None and nix_config.vaults:
-        for vault in nix_config.vaults:
-            label = f"Vault {vault.name}"
+    if nix_config is not None and nix_config.wikis:
+        for wiki in nix_config.wikis:
+            label = f"Wiki {wiki.name}"
             try:
-                root = nix_config.require_vault(vault.name)
+                root = nix_config.require_wiki(wiki.name)
             except ConfigError as exc:
                 checks.append(DoctorCheck(label, "warn", exc.message))
                 continue
             vault_ok = True
-            mark = " (padrão)" if vault.is_default else ""
+            mark = " (padrão)" if wiki.is_default else ""
             checks.append(DoctorCheck(label, "ok", f"{root} ok{mark}"))
     elif nix_config is not None:
         checks.append(
-            DoctorCheck("Vault", "warn", "Nenhum vault configurado. Rode `nix init` para cadastrar o primeiro.")
+            DoctorCheck("Wiki", "warn", "Nenhuma wiki configurada. Rode `nix init` para cadastrar a primeira.")
         )
+    _legacy_name_checks(checks)
 
     _native_checks(checks)
     _import_checks(checks)
@@ -121,13 +123,13 @@ def build_doctor_report(
         data_root = nix_config.index.data_path
         _data_dir_check(checks, data_root)
         if not inspect_index:
-            _index_supplied(checks, index_status, index_problem, vault_statuses)
+            _index_supplied(checks, index_status, index_problem, wiki_statuses)
         elif vault_ok:
             _index_check(checks, nix_config)
 
-    vault_path: str | None = None
-    if nix_config is not None and nix_config.vaults:
-        vault_path = nix_config.default_vault.path
+    wiki_path: str | None = None
+    if nix_config is not None and nix_config.wikis:
+        wiki_path = nix_config.default_wiki.path
 
     return DoctorReport(
         version=__version__,
@@ -138,13 +140,41 @@ def build_doctor_report(
         settings_path=str(settings_path()),
         initialized=initialized,
         config_error=config_error,
-        vault_path=vault_path,
+        wiki_path=wiki_path,
         embedding_model=nix_config.index.embedding_model if nix_config is not None else None,
         data_dir=nix_config.index.data_dir if nix_config is not None else None,
         data_path=str(data_root) if data_root is not None else None,
         config=config,
         checks=checks,
     )
+
+
+def _legacy_name_checks(checks: list[DoctorCheck]) -> None:
+    """Aponta variável ou cadastro que ainda usa o nome vault."""
+    names = sorted(
+        key
+        for key in os.environ
+        if key == "NIX_VAULT" or key.startswith("NIX_VAULT__") or key.startswith("NIX_VAULT_")
+    )
+    for key in names:
+        checks.append(
+            DoctorCheck(
+                "Nome antigo",
+                "warn",
+                f"A variável {key} usa o nome vault. Ela não configura a wiki. Use `nix wiki`.",
+            )
+        )
+    leftovers = SettingsStore().legacy_vault_names()
+    for item in leftovers:
+        checks.append(
+            DoctorCheck(
+                "Nome antigo",
+                "warn",
+                f"A configuração ainda tem {item}. Feche outros processos do Nix e abra de novo "
+                "para concluir a migração para wiki. Se ela não concluir, rode `nix init --force`. "
+                "As notas não são alteradas.",
+            )
+        )
 
 
 def nix_command() -> tuple[str | None, str | None]:
@@ -227,10 +257,10 @@ def _index_check(checks: list[DoctorCheck], config: Any) -> None:
 
     host = RuntimeHost(config)
     try:
-        for vault in config.vaults:
-            label = f"Índice {vault.name}"
+        for wiki in config.wikis:
+            label = f"Índice {wiki.name}"
             try:
-                runtime = host.resolve(vault.name)
+                runtime = host.resolve(wiki.name)
                 status = runtime.status()
             except Exception as exc:  # noqa: BLE001
                 checks.append(DoctorCheck(label, "warn", f"ainda não utilizável: {exc}"))
@@ -245,12 +275,12 @@ def _index_supplied(
     checks: list[DoctorCheck],
     status: IndexStatus | None,
     problem: str | None,
-    vault_statuses: list[tuple[str, IndexStatus | None, str | None]] | None,
+    wiki_statuses: list[tuple[str, IndexStatus | None, str | None]] | None,
 ) -> None:
-    if vault_statuses is not None:
-        if not vault_statuses and problem:
+    if wiki_statuses is not None:
+        if not wiki_statuses and problem:
             checks.append(DoctorCheck("Índice", "warn", problem))
-        for name, item, item_problem in vault_statuses:
+        for name, item, item_problem in wiki_statuses:
             label = f"Índice {name}"
             if item_problem:
                 checks.append(DoctorCheck(label, "warn", item_problem))

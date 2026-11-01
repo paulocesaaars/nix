@@ -25,7 +25,7 @@ def _indexed() -> dict[str, str]:
     from nix.config.loader import load_config
     from nix.core.index.store import IndexStore
 
-    store = IndexStore(load_config().vault_index_dir() / "index.db")
+    store = IndexStore(load_config().wiki_index_dir() / "index.db")
     try:
         return {str(row["rel_path"]): str(row["status"]) for row in store.list_files()}
     finally:
@@ -36,7 +36,7 @@ def _indexed() -> dict[str, str]:
 def test_sync_indexes_notes_outside_exclude(configured: Path) -> None:
     ignored = configured / "Templates" / "modelo.md"
     ignored.parent.mkdir(parents=True, exist_ok=True)
-    ignored.write_text("# Modelo\n\nNota que o vault.exclude deixa de fora.\n", encoding="utf-8")
+    ignored.write_text("# Modelo\n\nNota que a wiki.exclude deixa de fora.\n", encoding="utf-8")
 
     result = runner.invoke(app, ["sync"])
 

@@ -1,4 +1,4 @@
-"""Fachada de recuperação híbrida, inclusive juntando vários vaults."""
+"""Fachada de recuperação híbrida, inclusive juntando várias wikis."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
-from nix.config.schema import NixConfig, VaultSettings
+from nix.config.schema import NixConfig, WikiSettings
 from nix.core.errors import NixError
 from nix.core.index.embedder import Embedder
 from nix.core.index.store import IndexStore
@@ -16,7 +16,7 @@ from nix.core.models import RetrievedChunk
 from nix.core.retrieval.fusion import reciprocal_rank_fusion
 from nix.core.retrieval.lexical import LexicalSearch
 from nix.core.retrieval.vector import VectorSearch
-from nix.core.vault.paths import is_included, matches_folder
+from nix.core.wiki.paths import is_included, matches_folder
 from nix.observability.logging import get_logger
 
 logger = get_logger("nix.retrieval")
@@ -27,20 +27,20 @@ class MultiSearchResult:
     """Trechos já cortados por score e as falhas que não derrubaram a busca."""
 
     chunks: list[RetrievedChunk]
-    vault_errors: list[dict[str, str]]
+    wiki_errors: list[dict[str, str]]
 
 
 class RetrievalService:
     def __init__(
         self,
         config: NixConfig,
-        vault: VaultSettings,
+        wiki: WikiSettings,
         store: IndexStore,
         vectors: VectorStore,
         embedder: Embedder,
     ) -> None:
         self.config = config
-        self._vault = vault
+        self._vault = wiki
         self.store = store
         self.vector = VectorSearch(vectors, embedder)
         self.lexical = LexicalSearch(store)
@@ -114,16 +114,9 @@ class RetrievalService:
         return [chunk for chunk in fused if chunk.score >= floor]
 
     def _hidden_folder(self, folder: str | None) -> str | None:
-        """Pasta de sessões a esconder da busca comum (RF-107). Pedir a pasta explicitamente a inclui."""
-        sessions = self.config.sessions
-        if not sessions.enabled or sessions.search_default != "excluir":
-            return None
-        if folder and folder.strip():
-            return None
-        target = sessions.vault.strip() or self.config.default_vault.name
-        if target.casefold() != self._vault.name.casefold():
-            return None
-        return sessions.folder
+        """A busca comum não esconde pasta. O filtro de projeto fica em brain_query."""
+        del folder
+        return None
 
     def _filter(
         self,
@@ -185,7 +178,7 @@ class RetrievalService:
                         tags=tags,
                         folder=rel.rsplit("/", 1)[0] if "/" in rel else "",
                         mtime=float(row["mtime"] or 0.0),
-                        vault=chunk.vault,
+                        wiki=chunk.wiki,
                     )
                 )
         return chunks + extra
@@ -204,10 +197,10 @@ def search_many(
 ) -> MultiSearchResult:
     """Vetoriza uma vez e junta pelo score.
 
-    Falha num vault vai para `vault_errors` com a ação corretiva. Os outros seguem.
+    Falha numa wiki vai para `wiki_errors` com a ação corretiva. Os outros seguem.
     """
     if not services:
-        return MultiSearchResult(chunks=[], vault_errors=[])
+        return MultiSearchResult(chunks=[], wiki_errors=[])
     primary = services[0][1]
     settings = primary.config.retrieval
     k = top_k or settings.top_k
@@ -227,21 +220,21 @@ def search_many(
                 expand_neighbors=expand_neighbors,
             )
         except NixError as exc:
-            errors.append({"vault": name, "message": exc.message})
+            errors.append({"wiki": name, "message": exc.message})
             continue
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Busca falhou no vault %s", name)
+            logger.exception("Busca falhou na wiki %s", name)
             errors.append(
                 {
-                    "vault": name,
+                    "wiki": name,
                     "message": (
-                        f"A busca no vault {name} falhou ({exc}). "
-                        f"Rode `nix sync --vault {name}` e tente de novo."
+                        f"A busca na wiki {name} falhou ({exc}). "
+                        f"Rode `nix sync --wiki {name}` e tente de novo."
                     ),
                 }
             )
             continue
-        merged.extend(replace(chunk, vault=name) for chunk in found)
+        merged.extend(replace(chunk, wiki=name) for chunk in found)
     merged.sort(key=lambda chunk: chunk.score, reverse=True)
     chunks = primary.finish(merged, k=k)
-    return MultiSearchResult(chunks=chunks, vault_errors=errors)
+    return MultiSearchResult(chunks=chunks, wiki_errors=errors)

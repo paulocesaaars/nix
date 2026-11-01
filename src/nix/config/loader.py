@@ -23,7 +23,7 @@ def require_initialized() -> SettingsStore:
         raise mismatch
     if not store.is_initialized():
         raise ConfigError(
-            f"O Nix ainda não foi configurado ({store.path}). Rode `nix init` para cadastrar o vault."
+            f"O Nix ainda não foi configurado ({store.path}). Rode `nix init` para cadastrar a wiki."
         )
     return store
 
@@ -46,7 +46,8 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 def env_overrides() -> dict[str, Any]:
     """Lê NIX_SECTION__FIELD dos campos globais. O ambiente ganha do settings.db.
 
-    Vaults ficam na tabela `vaults`. `NIX_VAULT__*` não entra nessa precedência.
+    Wikis ficam na tabela `wikis`. `NIX_VAULT__*` e `NIX_WIKI__*` não entram nessa precedência.
+    O `nix doctor` avisa quando `NIX_VAULT__*` ainda está definido.
     """
     nested: dict[str, dict[str, Any]] = {}
     prefix = "NIX_"
@@ -102,17 +103,19 @@ def _sources(db: dict[str, dict[str, Any]], env: dict[str, Any]) -> dict[str, st
 
 
 def config_document(store: SettingsStore) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, Any]]:
-    """`(db, env, merged)` com os vaults da tabela.
+    """`(db, env, merged)` com as wikis da tabela.
 
-    A seção `vault` antiga e `NIX_VAULT__*` ficam de fora: o cadastro vive em `vaults`.
+    A seção `vault` do esquema 1 e `NIX_VAULT__*` ficam de fora: o cadastro vive em `wikis`.
     """
     db = store.load_overrides()
-    db.pop("vault", None)
     env = env_overrides()
-    env.pop("vault", None)
+    for stale in ("vault", "wiki"):
+        db.pop(stale, None)
+        env.pop(stale, None)
     merged = deep_merge(db, env)
-    merged.pop("vault", None)
-    merged["vaults"] = [record.payload() for record in store.list_vaults()]
+    for stale in ("vault", "wiki"):
+        merged.pop(stale, None)
+    merged["wikis"] = [record.payload() for record in store.list_wikis()]
     return db, env, merged
 
 
