@@ -213,7 +213,7 @@ def _package_title(system: str, arch: str) -> str:
 def _require_release(version: str, tag: str, repo: str) -> None:
     if not version or any(char in version for char in "/\\ "):
         raise RegistryError(
-            f"Versão {version!r} inválida. Use o número do pyproject, como 5.0.0."
+            f"Versão {version!r} inválida. Use o número do pyproject, como 5.0.1."
         )
     if tag != f"v{version}" or any(char in tag for char in "/\\ "):
         raise RegistryError(
