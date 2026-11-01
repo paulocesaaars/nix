@@ -1,9 +1,8 @@
-# Instala o binário do Nix (sem Python), grava NIX_HOME, coloca bin no PATH
-# e inicia nix init se ainda não houver settings.db.
+# Instala o binário do Nix (sem Python), grava NIX_HOME e coloca bin no PATH.
+# A wiki é cadastrada depois, na interface.
 #
 # Uso:
 #   irm https://raw.githubusercontent.com/paulocesaaars/nix/main/install.ps1 | iex
-#   .\install.ps1 --vault "C:/Obsidian/MeuVault"
 #
 # Variáveis:
 #   NIX_VERSION   tag da release (com ou sem o v inicial). Vazio = última estável.
@@ -28,11 +27,8 @@ function Die([string]$Message) {
 
 if ($args.Count -eq 1 -and $args[0] -in @("-h", "--help")) {
     Write-Host @"
-Baixa o binário do Nix para a pasta de instalação, grava NIX_HOME, coloca
-{NIX_HOME}\bin no PATH do usuário e, se não houver settings.db, executa nix init.
-
-Argumentos extras vão para nix init, por exemplo:
-  .\install.ps1 --vault "C:/Obsidian/MeuVault"
+Baixa o binário do Nix para a pasta de instalação, grava NIX_HOME e coloca
+{NIX_HOME}\bin no PATH do usuário. A wiki é cadastrada depois, na interface.
 
 NIX_VERSION escolhe a release (ex.: 1.2.3 ou v1.2.3). Sem isso, vale a última estável.
 "@
@@ -161,19 +157,14 @@ try {
     Write-Host "NIX_HOME=$Root"
     Write-Host "Comando nix: $BinDir"
 
-    $config = Join-Path $Root "settings.db"
-    if (-not (Test-Path -LiteralPath $config)) {
-        Write-Host "nix-install: iniciando configuração (nix init)..."
-        & $Dest init @args
-        if ($LASTEXITCODE -ne 0) { Stop-NixInstall $LASTEXITCODE }
-    }
-    else {
-        Write-Host "settings.db já existe em $Root. O init não foi repetido."
-        Write-Host "Para reconfigurar: nix init --vault CAMINHO"
+    if ($args.Count -gt 0) {
+        Write-Host "A instalação não cadastra a wiki. Isso é feito depois, na interface."
     }
 
     Write-Host ""
-    Write-Host "Abra um terminal novo. No MCP, command é $Dest"
+    Write-Host "Para abrir a interface, execute o comando nix."
+    Write-Host "Se o comando nix não funcionar, feche o terminal, abra outro e tente de novo."
+    Write-Host "No MCP, command é $Dest"
 }
 finally {
     Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue

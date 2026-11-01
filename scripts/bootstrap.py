@@ -1,4 +1,4 @@
-"""Cria o .venv, instala o Nix, registra o comando no PATH e inicia `nix init`."""
+"""Cria o .venv, instala o Nix e registra o comando no PATH."""
 
 from __future__ import annotations
 
@@ -37,10 +37,9 @@ def main() -> None:
     extra = sys.argv[1:]
     if extra in (["-h"], ["--help"]):
         print(
-            "Cria o ambiente virtual .venv, instala os pacotes do Nix, "
-            "registra NIX_HOME e o comando nix no PATH, e inicia nix init.\n"
-            "Argumentos extras vão para nix init, por exemplo:\n"
-            '  python scripts/bootstrap.py --wiki "C:/Notas/MinhaWiki"'
+            "Cria o ambiente virtual .venv, instala os pacotes do Nix e "
+            "registra NIX_HOME e o comando nix no PATH.\n"
+            "A wiki é cadastrada depois, na interface. Para abri-la, execute nix."
         )
         return
 
@@ -88,15 +87,10 @@ def main() -> None:
             "(README.md, seção Registrar NIX_HOME e o PATH à mão) e abra um terminal novo."
         )
 
-    print("Iniciando configuração (nix init)...")
-    try:
-        result = subprocess.run(
-            [str(python), "-P", "-m", "nix", "init", *extra],
-            cwd=ROOT,
-        )
-    except KeyboardInterrupt:
-        _fail("Instalação interrompida.", 130)
-    raise SystemExit(result.returncode)
+    if extra:
+        print("A instalação não cadastra a wiki. Isso é feito depois, na interface.")
+    print("Para abrir a interface, execute o comando nix.")
+    print("Se o comando nix não funcionar, feche o terminal, abra outro e tente de novo.")
 
 
 if __name__ == "__main__":

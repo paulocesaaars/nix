@@ -1,10 +1,9 @@
 #!/bin/sh
-# Instala o binário do Nix (sem Python), grava NIX_HOME, coloca bin no PATH
-# e inicia nix init se ainda não houver settings.db.
+# Instala o binário do Nix (sem Python), grava NIX_HOME e coloca bin no PATH.
+# A wiki é cadastrada depois, na interface.
 #
 # Uso:
 #   curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/install.sh | sh
-#   sh install.sh --vault "$HOME/Vault"
 #
 # Variáveis:
 #   NIX_VERSION   tag da release (com ou sem o v inicial). Vazio = última estável.
@@ -24,11 +23,8 @@ die() {
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   cat <<'EOF'
-Baixa o binário do Nix, grava NIX_HOME, coloca $NIX_HOME/bin no PATH e,
-se não houver settings.db, executa nix init.
-
-Argumentos extras vão para nix init, por exemplo:
-  sh install.sh --vault "$HOME/Vault"
+Baixa o binário do Nix, grava NIX_HOME e coloca $NIX_HOME/bin no PATH.
+A wiki é cadastrada depois, na interface.
 
 NIX_VERSION escolhe a release (ex.: 1.2.3 ou v1.2.3). Sem isso, vale a última estável.
 EOF
@@ -230,13 +226,11 @@ else
   echo "A instalação segue. Registre NIX_HOME e o PATH à mão (README.md, seção Registrar NIX_HOME e o PATH à mão) e abra um terminal novo." >&2
 fi
 
-if [ ! -f "$root/settings.db" ]; then
-  echo "nix-install: iniciando configuração (nix init)..."
-  "$root/bin/nix" init "$@"
-else
-  echo "settings.db já existe em $root. O init não foi repetido."
-  echo "Para reconfigurar: nix init --vault CAMINHO"
+if [ "$#" -gt 0 ]; then
+  echo "A instalação não cadastra a wiki. Isso é feito depois, na interface."
 fi
 
 echo
-echo "Abra um terminal novo. No MCP, command é o caminho absoluto de $root/bin/nix"
+echo "Para abrir a interface, execute o comando nix."
+echo "Se o comando nix não funcionar, feche o terminal, abra outro e tente de novo."
+echo "No MCP, command é o caminho absoluto de $root/bin/nix"
