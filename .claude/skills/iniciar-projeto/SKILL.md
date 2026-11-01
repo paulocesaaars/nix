@@ -17,10 +17,9 @@ vez**, depois que as skills já estiverem instaladas no projeto e antes de
 `especificar-projeto`. Se o `AGENTS.md` já for o modelo e os documentos de
 referência já existirem, diga que o projeto já foi iniciado e não refaça.
 Explicações ao usuário
-em **português (Brasil)**. Edita **apenas** `AGENTS.md`, `CLAUDE.md` e `HARNESS.md` e cria, se faltarem, os
-documentos de referência (`PRD.md`, `TDD.md`, `DESIGN.md`, `BDD.md` e a pasta
-`bdd/`), todos
-na raiz do repositório. Também confere e, com a confirmação do usuário, instala
+em **português (Brasil)**. Edita **apenas** `AGENTS.md`, `CLAUDE.md` e `HARNESS.md`, na raiz, e cria, se faltarem, os
+documentos de referência (`docs/PRD.md`, `docs/TDD.md`, `docs/DESIGN.md`, `docs/BDD.md` e a pasta
+`docs/bdd/`). Também confere e, com a confirmação do usuário, instala
 as ferramentas de apoio da máquina (passo 6).
 
 O modelo fica em [`assets/AGENTS.template.md`](assets/AGENTS.template.md), na
@@ -94,13 +93,13 @@ mantê-las no `AGENTS.md`, e só mova com a confirmação do usuário.
 
 ### 5. Documentos de referência
 
-O modelo aponta para `PRD.md` (produto), `TDD.md` (técnico), `DESIGN.md`
-(estilo visual) e `BDD.md` (índice dos casos de uso; os critérios de aceite em Gherkin ficam na pasta
-`bdd/`, um arquivo por caso de uso), aceitando nomes equivalentes.
+O modelo aponta para `docs/PRD.md` (produto), `docs/TDD.md` (técnico), `docs/DESIGN.md`
+(estilo visual) e `docs/BDD.md` (índice dos casos de uso; os critérios de aceite em Gherkin ficam na pasta
+`docs/bdd/`, um arquivo por caso de uso), aceitando nomes equivalentes.
 
 | Situação | Ação |
 |----------|------|
-| Não existe nem um equivalente | Crie o arquivo **vazio** na raiz (para o BDD, o `BDD.md` vazio e a pasta `bdd/` com um `.gitkeep`) |
+| Não existe nem um equivalente | Crie o arquivo **vazio** em `docs/` (para o BDD, o `docs/BDD.md` vazio e a pasta `docs/bdd/` com um `.gitkeep`) |
 | Existe (ou há um equivalente) | **Nunca** altere nem sobrescreva: o conteúdo é do projeto |
 
 Esses documentos nascem em branco e existem sempre. Quem os preenche é o
@@ -196,7 +195,7 @@ sem ela. Não insista nem tente alternativas arriscadas.
 - **AGENTS.md:** <criado | já atualizado | substituído | mesclado | mantido>
 - **CLAUDE.md:** <criado | já importava o AGENTS.md | importação adicionada>
 - **HARNESS.md:** <criado vazio | já existia, mantido>
-- **PRD.md / TDD.md / DESIGN.md / BDD.md e bdd/:** <criados vazios | já existiam, mantidos>
+- **docs/PRD.md / docs/TDD.md / docs/DESIGN.md / docs/BDD.md e docs/bdd/:** <criados vazios | já existiam, mantidos>
 - **CLI do host (`gh`):** <ok e autenticado | instalado agora | instalado, falta `gh auth login` | ausente: sugerido>
 - **Context7:** <ok | instalado agora (reinicie o agente) | ausente: sugerido>
 - **Octocode:** <ok | instalado agora (reinicie o agente) | ausente: sugerido>

@@ -75,7 +75,7 @@ o hash completo; o `HARNESS.md` pode indicar outro caminho). Ordem de escolha:
 MARK=.agents/last-reviewed-commit
 BASE=$(cat "$MARK" 2>/dev/null)
 if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
-  BASE=$(git log -1 --format=%H -- PRD.md TDD.md README.md)
+  BASE=$(git log -1 --format=%H -- docs/PRD.md docs/TDD.md README.md)
 fi
 if [ -n "$BASE" ]; then git log --oneline "$BASE"..HEAD; fi
 ```
@@ -86,7 +86,7 @@ atual dos arquivos e documentos; não use um intervalo Git com base vazia.
 Se `BASE` for igual a `HEAD` e não houver mudanças não commitadas fora dos
 documentos, informe que a documentação já está em dia e encerre.
 
-- Se `PRD.md`, `TDD.md` ou `README.md` tiverem alterações não commitadas, elas
+- Se `docs/PRD.md`, `docs/TDD.md` ou `README.md` tiverem alterações não commitadas, elas
   são edições em andamento do usuário: **preserve-as** e trabalhe sobre elas.
 
 ### 2. Levantar o que mudou

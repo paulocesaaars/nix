@@ -17,11 +17,11 @@ documentos que existirem; o que o projeto não tem não se aplica.
 
 | Necessidade | Documento |
 |-------------|-----------|
-| Escopo, funcionalidades, regras de negócio, roadmap | [`PRD.md`](PRD.md) |
-| Arquitetura, componentes, dependências, configuração, segurança | [`TDD.md`](TDD.md) |
-| Estilo visual: cores, tipografia, espaçamento, raios, elevação, componentes, layout | [`DESIGN.md`](DESIGN.md) |
+| Escopo, funcionalidades, regras de negócio, roadmap | [`PRD.md`](docs/PRD.md) |
+| Arquitetura, componentes, dependências, configuração, segurança | [`TDD.md`](docs/TDD.md) |
+| Estilo visual: cores, tipografia, espaçamento, raios, elevação, componentes, layout | [`DESIGN.md`](docs/DESIGN.md) |
 | Regras específicas deste projeto, que complementam este arquivo | [`HARNESS.md`](HARNESS.md) |
-| Critérios de aceite em Gherkin e rastreabilidade dos cenários, quando BDD está preenchido | [`BDD.md`](BDD.md) (índice) e [`bdd/`](bdd) |
+| Critérios de aceite em Gherkin e rastreabilidade dos cenários, quando BDD está preenchido | [`BDD.md`](docs/BDD.md) (índice) e [`bdd/`](docs/bdd) |
 
 Este arquivo vale para qualquer projeto. Leia também o `HARNESS.md`, se
 existir, e siga **tudo** o que estiver nele: ele traz as regras específicas
@@ -79,12 +79,12 @@ prevalece sobre qualquer outra deste documento.
    camadas, dependências ou configuração.
 3. Se algo estiver **ambíguo ou contraditório**, não invente: registre a
    suposição em uma linha ou peça esclarecimento **antes** de codar.
-4. Leia [`DESIGN.md`](DESIGN.md) quando a tarefa envolver interface, layout ou
+4. Leia [`DESIGN.md`](docs/DESIGN.md) quando a tarefa envolver interface, layout ou
    aparência.
 
 ### Estilo visual
 
-Interface, layout e aparência seguem [`DESIGN.md`](DESIGN.md). Esta regra vale
+Interface, layout e aparência seguem [`DESIGN.md`](docs/DESIGN.md). Esta regra vale
 para qualquer alteração visível ao usuário.
 
 - Use os tokens e componentes definidos lá: cores, tipografia, espaçamento,
@@ -100,8 +100,8 @@ para qualquer alteração visível ao usuário.
 
 ### Critérios de aceite (BDD)
 
-Esta seção vale quando `BDD.md` está preenchido com um índice de cenários e
-há cenários em `bdd/`. Arquivos vazios apenas demonstram a estrutura e não
+Esta seção vale quando `docs/BDD.md` está preenchido com um índice de cenários e
+há cenários em `docs/bdd/`. Arquivos vazios apenas demonstram a estrutura e não
 ativam BDD. Os cenários usam Gherkin e IDs estáveis; testes, quando solicitados,
 podem referenciar esses IDs para rastreabilidade. Cenários `@manual` compõem
 um checklist, não uma obrigação de automatização.

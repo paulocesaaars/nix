@@ -64,7 +64,7 @@ que cada cenário exercita.
 
 | Dado | Onde descobrir |
 |------|----------------|
-| Índice e cenários | `BDD.md` na raiz e os arquivos de `bdd/`. Sem `BDD.md`, pare: o projeto não usa este BDD |
+| Índice e cenários | `BDD.md` e `bdd/` no caminho do `AGENTS.md` (aqui, `docs/`). Sem esse índice, pare: o projeto não usa este BDD |
 | ID, `@manual` e marcação no teste | Seção de convenções do `BDD.md`; na falta dela, o `AGENTS.md`. Confirme com um teste que já cita um ID |
 | Verificador de cobertura | Comando citado no `BDD.md`, no CI, no Makefile, no manifesto ou em `scripts/` |
 | Runner, pasta e marcadores | Manifesto, Makefile, CI e a documentação técnica |
@@ -73,8 +73,8 @@ que cada cenário exercita.
 
 Pare sem gravar nada quando:
 
-- `BDD.md` está ausente ou vazio, ou não há cenários preenchidos em `bdd/`;
-- o índice e a pasta `bdd/` divergem, ou há ID de cenário repetido — o
+- `docs/BDD.md` está ausente ou vazio, ou não há cenários preenchidos em `docs/bdd/`;
+- o índice e a pasta `docs/bdd/` divergem, ou há ID de cenário repetido — o
   verificador costuma apontar isso; peça a correção e não invente o índice;
 - a convenção de marcação não aparece no `BDD.md` nem num teste existente.
 
