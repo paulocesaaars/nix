@@ -1,6 +1,6 @@
 # TDD — Nix
 
-Especificações técnicas do Nix, servidor MCP que expõe vaults do Obsidian a agentes de desenvolvimento.
+Especificações técnicas do Nix, servidor MCP que expõe wikis em Markdown a agentes de desenvolvimento.
 
 Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 
@@ -11,7 +11,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 1. **Núcleo independente de interface.** Toda a lógica vive em `nix.core`. CLI, MCP e a interface local são adaptadores finos que chamam os mesmos serviços. Nenhuma regra de negócio é duplicada.
 2. **Local por padrão.** Embeddings e banco vetorial rodam na máquina do usuário, sem custo e sem enviar o vault para terceiros. O Nix não faz chamadas remotas.
 3. **Indexação sob consentimento.** Não existe watcher de arquivos. O vault só é varrido quando o usuário pede (`nix sync` / ferramenta `sync_index`) ou quando as próprias ferramentas escrevem (write-through).
-4. **O vault é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar a pasta daquele vault em `index.data_dir` (padrão `.nix/data/<nome>`) e rodar `nix sync --full --vault NOME` reconstrói tudo.
+4. **A wiki é a fonte da verdade.** O índice é um artefato derivado e descartável: apagar a pasta daquela wiki em `index.data_dir` (padrão `.nix/data/<nome>`) e rodar `nix sync --full --wiki NOME` reconstrói tudo.
 5. **Ferramentas antes de prompts.** A capacidade exposta ao cliente é um conjunto pequeno e bem tipado de ferramentas, definido uma vez em `core/tools/registry.py`.
 6. **Falhar de forma explícita.** Erros de configuração, defasagem de índice e ausência de resultados são comunicados, nunca mascarados.
 
@@ -41,7 +41,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 graph TB
     subgraph Interfaces
         Client["Clientes MCP<br/>stdio"]
-        CLI["CLI<br/>init / vault / config / sync / status / doctor / ui"]
+        CLI["CLI<br/>init / wiki / config / sync / status / doctor / ui / brain / run"]
         UI["Interface local<br/>nix ui"]
         MCP["Servidor MCP<br/>stdio"]
     end
@@ -50,7 +50,7 @@ graph TB
         TOOLS["Toolbelt<br/>registry.py"]
         RAG["Serviço de recuperação<br/>híbrido"]
         IDX["Serviço de indexação<br/>sync incremental / write-through"]
-        VAULT["Serviço de vault<br/>leitura, escrita, confinamento"]
+        VAULT["Serviço de wiki<br/>leitura, escrita, confinamento"]
         CFG["Configuração<br/>settings.db + env"]
     end
 
@@ -81,9 +81,9 @@ graph TB
     CFG -.-> Core
 ```
 
-Um processo MCP (ou `nix ui`) atende de 1 a 100 vaults. `RuntimeHost` guarda um `Runtime` por nome, criado na primeira resolução e fechado quando o vault sai do `settings.db`. `resolve(nome | None)` abre um vault (nome omitido usa o padrão). `resolve_many(nome | lista | "*")` abre vários; nome desconhecido lista os cadastrados e diz qual é o padrão. O modelo de embedding é um só (`index.embedding_model`): o `Embedder` é do processo, com `threading.RLock` no carregamento e no `embed`, para dois vaults não rodarem inferência ao mesmo tempo.
+Um processo MCP (ou `nix ui`) atende de 1 a 100 wikis. `RuntimeHost` guarda um `Runtime` por nome, criado na primeira resolução e fechado quando a wiki sai do `settings.db`. `resolve(nome | None)` abre uma wiki (nome omitido usa o padrão). `resolve_many(nome | lista | "*")` abre várias; nome desconhecido lista as cadastradas e diz qual é o padrão. O modelo de embedding é um só (`index.embedding_model`): o `Embedder` é do processo, com `threading.RLock` no carregamento e no `embed`, para duas wikis não rodarem inferência ao mesmo tempo.
 
-### 3.1 Pastas por vault
+### 3.1 Pastas por wiki
 
 `index.data_dir` e `safety.backup_dir` continuam globais. O que é de um vault fica numa subpasta com o nome cadastrado:
 
@@ -93,7 +93,7 @@ Um processo MCP (ou `nix ui`) atende de 1 a 100 vaults. `RuntimeHost` guarda um 
 | Backups | `{safety.backup_dir}/<nome>/` (padrão `.nix/backups/<nome>/`) |
 | Trava de sync e write-through | `{app_root}/.nix/sync-<nome>.lock` |
 
-A trava é por vault: um pode sincronizar enquanto outro é lido. Renomear o vault não move índice nem backups; a CLI avisa para rodar `nix sync --full --vault NOME` se a busca ficar vazia. Remover o vault do cadastro também deixa essas pastas no disco.
+A trava é por vault: um pode sincronizar enquanto outro é lido. Renomear o vault não move índice nem backups; a CLI avisa para rodar `nix sync --full --wiki NOME` se a busca ficar vazia. Remover o vault do cadastro também deixa essas pastas no disco.
 
 O vault migrado do esquema 1 é a exceção: o índice (`index.db` e o chroma) continua na raiz de `{index.data_dir}` e os backups na raiz de `{safety.backup_dir}`, para a busca e os backups não ficarem vazios. Vaults cadastrados depois usam a subpasta do nome.
 
@@ -101,15 +101,16 @@ O vault migrado do esquema 1 é a exceção: o índice (`index.db` e o chroma) c
 
 ```
 nix/
-├── install.bat / install.sh / install.ps1  # baixa o binário, confere SHA-256, registra PATH e inicia `nix init`
+├── install.bat / install.sh / install.ps1  # baixa o binário, confere SHA-256, registra PATH e pede para executar `nix`
 ├── uninstall.bat / uninstall.sh / uninstall.ps1  # remove PATH/NIX_HOME, o binário, .nix, settings.db e o cache onefile/hook
 ├── bin/nix / bin/nix.cmd   # shims só do checkout de desenvolvimento (acham o .venv)
 ├── bin/env.sh / bin/env.cmd / bin/env.ps1  # ativação manual do PATH no checkout
 ├── __main__.py             # `python -m nix` a partir do projeto pai (pasta nix/)
-├── scripts/bootstrap.py    # venv + pip + init (desenvolvimento)
+├── scripts/bootstrap.py    # venv + pip + PATH (desenvolvimento); não roda nix init
 ├── scripts/build_frozen.py # Nuitka onefile, Python 3.12, na plataforma local
 ├── scripts/smoke_frozen.py # gate de --version, doctor --json e nix-hook
 ├── scripts/check_bdd.py    # cobertura dos cenários de docs/bdd/ pelos testes
+├── scripts/release_registry.py # MCPB por plataforma e a ficha server.json
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
 ├── scripts/uninstall.py    # desfaz PATH, artefatos do checkout e o cache onefile/hook
 ├── nix.jpeg                # foto da Nix (mascote no README)
@@ -125,6 +126,10 @@ nix/
 │   ├── BDD.md              # índice dos casos de uso do BDD
 │   ├── bdd/                # critérios de aceite em Gherkin, um arquivo por caso de uso (um teste por cenário)
 │   └── DESIGN.md           # estilo visual da CLI e da interface local
+├── site/                   # guia publicado no GitHub Pages (index.html, PDF, ícone)
+├── .github/workflows/
+│   ├── release.yml         # tag vX.Y.Z: checagens, binários, MCP Registry
+│   └── pages.yml           # push na main que altera site/ publica o guia
 ├── tests/                  # pytest; conftest.py isola NIX_HOME e troca o embedder
 ├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
 ├── HARNESS.md              # regras específicas deste repositório
@@ -139,24 +144,23 @@ nix/
     └── nix/
         ├── __init__.py             # versão: pyproject.toml no checkout; metadata no binário
         ├── __main__.py             # python -m nix (pacote instalado)
-        ├── skills/                 # reservado; o Mega Brain não instala skill de produto
         ├── config/
         │   ├── schema.py           # modelos Pydantic da configuração e textos de ajuda
         │   ├── embedding_models.py # catálogo técnico dos embeddings (validação + FastEmbed)
         │   ├── embedding_present.py # textos de apresentação dos modelos (CLI e interface)
         │   ├── store.py            # settings.db: valores, histórico, versão do esquema
         │   ├── editor.py           # gravação validada (CLI e interface)
-        │   ├── loader.py           # precedência env > banco > padrão; vaults vêm da tabela
-        │   ├── executables.py      # no binário publicado, aponta o hook para o irmão `nix-hook`
+        │   ├── loader.py           # precedência env > banco > padrão; wikis vêm da tabela
+        │   ├── executables.py      # no binário, o hook acha o `nix` irmão ou em NIX_HOME/bin
         │   └── paths.py            # app_root; no binário, NIX_HOME ou a pasta de dados da plataforma
         ├── core/
-        │   ├── vault/
+        │   ├── wiki/
         │   │   ├── reader.py       # varredura, filtros, leitura segura
         │   │   ├── writer.py       # escrita atômica, backup, YAML, confinamento
         │   │   ├── markdown.py     # frontmatter, cabeçalhos, wikilinks, tags, links
         │   │   ├── frontmatter_edit.py  # edição linha a linha do YAML
         │   │   ├── paths.py        # normalização e validação de caminhos
-        │   │   └── longterm.py     # remember → notas no vault
+        │   │   └── longterm.py     # remember → notas na wiki
         │   ├── index/
         │   │   ├── store.py        # SQLite: arquivos, chunks, metadados
         │   │   ├── chunker.py      # divisão consciente da estrutura
@@ -185,7 +189,7 @@ nix/
         │   │   ├── store.py        # brain.db: projects, sessions, observations, handoffs, messages, tokens, profile
         │   │   ├── capture.py      # consentimento: ligado, hook e .nix.toml
         │   │   ├── pages.py        # página da sessão por regras
-        │   │   ├── worker.py       # gravação destacada no session-end e idle (padrão 0)
+        │   │   ├── worker.py       # no session-end, o nix-hook abre o binário completo (`brain work`)
         │   │   ├── briefing.py     # perfil, handoff, resumo, mensagens, sessão interrompida
         │   │   ├── handoff.py      # um aberto por projeto; accept reivindica uma vez
         │   │   ├── profile.py      # listas EN/PT, min_projects, lápide
@@ -197,20 +201,20 @@ nix/
         │   │   ├── history/        # leitores v1: Claude Code e Codex
         │   │   └── paths.py        # página, perfil e URI somente leitura do SQLite
         │   ├── runtime.py          # RuntimeHost: resolve / resolve_many, Embedder compartilhado
-        │   ├── admin/              # init, doctor, VaultService, agent_hooks, agent_skills, empty_dirs
+        │   ├── admin/              # init, doctor, WikiService, agent_hooks, empty_dirs
         │   └── tools/
-        │       ├── args.py         # VaultArgs (um nome) e MultiVaultArgs (nome, lista ou "*")
+        │       ├── args.py         # WikiArgs (um nome) e MultiWikiArgs (nome, lista ou "*")
         │       ├── registry.py     # definição canônica das ferramentas
         │       ├── search.py
         │       ├── notes.py
         │       ├── maintenance.py
         │       └── brain.py        # ferramentas brain_*; host_only; só no MCP com brain.enabled
         ├── cli/
-        │   ├── app.py              # entrypoint Typer (sem args → servidor stdio)
+        │   ├── app.py              # entrypoint Typer (terminal sem args → interface; senão, stdio)
         │   ├── ascii-art.txt
         │   ├── commands/
         │   │   ├── setup.py        # init, doctor
-        │   │   ├── wiki_cmds.py    # nix wiki list/add/rename/remove/default/path/set; `nix vault` avisa e delega
+        │   │   ├── wiki_cmds.py    # nix wiki list/add/rename/remove/default/path/set
         │   │   ├── config_cmds.py  # config list/get/set/unset/history/undo
         │   │   ├── ui_cmd.py       # nix ui
         │   │   ├── brain_cmds.py   # nix brain enable/status/hooks/handoff/profile/work
@@ -222,7 +226,8 @@ nix/
         ├── mcp/
         │   ├── server.py           # FastMCP/MCPServer stdio; recarrega a config entre chamadas
         │   ├── traffic.py          # log de interações MCP (arquivo e .nix/traffic.db)
-        │   └── resources.py        # nix://note/… no padrão; nix://vault/{name}/note/…
+        │   ├── registry.py         # MCPB da release e a ficha server.json
+        │   └── resources.py        # nix://note/… no padrão; nix://wiki/{name}/note/…
         ├── web/                    # nix ui: Starlette, templates Jinja2, HTMX e nix.css vendidos
         │   └── routes/             # ops, wiki, integration, maintenance, brain
         └── observability/
@@ -230,7 +235,7 @@ nix/
             └── stdio.py            # isola stdout de bibliotecas
 ```
 
-Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `settings.db`.
+Quem usa o Nix instala um binário único (Nuitka, arquivo só, sem Python na máquina). O instalador (`install.ps1` / `install.sh`, e `install.bat` que delega ao PowerShell) baixa o artefato da release, confere o SHA-256, grava `NIX_HOME` e pede para executar `nix`. Não roda `nix init`. A tela Wikis cadastra a pasta; a marca que libera o MCP e o `nix ui` só o `nix init` grava. O desinstalador em shell puro desfaz o PATH e apaga o binário, `.nix/` e `settings.db`.
 
 O checkout de desenvolvimento continua com `venv` e `pip`: `python scripts/bootstrap.py` cria `.venv`, instala `requirements.txt` e o pacote em modo editável (`pip install -e .`). `scripts/uninstall.py` desfaz esse checkout. O `pyproject.toml` se limita aos metadados do pacote e à declaração do *entry point* `nix`. No checkout, com o pacote em `src/nix`, `nix.__version__` lê `[project].version` desse arquivo, para uma instalação editável não mostrar metadata velho. Fora do checkout, vale o metadata do pacote instalado. O binário é compilado por `scripts/build_frozen.py` com Python 3.12.
 
@@ -321,7 +326,7 @@ A configuração `brain.*` fica no `settings.db`: `enabled` (padrão falso), `wi
 
 ### 5.4 Migração de nomes
 
-O `settings.db` sobe para o esquema 3: a seção antiga `vault` é copiada e a tabela `vaults` é renomeada para `wikis`, sem alterar pastas de índice nem de backup. O meta `vault_path` do índice ainda é lido; sincronizações novas gravam `wiki_path`. Por uma versão, os nomes `vault` na CLI, no MCP e no recurso `nix://vault/...` devolvem o resultado normal e um aviso.
+O `settings.db` sobe para o esquema 3: a seção antiga `vault` é copiada e a tabela `vaults` é renomeada para `wikis`, sem alterar pastas de índice nem de backup. O meta `vault_path` do índice ainda é lido; sincronizações novas gravam `wiki_path`.
 
 ## 6. Pipeline de indexação
 
@@ -430,49 +435,49 @@ graph LR
 - **Expansão de vizinhos** recupera os chunks `ordinal ± 1` dos melhores resultados.
 - **Corte de score** descarta trechos abaixo de `max(min_score, melhor × 0.65)`.
 
-`search_notes` sempre passa por `search_many`, com um vault ou com vários. A consulta é vetorizada uma vez. Cada vault roda a híbrida com `candidate_pool` e os filtros, sem corte final. Os trechos são juntados, ordenados pelo score, e então `min_score` e `top_k` valem para o conjunto. Falha num vault vai para `vault_errors`, com a ação corretiva, e os outros seguem. Cada trecho traz o nome do vault.
+`search_notes` sempre passa por `search_many`, com uma wiki ou com várias. A consulta é vetorizada uma vez. Cada wiki roda a híbrida com `candidate_pool` e os filtros, sem corte final. Os trechos são juntados, ordenados pelo score, e então `min_score` e `top_k` valem para o conjunto. Falha numa wiki vai para `wiki_errors`, com a ação corretiva, e as outras seguem. Cada trecho traz o nome da wiki.
 
-Cada trecho devolvido por `search_notes` inclui `vault`, `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP.
-
-Notas de sessão e busca (RF-107): com `sessions.enabled`, `sessions.search_default = excluir` e sem `folder` explícito, `RetrievalService` descarta a pasta de sessões no vault que as recebe, **antes** do corte do top-k: o pool denso e o léxico buscam mais candidatos (4×) e o filtro roda antes de `finish`. Com `folder` na pasta de sessões, ou com `incluir`, elas entram.
+Cada trecho devolvido por `search_notes` inclui `wiki`, `rel_path`, `title`, `heading_path`, `content` e `citation` no formato `[[Título]]` / `[[Título#Seção]]` (RN-04). A síntese em linguagem natural é responsabilidade do cliente MCP. A busca comum não esconde as páginas do Mega Brain: quem quiser só elas usa `brain_query`.
 
 ## 8. Ferramentas
 
-Definidas uma única vez em `core/tools/registry.py` (`SPECS`, 20 ferramentas, mais 3 de sessão que só são expostas com `sessions.enabled`: 23 no total) e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso), um vault por vez.
+Definidas uma única vez em `core/tools/registry.py` (`SPECS`: 20 ferramentas de wiki; com `brain.enabled`, mais 18 `brain_*` — 38 no total) e registradas no servidor MCP. A CLI de bootstrap chama `call_tool` para `index_status`; `nix sync` usa o mesmo `Indexer.sync` da ferramenta (com barra de progresso), uma wiki por vez.
 
-`VaultArgs` é um nome, ou o padrão se o campo vier vazio. `MultiVaultArgs` aceita um nome, uma lista ou `"*"`. A comparação ignora maiúsculas. Escrita, leitura de uma nota, links e insights recusam lista e `"*"`. Busca, `list_notes`, `list_all_tags`, `index_status` e `sync_index` aceitam vários. `list_vaults` não recebe vault: devolve todos. A resposta traz `vault` (um nome ou a lista dos consultados).
+`WikiArgs` é um nome, ou o padrão se o campo vier vazio. `MultiWikiArgs` aceita um nome, uma lista ou `"*"`. A comparação ignora maiúsculas. Escrita, leitura de uma nota, links e insights recusam lista e `"*"`. Busca, `list_notes`, `list_all_tags`, `index_status` e `sync_index` aceitam várias. `list_wikis` não recebe wiki: devolve todas. A resposta traz `wiki` (um nome ou a lista das consultadas).
 
 | Ferramenta | Assinatura | Efeito no índice |
 | --- | --- | --- |
-| `search_notes` | `(query, top_k=5, folder?, tags?, date_from?, date_to?, vault?) -> {results, vault_errors}` | — ; junção em `search_many` |
-| `read_note` | `(rel_path, vault?) -> NoteContent` | — |
-| `get_note_outline` | `(rel_path, vault?) -> NoteOutline` (título, chaves, linhas, headings) | — |
-| `read_note_lines` | `(rel_path, start_line?, end_line?, heading?, vault?) -> NoteLines` | — |
-| `list_notes` | `(folder?, tag?, limit=50, vault?) -> {notes}` | — ; o limite vale **por vault** e as listas são juntadas |
-| `list_all_tags` | `(folder?, limit=200, vault?) -> {tags}` | — ; soma as contagens de cada vault e só então aplica o limite; o detalhe por vault permanece |
-| `get_linked_notes` | `(rel_path, direction=both, vault?) -> list[NoteRef]` | — |
-| `create_note` | `(rel_path, content, frontmatter?, vault?) -> WriteResult` | write-through; pasta padrão `default_new_note_folder` (`Inbox`) se o caminho não tiver `/` |
-| `append_to_note` | `(rel_path, content, section?, vault?) -> WriteResult` | write-through |
-| `update_note` | `(rel_path, content, mode=replace\|patch\|prepend, confirm, vault?) -> WriteResult` | write-through; `prepend` não exige `confirm` |
-| `update_frontmatter` | `(rel_path, set?, remove?, vault?) -> WriteResult` | write-through; só a chave alterada é reemitida |
-| `manage_tags` | `(rel_path, add?, remove?, vault?) -> WriteResult` | write-through; tags inline do corpo ficam |
-| `move_note` | `(src, dest, update_links=true, overwrite, confirm, vault?) -> WriteResult` | `after_move`: remove o id antigo, indexa o caminho novo e as notas reescritas |
-| `move_file` | `(src, dest, update_links=true, overwrite, confirm, vault?) -> WriteResult` | igual a `move_note` para o id; PDF só entra no índice com `index.index_attachments` |
-| `delete_note` | `(rel_path, confirm, vault?) -> WriteResult` | remove do índice |
-| `sync_index` | `(full=False, dry_run=False, vault?) -> {reports}` | um vault por vez; um relatório por vault |
-| `index_status` | `(vault?) -> {vaults}` | — ; um status por vault |
-| `vault_insights` | `(kind, limit=20, vault?) -> insights` | — |
-| `remember` | `(content, title?, vault?) -> WriteResult` | write-through em `longterm_folder` do vault |
-| `list_vaults` | `() -> {vaults}` | — ; nome, caminho, padrão e se o índice está desatualizado |
-| `list_sessions` | `(project?, agent?, status?, limit=20) -> {project, sessions}` | — ; lê `sessions.db`, não abre vault; só com `sessions.enabled` |
-| `read_session` | `(session, project?, max_chars=8000) -> {session, events, truncated}` | — ; eventos do fim para o começo, ferramentas marcadas como já executadas |
-| `session_handoff` | `(accept=true, agent?, project?) -> {handoff, state, note_path}` | com `accept=true`, grava a nota da sessão no vault (write-through) e entrega o handoff uma única vez; com `accept=false` só mostra, sem gravar nem consumir; `agent` tira a sessão em curso do chamador da escolha |
+| `search_notes` | `(query, top_k=5, folder?, tags?, date_from?, date_to?, wiki?) -> {results, wiki_errors}` | — ; junção em `search_many` |
+| `read_note` | `(rel_path, wiki?) -> NoteContent` | — |
+| `get_note_outline` | `(rel_path, wiki?) -> NoteOutline` (título, chaves, linhas, headings) | — |
+| `read_note_lines` | `(rel_path, start_line?, end_line?, heading?, wiki?) -> NoteLines` | — |
+| `list_notes` | `(folder?, tag?, limit=50, wiki?) -> {notes}` | — ; o limite vale **por wiki** e as listas são juntadas |
+| `list_all_tags` | `(folder?, limit=200, wiki?) -> {tags}` | — ; soma as contagens de cada wiki e só então aplica o limite; o detalhe por wiki permanece |
+| `get_linked_notes` | `(rel_path, direction=both, wiki?) -> list[NoteRef]` | — |
+| `create_note` | `(rel_path, content, frontmatter?, wiki?) -> WriteResult` | write-through; pasta padrão `default_new_note_folder` (`Inbox`) se o caminho não tiver `/` |
+| `append_to_note` | `(rel_path, content, section?, wiki?) -> WriteResult` | write-through |
+| `update_note` | `(rel_path, content, mode=replace\|patch\|prepend, confirm, wiki?) -> WriteResult` | write-through; `prepend` não exige `confirm` |
+| `update_frontmatter` | `(rel_path, set?, remove?, wiki?) -> WriteResult` | write-through; só a chave alterada é reemitida |
+| `manage_tags` | `(rel_path, add?, remove?, wiki?) -> WriteResult` | write-through; tags inline do corpo ficam |
+| `move_note` | `(src, dest, update_links=true, overwrite, confirm, wiki?) -> WriteResult` | `after_move`: remove o id antigo, indexa o caminho novo e as notas reescritas |
+| `move_file` | `(src, dest, update_links=true, overwrite, confirm, wiki?) -> WriteResult` | igual a `move_note` para o id; PDF só entra no índice com `index.index_attachments` |
+| `delete_note` | `(rel_path, confirm, wiki?) -> WriteResult` | remove do índice |
+| `sync_index` | `(full=False, dry_run=False, wiki?) -> {reports}` | uma wiki por vez; um relatório por wiki |
+| `index_status` | `(wiki?) -> {wikis}` | — ; um status por wiki |
+| `wiki_insights` | `(kind, limit=20, wiki?) -> insights` | — |
+| `remember` | `(content, title?, wiki?) -> WriteResult` | write-through em `longterm_folder` da wiki |
+| `list_wikis` | `() -> {wikis}` | — ; nome, caminho, padrão e se o índice está desatualizado |
+| `brain_query` | `(query, project?, scope?, path_prefix?, tag?, kind?)` | — ; só com `brain.enabled`; busca na wiki do Mega Brain e nas observações |
+| `brain_read_page` / `brain_recent_pages` / `brain_write_page` / `brain_patch_page` / `brain_delete_page` | caminho relativo na wiki do Mega Brain | write-through nas que gravam; `brain_delete_page` exige `confirm=true` |
+| `brain_briefing` / `brain_status` / `brain_feedback` / `brain_read_session_observations` | projeto atual | — ; o briefing não consome o handoff |
+| `brain_handoff_create` / `brain_handoff_list` / `brain_handoff_accept` / `brain_handoff_cancel` | um aberto por projeto | `accept` reivindica uma única vez |
+| `brain_message_send` / `brain_message_list` / `brain_message_pop` / `brain_message_cancel` | fila do projeto | `pop` entrega uma única vez |
 
 Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34). `move_note` e `move_file` não levam `destructiveHint`; sobrescrever o destino ainda exige `overwrite=true` e `confirm=true`. `read_note_lines` devolve no máximo 400 linhas (`truncated`, `next_start_line`). As linhas de `search_notes`, do outline e de `read_note_lines` são do arquivo bruto, com o frontmatter incluído.
 
-`vault_insights` (órfãs, duplicatas, sugestão de wikilinks, resumo) usa o índice SQLite. A sugestão de links não relê o vault.
+`wiki_insights` (órfãs, duplicatas, sugestão de wikilinks, resumo) usa o índice SQLite. A sugestão de links não relê a wiki. `brain_write_page`, `brain_patch_page` e `brain_delete_page` também levam `destructiveHint`.
 
-Todas as ferramentas recebem `rel_path` relativo ao vault. `core/vault/paths.py` resolve, normaliza, rejeita `..`, caminhos absolutos e links simbólicos que escapem do vault (RN-03).
+Todas as ferramentas de nota recebem `rel_path` relativo à wiki. `core/wiki/paths.py` resolve, normaliza, rejeita `..`, caminhos absolutos e links simbólicos que escapem da wiki (RN-03).
 
 ## 9. Interfaces
 
@@ -485,46 +490,52 @@ install.ps1 / install.sh          # release estável (ou NIX_VERSION) → SHA-25
 install.bat                       # delega a install.ps1
 uninstall.ps1 / uninstall.sh      # PATH, binário, settings.db, .nix e cache onefile/hook (não o vault)
 uninstall.bat                     # delega a uninstall.ps1
-scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path → nix init
+scripts/bootstrap.py              # só desenvolvimento: .venv → pip → register_path; não roda nix init
 scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12; também gera o nix-hook
 scripts/smoke_frozen.py           # --version só com a versão; doctor --json com cada Import em ok; nix-hook em 300 ms
 ```
 
 O binário publicado cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
 
-O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive`. O `.gitattributes` usa `export-ignore` para tirar skills de desenvolvimento, documentação, testes, exemplos, configuração de editor e de CI e os scripts que só compilam ou conferem. Permanecem o pacote, o manifesto, as dependências de execução, os wrappers, os instaladores e a skill de produto que o `nix skills install` copia. A compilação da release usa o checkout inteiro, não esse zip.
+O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive`. O `.gitattributes` usa `export-ignore` para tirar skills de desenvolvimento, documentação, testes, exemplos, configuração de editor e de CI e os scripts que só compilam ou conferem. Permanecem o pacote, o manifesto, as dependências de execução, os wrappers e os instaladores. A compilação da release usa o checkout inteiro, não esse zip.
 
-`NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. Argumentos extras (`--vault PATH`, `--force`) vão para `nix init` só quando `settings.db` ainda não existe. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
+O mesmo job monta um `.mcpb` por plataforma (`scripts/release_registry.py`) e a ficha `server.json` (`io.github.paulocesaaars/nix`). Os dois sobem na release. Em seguida o `mcp-publisher` publica a ficha no MCP Registry, com login OIDC do GitHub. O guia em `site/` sai por outro workflow: push na `main` que altera `site/` publica `https://paulocesaaars.github.io/nix/`.
+
+`NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. A instalação não cadastra a wiki. Ao terminar, pede para executar `nix` e, se o comando não funcionar, fechar e abrir o terminal. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
 O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação. Apaga também o cache de extração (`onefile-*` e `hook-*` em `{CACHE_DIR}/nix` e na pasta da instalação) e, se a pasta da instalação ficar vazia, a pasta. No Linux e no macOS esse cache não é a pasta da instalação; só entram diretórios com esses prefixos, para não apagar outros arquivos em `~/.cache/nix`. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração. O vault não é alterado. O modelo no cache do Hugging Face fica: pode ser compartilhado com outros programas.
 
 No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `settings.db` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
 
 ```
-nix                           # inicia o servidor MCP stdio
-nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]
-                              # pergunta (ou recebe) o primeiro vault; nome padrão Default
+nix                           # terminal (stdin TTY): abre a interface, mesmo sem nix init
+                              # sem terminal: servidor MCP stdio, que exige nix init
+nix init [--name NOME] [--wiki PATH] [--embedding-model NOME] [--force]
+                              # pergunta (ou recebe) a primeira wiki; nome padrão Default
                               # sem --force, configuração existente só atualiza o caminho do padrão
-                              # --name com vaults já cadastrados pede `nix vault add`
-nix vault list|add|rename|remove|default|path|set
+                              # --name com wikis já cadastradas pede `nix wiki add`
+                              # grava a marca initialized, que o MCP e o nix ui exigem
+nix wiki list|add|rename|remove|default|path|set
                               # cadastro; rename não move índice nem backups
-                              # path troca a pasta; set grava include/exclude e as pastas daquele vault
+                              # path troca a pasta; set grava include/exclude e as pastas daquela wiki
 nix config list|get|set|unset|history|undo
-nix sync [--full] [--dry-run] [--json] [--vault NOME]... [--all]
-nix status [--json] [--vault NOME]... [--all]
+nix sync [--full] [--dry-run] [--json] [--wiki NOME]... [--all]
+nix status [--json] [--wiki NOME]... [--all]
                               # status via call_tool("index_status")
-nix doctor [--json]           # relatório de todos os vaults; --json serializa o DoctorReport
+nix doctor [--json]           # relatório de todas as wikis; --json serializa o DoctorReport
 nix ui [--no-browser] [--port N]
                               # interface local; exige nix init
+nix brain enable|status|hooks|handoff|profile
+nix run AGENTE [--no-autowire] [--project PASTA]
 ```
 
-`--vault` em `sync` e `status` pode repetir. `--all` percorre todos, em sequência. Os dois juntos são recusados. Sem nenhum dos dois, vale o vault padrão. `--json` em `sync` e `status` emite o relatório em formato estruturado, com um item por vault. `nix doctor --json` serializa o relatório de diagnóstico (ambiente, configuração e checagens, entre elas uma por vault). Erros de domínio (`NixError`) saem no stderr, sem traceback. Fora de `init` e `doctor`, os comandos falham com ação corretiva se o `nix init` ainda não rodou. `nix vault remove` recusa o padrão até `nix vault default` apontar outro, e recusa o último vault. `nix vault rename` preserva a grafia nova e avisa para `nix sync --full --vault NOME` se a busca ficar vazia. `nix vault path` troca a pasta. `nix vault set` grava `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` ou `longterm_folder`; listas e objetos entram como JSON. Nome no formato `AAAAMMDDTHHMMSS` é recusado. Renomear, remover, `path` e `set` são recusados enquanto a sincronização daquele vault não termina.
+`--wiki` em `sync` e `status` pode repetir. `--all` percorre todas, em sequência. Os dois juntos são recusados. Sem nenhum dos dois, vale a wiki padrão. `--json` em `sync` e `status` emite o relatório em formato estruturado, com um item por wiki. `nix doctor --json` serializa o relatório de diagnóstico (ambiente, configuração e checagens, entre elas uma por wiki). Erros de domínio (`NixError`) saem no stderr, sem traceback. `wiki`, `config`, `sync`, `status` e `ui` falham com ação corretiva se o `nix init` ainda não rodou. `nix` no terminal abre a interface mesmo assim. `nix wiki remove` recusa o padrão até `nix wiki default` apontar outro, e recusa a última wiki. `nix wiki rename` preserva a grafia nova e avisa para `nix sync --full --wiki NOME` se a busca ficar vazia. `nix wiki path` troca a pasta. `nix wiki set` grava `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` ou `longterm_folder`; listas e objetos entram como JSON. Nome no formato `AAAAMMDDTHHMMSS` é recusado. Renomear, remover, `path` e `set` são recusados enquanto a sincronização daquela wiki não termina.
 
-Se `nix` roda sem subcomando num terminal interativo, um aviso vai para stderr e o servidor stdio inicia mesmo assim — o cliente MCP (stdin não-TTY) não vê essa mensagem.
+No terminal, `nix` sem subcomando chama `open_interface` (navegador, porta livre) e não exige wiki cadastrada. Sem TTY, o mesmo comando sobe o servidor stdio. O cliente MCP não vê a interface.
 
 ### 9.2 Servidor MCP
 
-Transporte **somente stdio**. O cliente inicia o processo (o binário em `{NIX_HOME}/bin`; no checkout de desenvolvimento, `python -P -m nix` no venv). Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP. `nix://note/{+rel_path}` lê no vault padrão (barras no caminho; `|` também é aceito). `nix://vault/{name}/note/{+rel_path}` lê no vault nomeado. Nome desconhecido devolve o erro que lista os vaults e o padrão. O cliente anexa a nota ao contexto sem consumir uma chamada de ferramenta.
+Transporte **somente stdio**. O cliente inicia o processo (o binário em `{NIX_HOME}/bin`; no checkout de desenvolvimento, `python -P -m nix` no venv). A subida chama `require_initialized`: sem `nix init`, o processo termina com a ação corretiva. Expõe as ferramentas da seção 8 e, adicionalmente, notas como recursos MCP. `nix://note/{+rel_path}` lê na wiki padrão (barras no caminho; `|` também é aceito). `nix://wiki/{name}/note/{+rel_path}` lê na wiki nomeada. Nome desconhecido devolve o erro que lista as wikis e o padrão. O cliente anexa a nota ao contexto sem consumir uma chamada de ferramenta.
 
 O servidor tenta `FastMCP` e, se o SDK recente expuser só `MCPServer`, usa essa classe — ambas precisam de `.tool()`, `.run()` e `transport="stdio"`. Falha de instância ou de transporte vira `ConfigError` com ação corretiva (`pip install 'mcp>=1.9.0'`). `NixError` na subida vai para stderr e encerra com código 1, sem vazar traceback no stdout.
 
@@ -560,7 +571,7 @@ Troque pelo caminho da linha `comando nix:` do `nix doctor`. `"command": "nix"` 
 
 O servidor não escreve em stdout — o canal é do protocolo. Interações (`initialize`, `tools/list`, `tools/call`, `resources/read`) vão só para o arquivo de log. Argumentos das ferramentas (consultas, caminhos) só entram no log se `logging.log_prompts=true`. `ping` e notificações ficam em nível debug. Trocar `logging.file` ou o nível passa a valer quando o processo recarrega a configuração.
 
-Antes de cada ferramenta, o processo compara um carimbo que junta a data mais recente de `settings` e `vaults`, o maior `id` de `settings_history` e a quantidade de vaults. Assim uma remoção também recarrega. Se mudou, recarrega a configuração e mantém `index.embedding_model` e a pasta-base do índice deste processo (a pasta é comparada já resolvida). O runtime de um vault que saiu só é fechado quando a sincronização dele já soltou a trava; enquanto a trava está presa, o processo não abre um segundo cliente de índice no mesmo diretório. Enquanto modelo ou pasta-base divergirem, a resposta da ferramenta inclui `config_warning`. A leitura de resource registra o mesmo aviso no log e devolve só o texto da nota. Troca de modelo continua exigindo `nix sync --full`.
+Antes de cada ferramenta, o processo compara um carimbo que junta a data mais recente de `settings` e `wikis`, o maior `id` de `settings_history` e a quantidade de wikis. Assim uma remoção também recarrega. Se mudou, recarrega a configuração e mantém `index.embedding_model` e a pasta-base do índice deste processo (a pasta é comparada já resolvida). O runtime de um vault que saiu só é fechado quando a sincronização dele já soltou a trava; enquanto a trava está presa, o processo não abre um segundo cliente de índice no mesmo diretório. Enquanto modelo ou pasta-base divergirem, a resposta da ferramenta inclui `config_warning`. A leitura de resource registra o mesmo aviso no log e devolve só o texto da nota. Troca de modelo continua exigindo `nix sync --full`.
 
 ### 9.3 Interface local
 
@@ -568,35 +579,35 @@ Antes de cada ferramenta, o processo compara um carimbo que junta a data mais re
 
 O token da URL vira cookie `HttpOnly` (`SameSite=Strict`). Pedidos seguintes exigem esse cookie. POST exige o mesmo token no formulário ou no header `X-CSRF-Token`. `Host` e `Origin` têm de ser o endereço local. Arquivos estáticos (HTMX, extensão SSE, `nix.css` e `nix.js`) estão no pacote; não há CDN nem fonte remota (a interface usa as fontes do sistema).
 
-Telas: status do índice, sincronização (prévia, progresso por SSE, opção de todos os vaults e confirmação extra para `--full`), diagnóstico, tela Vaults, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos globais alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. Campos `vault.*` não passam por esse formulário. Nome, caminho, padrão, pasta e ajustes (`include`, `exclude`, `follow_symlinks`, pastas) ficam no `VaultService`, o mesmo de `nix vault`. Renomear, remover, trocar a pasta ou gravar um ajuste é recusado enquanto a sincronização daquele vault não termina. A sincronização roda numa thread, um vault por vez, e segura a trava `.nix/sync-<nome>.lock` daquele vault, a mesma do `nix sync` e do write-through. Há um job por processo. O progresso cita o vault atual.
+Telas: status do índice, sincronização (prévia, progresso por SSE, opção de todas as wikis e confirmação extra para `--full`), diagnóstico, Mega Brain, tela Wikis, formulário de configuração (campo de ambiente fica travado) e histórico com desfazer. O formulário grava os campos globais alterados numa transação; se o conjunto fica inválido, nada daquele envio entra no banco. O cadastro das wikis não passa por esse formulário. Nome, caminho, padrão, pasta e ajustes (`include`, `exclude`, `follow_symlinks`, pastas) ficam no `WikiService`, o mesmo de `nix wiki`. Renomear, remover, trocar a pasta ou gravar um ajuste é recusado enquanto a sincronização daquele vault não termina. A sincronização roda numa thread, um vault por vez, e segura a trava `.nix/sync-<nome>.lock` daquele vault, a mesma do `nix sync` e do write-through. Há um job por processo. O progresso cita o vault atual.
 
 Os controles de sincronização (prévia, incremental, reindexação e "todos os vaults") ficam num fieldset desligado enquanto o job existe. O primeiro clique desliga o fieldset inteiro antes da resposta. O POST de início devolve esse fieldset desligado fora da área do progresso, porque a resposta volta antes de o modelo terminar de carregar. O fim do job devolve o mesmo fieldset habilitado. Recarregar `/sync` no meio lê o job ainda em andamento e renderiza o fieldset desligado. Um segundo início, ou uma prévia com job ativo, recebe 409 no aviso da página e não substitui o progresso. A prévia não varre o vault nesse caso. Sem job, a prévia percorre um vault por vez e solta a trava daquele vault antes do próximo.
 
-O seletor de vault fica no topo da barra lateral ("Vault ativo", com o caminho do vault escolhido logo abaixo), antes da navegação; no celular vira uma linha compacta, com o caminho truncado. É um formulário GET com `?vault=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: um vault, vários ou todos (`vault=*`), e cada trecho exibe o vault de origem.
+O seletor de wiki fica no topo da barra lateral ("Wiki ativo", com o caminho da wiki escolhida logo abaixo), antes da navegação; no celular vira uma linha compacta, com o caminho truncado. É um formulário GET com `?wiki=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: uma wiki, várias ou todas (`wiki=*`), e cada trecho exibe a wiki de origem. O menu tem os grupos Operação, Wiki, Mega Brain, Integração e Manutenção.
 
 Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP. `RuntimeGate` tem uma trava por vault, para ler um enquanto outro sincroniza. Se a trava daquele vault estiver ocupada, a tela pede para esperar em vez de bloquear. O diagnóstico da interface percorre os vaults deste processo; `nix doctor` no terminal abre o seu.
 
-Conectar cliente mostra também o estado dos hooks de sessão do projeto da pasta onde o `nix ui` roda (ou de outro projeto que já tenha sessões, com `?project=`). Monta o trecho de Cursor, VS Code, Claude Code e Codex em `core/admin/client_config.py`, com o executável de `nix_command()` (o mesmo do `nix doctor`). A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo. As páginas saem com `Referrer-Policy: same-origin`, para o POST de um formulário comum levar a origem deste `nix ui`.
+Conectar cliente mostra também o estado dos hooks do Mega Brain no projeto da pasta onde o `nix ui` roda (ou de outro projeto que já tenha sessões, com `?project=`). A página não grava o arquivo: a instalação continua no `nix brain hooks install`. Monta o trecho de Cursor, VS Code, Claude Code e Codex em `core/admin/client_config.py`, com o executável de `nix_command()` (o mesmo do `nix doctor`). A lista de ferramentas vem de `SPECS`; `destructive` e `read_only` definem o selo. As páginas saem com `Referrer-Policy: same-origin`, para o POST de um formulário comum levar a origem deste `nix ui`.
 
 Tráfego MCP: o middleware de `mcp/traffic.py` grava cada `tools/call` em `{app_root}/.nix/traffic.db` (`core/admin/traffic.py`), tabela `mcp_calls` com quando, cliente (do `initialize`), ferramenta, argumentos resumidos (só com `logging.log_prompts`), situação, duração e erro. Cada gravação abre e fecha a conexão em WAL (o esquema é criado uma vez por processo), porque servidor e interface são processos diferentes; a interface lê em modo somente leitura e não cria o arquivo. A tabela guarda as 5.000 chamadas mais recentes. O texto de erro só é gravado com `logging.log_prompts`; sem ele o banco guarda apenas que houve erro. Se a gravação falhar, o servidor registra um aviso e tenta de novo na chamada seguinte; depois de 3 falhas seguidas, para de gravar naquele processo. A chamada nunca é afetada.
 
-Backups (`core/admin/backups.py`): lista `{safety.backup_dir}/<nome>/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups daquele vault. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `VaultWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
+Backups (`core/admin/backups.py`): lista `{safety.backup_dir}/<nome>/{AAAAMMDDTHHMMSS}/{rel_path}`, compara com a nota atual por `difflib` e serve o arquivo para download. Carimbo e caminho são validados e não saem da pasta de backups daquela wiki. A comparação é pulada acima de 512 KB (o `difflib` é quadrático); o download segue disponível. Restaurar exige confirmação, vale só para `.md` e passa por `WikiWriter.update_note(mode="replace")` (ou `create_note`, se a nota foi removida) e `Writeback.after_write`, então o estado atual ganha backup e o índice é atualizado.
 
-### 9.4 Hooks de sessão
+### 9.4 Hooks do Mega Brain
 
-`nix hooks install` escreve, **no repositório**, o arquivo de hook de cada agente escolhido: `.claude/settings.local.json`, `.cursor/hooks.json`, `.github/hooks/nix.json` e `.codex/hooks.json`. Os nomes de evento e os formatos vêm da documentação de cada agente; a tabela `AgentSpec` de `core/admin/agent_hooks.py` os reúne. O `PreToolUse` não é assinado: dobraria o custo por ferramenta. A marca da Nix é o comando `nix hook --event E --agent A`, que `remove` reconhece sem tocar nos hooks do usuário. Antes de alterar um arquivo existente há backup em `safety.backup_dir/hooks/`; rodar de novo troca as entradas da Nix sem duplicar. O VS Code tem campos por sistema (`bash` com `[ -x ] && ... || true`, `powershell` com `Test-Path`) para terminar em silêncio onde o binário não existe.
+`nix brain hooks install` grava o arquivo de cada agente, no projeto ou na conta. No projeto: Cursor `.cursor/hooks.json`, VS Code `.github/hooks/nix.json`, Claude Code `.claude/settings.local.json`, Codex `.codex/hooks.json`. Na conta, o Claude usa `.claude/settings.json`; o VS Code não tem arquivo global e a captura fica parcial, sem JSON inventado. A tabela `AgentSpec` de `core/admin/agent_hooks.py` reúne o formato. Há prévia, confirmação e backup em `safety.backup_dir/hooks/` antes de alterar um arquivo que já existe. A marca da Nix é o comando `brain --event E --agent A`. O subcomando antigo `hook` ainda é reconhecido na remoção. O VS Code tem campos por sistema (`bash` com `[ -x ] && ... || true`, `powershell` com `Test-Path`) para terminar em silêncio onde o binário não existe.
 
-`nix hook` não passa pela CLI: `nix_launch.main` o despacha para `core/sessions/hook_entry.py` antes do relançamento do venv e do import do Typer. O módulo usa só a biblioteca padrão: o import de `nix.cli.app` custa cerca de 380 ms e o Pydantic da configuração, 90 a 150 ms. Por isso `nix/__init__.py` e `nix/config/__init__.py` carregam sob demanda, e os limites (`sessions.max_prompt_bytes` etc.) vêm de uma leitura direta do `settings.db` (`limits.py`). No binário publicado o agente não chama esse `nix`: o Nuitka 4.3 recalcula o CRC do payload onefile em toda partida, e o arquivo completo passa de 1 s. `nix hooks install` grava o irmão `nix-hook` (`src/nix_hook_frozen.py`, cache `hook-<versão>`). O `session-end` dispara o consolidador no binário completo. Fluxo: stdin → `normalize` (tolerante a cada agente, com sanitização) → descarta se o projeto não tem hooks (`hook_projects`) → `SessionStore.record` → no `session-start`, entrega o handoff pendente no stdout (Cursor `additional_context`; Claude Code `hookSpecificOutput.additionalContext`; VS Code `additionalContext`; Codex em texto puro) → no `session-end`, cria o handoff, enfileira a sessão em `.nix/sessions-render.queue` e dispara `nix session render --drain` destacado. Sai sempre com código 0 e o erro vai para `.nix/logs/hook.log`.
+No binário, o agente chama `nix-hook brain`, não o `nix` completo: o Nuitka 4.3 recalcula o CRC do payload onefile em toda partida, e o arquivo completo passa de 1 s. O cache do hook é `hook-<versão>`. No checkout, `nix_launch` manda `brain` para `core/brain/hook_entry.py` antes do Typer. Esse módulo evita o import da CLI. Os limites `brain.*` saem de uma leitura direta do `settings.db` (`limits.py`). O fluxo é stdin → `normalize` (com sanitização) → `capture.record`, só com o Mega Brain ligado e com hook daquele agente. No `session-start`, o briefing vai para o stdout no formato do agente. A ordem do texto está no PRD (RF-164). O código de saída é sempre 0. O erro vai para `.nix/logs/brain-hook.log`.
 
-O consolidador (`service.consolidate`, com a fila e a trava em `drain.py`) pega uma trava em arquivo (`sessions-drain.lock`, não bloqueante): se outro já roda, sai. Se um consolidador anterior morreu no meio, a fila que ele tomou (`.taking`) volta a ser processada. Quem roda esvazia a fila em lote, com um só Embedder, grava as notas pelo `VaultWriter` e aplica `sessions.retention_days`. Sessões que terminam sem `session-end` (cota esgotada) só ganham nota em `session_handoff` ou `nix session render`.
+No `session-end`, `worker.schedule` abre um processo destacado. No binário, `cli_to_launch` procura o `nix` completo ao lado do `nix-hook` ou em `{NIX_HOME}/bin`. Se não achar, registra a falha no mesmo log e não grava a página. No checkout, o comando é `python -m nix brain work`. Uma trava `brain-work.lock` impede duas gravações ao mesmo tempo. A página passa pelo `WikiWriter`, com backup e write-through. `brain.idle_end_after_hours` vale 0 e não encerra sessão sozinho. O comando oculto `nix hook` (e `nix-hook hook`, usado só para aquecer o cache na instalação) termina com código 0 e não grava nada.
 
-### 9.5 Skills da Nix
+### 9.5 Skills
 
-`nix skills install` copia as skills que vêm no pacote (`src/nix/skills/<nome>/SKILL.md`, hoje `sessoes-nix`) para a pasta que o agente lê, dentro do repositório: `.claude/skills/` (Claude Code) e `.agents/skills/` (Cursor e VS Code). Dois agentes que leem a mesma pasta geram uma cópia só. A marca é o arquivo `.nix-skill`, com o nome da skill, gravado antes do `SKILL.md`: se a escrita parar no meio, a pasta fica desatualizada e o `install` seguinte repara. Um agente sem pasta em `DESTINATIONS` é recusado, em vez de o comando dizer que nada mudou. A escolha do agente e a raiz do projeto ficam em `cli/agents.py`, usadas por hooks e skills. A poda de pasta vazia fica em `core/admin/empty_dirs.py`. `remove` apaga só a pasta que tem essa marca; uma pasta sem a marca, mesmo com o nome `sessoes-nix`, permanece. Antes de alterar ou apagar há backup em `safety.backup_dir/skills/`. Rodar de novo só reescreve o `SKILL.md` quando o texto do pacote mudou. O binário completo inclui o arquivo pelo `--include-package-data=nix`; o `nix-hook` não importa esse módulo.
+O Nix não instala skill de produto. Não há `src/nix/skills` nem o comando `nix skills`. As pastas `.claude/skills/` e `.agents/skills/` deste repositório são só do desenvolvimento.
 
 ## 10. Configuração
 
-Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência dos campos globais: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_INDEX__EMBEDDING_MODEL`). `NIX_VAULT__*` é ignorado: o cadastro vive na tabela `vaults`. `nix init` grava o primeiro vault e o modelo. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`, com subpasta por vault, exceto o vault migrado do esquema 1, que permanece na raiz (seção 3.1).
+Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência dos campos globais: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_INDEX__EMBEDDING_MODEL`). `NIX_VAULT__*` e `NIX_WIKI__*` são ignorados: o cadastro vive na tabela `wikis`. `nix init` grava a primeira wiki, o modelo e a marca `initialized`. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`, com subpasta por wiki, exceto a wiki migrada do esquema 1, que permanece na raiz (seção 3.1).
 
 ```sql
 CREATE TABLE meta (
@@ -604,7 +615,7 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 CREATE TABLE settings (
-    section    TEXT NOT NULL,  -- index, retrieval, safety, logging, sessions
+    section    TEXT NOT NULL,  -- index, retrieval, safety, logging, brain, profile
     key        TEXT NOT NULL,
     value_json TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -612,32 +623,32 @@ CREATE TABLE settings (
 );
 CREATE TABLE settings_history (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    section        TEXT NOT NULL,  -- seção global, ou "vaults"
-    key            TEXT NOT NULL,  -- campo, ou o nome do vault
+    section        TEXT NOT NULL,  -- seção global, ou "wikis"
+    key            TEXT NOT NULL,  -- campo, ou o nome da wiki
     old_value_json TEXT,          -- nulo se a chave não existia
     new_value_json TEXT,          -- nulo se a chave foi removida
-    source         TEXT NOT NULL, -- init | cli | ui | vault | migration
+    source         TEXT NOT NULL, -- init | cli | ui | migration
     changed_at     TEXT NOT NULL
 );
-CREATE TABLE vaults (
+CREATE TABLE wikis (
     name          TEXT PRIMARY KEY COLLATE NOCASE,
     path          TEXT NOT NULL,
     is_default    INTEGER NOT NULL CHECK (is_default IN (0, 1)),
-    settings_json TEXT NOT NULL,  -- include, exclude, pastas padrão daquele vault
+    settings_json TEXT NOT NULL,  -- include, exclude, pastas padrão daquela wiki
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
-CREATE UNIQUE INDEX vaults_one_default
-    ON vaults(is_default) WHERE is_default = 1;
+CREATE UNIQUE INDEX wikis_one_default
+    ON wikis(is_default) WHERE is_default = 1;
 ```
 
-`schema_version` é `2`. Na abertura, a versão 1 migra para a 2: se `settings` tinha `vault.path` (e, quando existiam, `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder`), esse vault vira a linha `Default`, marcada como padrão. O índice e os backups desse vault continuam na raiz de `index.data_dir` e `safety.backup_dir` (seção 3.1). Sem `vault.path`, o banco fica na versão 2 sem vaults e `nix init` continua valendo. Qualquer outra versão impede o uso e pede `nix init --force`. `--force` apaga ajustes, vaults e histórico e recria o esquema; as notas do Obsidian não são alteradas. Lista vazia de vaults é o estado anterior ao init. Com vaults cadastrados, a validação exige de 1 a 100, exatamente um padrão, nomes únicos sem diferenciar maiúsculas (`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, grafia original preservada) e caminhos que não se sobrepõem. Um nome no formato `AAAAMMDDTHHMMSS` é recusado: é o carimbo das pastas de backup. `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder` nascem em `settings_json` com o padrão do schema e mudam com `nix vault set` (listas e objetos em JSON). `nix vault path` troca a pasta. O editor genérico não grava `vault.*` e aponta para esses comandos.
+`schema_version` é `3`. Na abertura, a versão 1 vira 2 (a seção `vault` vira a linha `Default`) e a 2 vira 3: a tabela `vaults` é renomeada para `wikis` e o histórico com `section = vaults` passa a `wikis`, sem mover índice nem backups. A wiki do esquema 1 fica com `legacy_layout` e continua na raiz de `index.data_dir` e `safety.backup_dir` (seção 3.1). As versões 1 e 2 não são erro. Qualquer outra pede `nix init --force`. `--force` apaga ajustes, wikis e histórico e recria o esquema; as notas não são alteradas. Lista vazia de wikis é o estado anterior ao init e é válida no `load_config`. A marca `initialized` só o `nix init` grava. Com wikis cadastradas, a validação exige de 1 a 100, exatamente um padrão, nomes únicos sem diferenciar maiúsculas (`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, grafia original preservada) e caminhos que não se sobrepõem. Um nome no formato `AAAAMMDDTHHMMSS` é recusado: é o carimbo das pastas de backup. `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder` nascem em `settings_json` com o padrão do schema e mudam com `nix wiki set` (listas e objetos em JSON). O padrão de `exclude` é `.trash/**`, `Templates/**` e `Privado/**`. `nix wiki path` troca a pasta. O editor genérico não grava o cadastro e aponta para esses comandos.
 
-A seção `sessions` (`enabled`, `vault`, `folder`, `search_default`, `retention_days`, `max_prompt_bytes`, `max_tool_bytes`, `max_note_bytes`, `extra_redact_patterns`) vem desligada (`enabled = false`) e aceita `NIX_SESSIONS__CAMPO`. Só `sessions.enabled` exige reinício do cliente MCP.
+As seções `brain` (`enabled` falso, `wiki` vazio, `briefing_max_bytes` 3000, `idle_end_after_hours` 0) e `profile` (`min_projects` 2) aceitam `NIX_BRAIN__*` e `NIX_PROFILE__*`. Só `brain.enabled` exige reinício do cliente MCP para as ferramentas `brain_*` aparecerem.
 
-O texto de ajuda de cada campo global está no schema Pydantic. `index.embedding_model` grava o id do Hugging Face: `lulu` é `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` e `spitz` é `BAAI/bge-m3`. A raça também é aceita na gravação. O número da tabela do `nix init` não é um id e só vale nesse comando. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de vaults, para uma remoção também ser percebida.
+O texto de ajuda de cada campo global está no schema Pydantic. `index.embedding_model` grava o id do Hugging Face: `lulu` é `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` e `spitz` é `BAAI/bge-m3`. A raça também é aceita na gravação. O número da tabela do `nix init` não é um id e só vale nesse comando. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de wikis, para uma remoção também ser percebida.
 
-Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, o caminho do vault é gravado com `/`. O histórico permite desfazer uma alteração global (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova. Mudanças de vault entram no mesmo histórico com `section="vaults"`.
+Toda gravação valida o conjunto com Pydantic antes de persistir. Erros trazem o campo e a ação corretiva (RF-04, RNF-09). No Windows, o caminho da wiki é gravado com `/`. O histórico permite desfazer uma alteração global (`nix config undo` ou o botão da interface), gravando o desfazer como uma mudança nova. Mudanças de wiki entram no mesmo histórico com `section="wikis"`.
 
 ## 11. Segurança
 
@@ -678,11 +689,11 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 | AD-10 | Binários Nuitka onefile (`nix` e o `nix-hook` leve; checkout de desenvolvimento segue com `scripts/bootstrap.py`) | PyInstaller onefile, venv com o Python do sistema | Sem runtime na máquina do usuário. A partida seguinte reusa o cache `{CACHE_DIR}/nix/onefile-{VERSION}`. O `nix-hook` existe porque o Nuitka 4.3 recalcula o CRC do payload inteiro a cada partida, e o binário completo passa de 1 s. O modo arquivo único do PyInstaller descompacta a cada processo e atrasa o stdio do MCP |
 | AD-11 | Configuração em `settings.db` na pasta da instalação | TOML, JSON, índice SQLite | A config não se perde ao apagar `.nix/data`. Histórico e desfazer ficam no mesmo arquivo. O ambiente continua ganhando do valor gravado |
 | AD-12 | Interface com Starlette, HTMX e CSS próprio vendidos no pacote | Streamlit, NiceGUI, app com Node; Pico.css; Tailwind | Sem build e sem chamada remota. Starlette e Uvicorn já vêm com o SDK MCP. O Pico (sem classes) não cobria menu lateral, selos, abas, diff e cartões sem sobrescrever quase tudo; Tailwind exigiria build ou CDN |
-| AD-13 | Vários vaults no mesmo processo, com um Embedder compartilhado | Uma instalação (e um processo MCP) por vault | Uma conexão MCP atende todos. O modelo de embedding é global e pesado para carregar mais de uma vez. Índice, backup e trava ficam isolados pelo nome. O limite é 100 |
-| AD-14 | `nix hook` com ponto de entrada mínimo, só biblioteca padrão | Chamar a CLI do Typer; fila em arquivo como caminho normal | A CLI custa cerca de 380 ms só de import e estoura o orçamento de 300 ms do hook; a fila fica como exceção |
-| AD-15 | Reaproveitar vetor por hash do texto do chunk | Casar por id (`arquivo:ordinal`); reindexar o arquivo inteiro | O id se desloca a cada inserção no meio da nota; reindexar tudo a cada regravação da nota de sessão custa CPU |
-| AD-16 | Sessões como notas no vault escolhido, sem índice próprio; busca comum as esconde por padrão | Banco vetorial separado para sessões | Reaproveita backup, filtros e índice; `sessions.vault` permite isolá-las num vault só delas |
-| AD-17 | Um consolidador por vez, destacado, para gerar a nota no `session-end` | Gravar a nota dentro do hook; um processo por sessão | O hook não pode carregar o índice; um só processo carrega o modelo uma vez para a fila inteira |
+| AD-13 | Várias wikis no mesmo processo, com um Embedder compartilhado | Uma instalação (e um processo MCP) por wiki | Uma conexão MCP atende todas. O modelo de embedding é global e pesado para carregar mais de uma vez. Índice, backup e trava ficam isolados pelo nome. O limite é 100 |
+| AD-14 | `nix-hook brain` com ponto de entrada mínimo | Chamar a CLI do Typer no evento | A CLI estoura o orçamento de 300 ms do hook. O binário completo recalcula o CRC do payload a cada partida |
+| AD-15 | Reaproveitar vetor por hash do texto do chunk | Casar por id (`arquivo:ordinal`); reindexar o arquivo inteiro | O id se desloca a cada inserção no meio da nota |
+| AD-16 | Páginas do Mega Brain na wiki escolhida, pelo writer comum | Banco vetorial separado; migrar o `sessions.db` | Reaproveita backup e write-through. O banco antigo não é lido |
+| AD-17 | No `session-end`, o `nix-hook` abre o binário completo (`brain work`) | Gravar a página dentro do hook | O hook não carrega o índice. Se o `nix` não estiver em `NIX_HOME/bin`, a falha fica em `brain-hook.log` |
 | AD-18 | Download do ONNX por HTTP, com hf-xet desligado | hf-xet, padrão do Hugging Face Hub | O xet aborta o arquivo quando um pedaço chega fora de ordem, comum em rede com proxy ou antivírus. `HF_HUB_DISABLE_XET=0` no ambiente religa |
 
 ## 14. Evolução prevista

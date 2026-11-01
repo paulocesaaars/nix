@@ -7,7 +7,7 @@
 | Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `wiki`, `config`, `sync`, `status`, `doctor`, `ui`, `brain`, `run`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (`nix` e `nix-hook` em `NIX_HOME`, `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
 | Status | Implementado — v4.0.0 |
 | Autor | Paulo |
-| Data | 2026-10-28 |
+| Data | 2026-11-01 |
 
 Especificações técnicas: [TDD.md](./TDD.md). Critérios de aceite: [BDD.md](./BDD.md).
 
@@ -65,11 +65,11 @@ Vaults de Obsidian crescem rápido e viram um arquivo morto. Hoje o usuário enf
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-01 | O sistema deve guardar a configuração num SQLite na pasta da instalação (`settings.db`), com os vaults nomeados (de 1 a 100, exatamente um padrão) e os demais parâmetros | Must |
-| RF-02 | O sistema deve oferecer um comando de inicialização que grava o primeiro vault (nome `Default`, ou `--name`) e o caminho (`--vault` ou pergunta) e o modelo de embedding (`--embedding-model` ou pergunta) no `settings.db`. Se a configuração já existir, sem `--force` só atualiza o caminho do vault padrão, salvo `--embedding-model`. `--name` com vaults já cadastrados é recusado e pede `nix vault add`. Uma configuração anterior, com um único caminho de vault, passa a ser o vault `Default` e continua usando o índice e os backups já gravados. `--force` recria a configuração do zero, sem alterar as notas | Must |
-| RF-03 | O sistema deve permitir sobrescrever a configuração global (`index`, `retrieval`, `safety`, `logging`) por variável de ambiente, e essa variável deve ganhar do valor gravado. O cadastro dos vaults não entra nessa precedência | Must |
-| RF-04 | O sistema deve validar a configuração antes de gravar e apresentar mensagens de erro acionáveis (vault inexistente, modelo inválido, campo desconhecido) | Must |
-| RF-05 | O sistema deve permitir configurar, por vault, padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas), com `nix vault set NOME include\|exclude VALOR` | Should |
+| RF-01 | O sistema deve guardar a configuração num SQLite na pasta da instalação (`settings.db`), com as wikis nomeadas (de 1 a 100, exatamente um padrão) e os demais parâmetros | Must |
+| RF-02 | O sistema deve oferecer um comando de inicialização que grava a primeira wiki (nome `Default`, ou `--name`), o caminho (`--wiki` ou pergunta) e o modelo de embedding (`--embedding-model` ou pergunta) no `settings.db`, e marca a instalação como configurada. Se a configuração já existir, sem `--force` só atualiza o caminho da wiki padrão, salvo `--embedding-model`. `--name` com wikis já cadastradas é recusado e pede `nix wiki add`. Uma configuração anterior, com um único caminho, passa a ser a wiki `Default` e continua usando o índice e os backups já gravados. `--force` recria a configuração do zero, sem alterar as notas. A tela Wikis da interface também cadastra a pasta (a primeira vira o padrão), mas não grava essa marca: `nix ui` e o servidor MCP continuam exigindo o `nix init` | Must |
+| RF-03 | O sistema deve permitir sobrescrever a configuração global (`index`, `retrieval`, `safety`, `logging`, `brain`, `profile`) por variável de ambiente, e essa variável deve ganhar do valor gravado. O cadastro das wikis não entra nessa precedência (`NIX_VAULT__*` e `NIX_WIKI__*` são ignorados) | Must |
+| RF-04 | O sistema deve validar a configuração antes de gravar e apresentar mensagens de erro acionáveis (wiki inexistente, modelo inválido, campo desconhecido) | Must |
+| RF-05 | O sistema deve permitir configurar, por wiki, padrões de inclusão/exclusão de arquivos e pastas (ex.: ignorar `Templates/`, `.trash/`, notas privadas), com `nix wiki set NOME include\|exclude VALOR` | Should |
 | RF-06 | O sistema deve permitir configurar modelo de embedding, tamanho de chunk e número de resultados recuperados | Should |
 
 ### 5.2 Sincronização e vetorização
@@ -109,7 +109,7 @@ Esta é a regra de negócio central do produto:
 | RF-30 | O sistema deve criar notas novas em Markdown, com frontmatter e no diretório indicado | Must |
 | RF-31 | O sistema deve anexar conteúdo a uma nota existente (ex.: adicionar item ao diário ou a uma nota de projeto) | Must |
 | RF-32 | O sistema deve editar uma nota existente preservando o restante do conteúdo | Should |
-| RF-33 | Toda escrita deve ficar restrita ao diretório de um único vault: o nome informado ou, se o nome for omitido, o padrão | Must |
+| RF-33 | Toda escrita deve ficar restrita ao diretório de uma única wiki: o nome informado ou, se o nome for omitido, o padrão | Must |
 | RF-34 | Operações destrutivas (sobrescrever, remover) devem exigir `confirm=true` e ser sinalizadas como destrutivas no MCP | Must |
 | RF-35 | O sistema deve manter um backup da versão anterior do arquivo antes de sobrescrever | Should |
 | RF-36 | O sistema deve seguir convenções do vault (template, tags, formato de nome de arquivo) definidas na configuração | Could |
@@ -118,12 +118,12 @@ Esta é a regra de negócio central do produto:
 
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
-| RF-40 | A CLI deve gravar a configuração inicial (`nix init [--name NOME] [--vault PATH] [--embedding-model NOME] [--force]`) | Must |
+| RF-40 | A CLI deve gravar a configuração inicial (`nix init [--name NOME] [--wiki PATH] [--embedding-model NOME] [--force]`) | Must |
 | RF-41 | A CLI deve oferecer sincronização e status do índice (`nix sync`, `nix status`) | Must |
 | RF-42 | A CLI deve diagnosticar ambiente, config e índice (`nix doctor`); `--json` emite o dump completo | Should |
-| RF-43 | Sem subcomando, `nix` deve iniciar o servidor MCP stdio | Must |
+| RF-43 | No terminal, `nix` sem subcomando abre a interface, mesmo antes do `nix init`. Sem terminal, inicia o servidor MCP stdio, que exige o `nix init` | Must |
 | RF-44 | `nix sync` e `nix status` devem oferecer saída em JSON (`--json`) | Could |
-| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar os binários `nix` e `nix-hook` da plataforma, conferir o SHA-256 de cada um, gravar `NIX_HOME`, colocar `{NIX_HOME}/bin` no PATH do usuário e iniciar `nix init` se ainda não houver `settings.db`. Não exige Python na máquina | Must |
+| RF-45 | Um instalador (`install.bat` / `install.ps1` no Windows, `install.sh` no Unix) deve baixar os binários `nix` e `nix-hook` da plataforma, conferir o SHA-256 de cada um, gravar `NIX_HOME` e colocar `{NIX_HOME}/bin` no PATH do usuário. Não roda `nix init`: pede para executar `nix` e, se o comando não funcionar, fechar e abrir o terminal. Não exige Python na máquina | Must |
 | RF-46 | Um desinstalador (`uninstall.bat` / `uninstall.ps1` no Windows, `uninstall.sh` no Unix) deve remover `NIX_HOME` e `{NIX_HOME}/bin` do PATH do usuário só se apontarem para esta instalação, apagar `nix` e `nix-hook`, `.nix/` e `settings.db` (e os arquivos `-wal`/`-shm`), apagar o cache de extração (`onefile-*` e `hook-*`) e a pasta da instalação se ela ficar vazia, e não tocar no vault. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração | Must |
 
 ### 5.6 Interface MCP
@@ -131,7 +131,7 @@ Esta é a regra de negócio central do produto:
 | ID | Requisito | Prioridade |
 | --- | --- | --- |
 | RF-50 | O sistema deve expor um servidor MCP **somente via stdio**, iniciado pelo cliente | Must |
-| RF-51 | O servidor MCP deve expor 20 ferramentas de busca, leitura, escrita, tags, movimentação, insights, sincronização e cadastro (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `vault_insights`, `remember`, `list_vaults`) e, com `sessions.enabled` ligado, as 3 de sessão da seção 5.7 (23 no total) | Must |
+| RF-51 | O servidor MCP deve expor 20 ferramentas de busca, leitura, escrita, tags, movimentação, insights, sincronização e cadastro (`search_notes`, `read_note`, `get_note_outline`, `read_note_lines`, `list_notes`, `list_all_tags`, `get_linked_notes`, `create_note`, `append_to_note`, `update_note`, `update_frontmatter`, `manage_tags`, `move_note`, `move_file`, `delete_note`, `sync_index`, `index_status`, `wiki_insights`, `remember`, `list_wikis`). Com o Mega Brain ligado, entram as 18 ferramentas `brain_*` da seção 5.7 (38 no total) | Must |
 | RF-52 | As ferramentas MCP devem ter descrições e esquemas claros o bastante para um cliente LLM usá-las corretamente sem instruções extras | Must |
 | RF-53 | O servidor MCP deve respeitar as regras de segurança e de vetorização (incluindo `confirm=true` em operações destrutivas) | Must |
 | RF-54 | O sistema deve documentar o trecho de configuração necessário para registrar o servidor no cliente MCP: `command` aponta para o binário na pasta da instalação (`NIX_HOME`). Windows: `${env:NIX_HOME}/bin/nix.exe` (ou o caminho absoluto). macOS/Linux: caminho absoluto `{NIX_HOME}/bin/nix` — não o nome `nix` no PATH | Must |
@@ -142,15 +142,15 @@ Esta é a regra de negócio central do produto:
 | RF-59 | `move_note` (só `.md`) e `move_file` (recusa `.md`) devem mover dentro do vault. `move_note` reescreve por padrão os wikilinks e links Markdown que apontam para a nota, com backup de cada nota alterada. Links pelo título do frontmatter não mudam se o título não mudou. Notas fora de include/exclude não são alteradas e voltam como pendentes. Destino existente exige `overwrite=true` e `confirm=true`. `move_file` atualiza `![[alvo]]`, `[[alvo]]` e links Markdown relativos de PDF, imagem e outros anexos. O índice perde o id antigo e ganha o caminho novo; anexo só é reindexado com `index.index_attachments` | Must |
 | RF-60 | `update_note` com `mode=prepend` deve inserir o texto depois do frontmatter, com o YAML original intacto, uma linha em branco e o corpo antigo, sem `confirm`. A ação é atualização. `mode=replace` continua destrutivo | Must |
 | RF-61 | `nix config` deve listar, ler, gravar, remover e desfazer valores. A gravação de um ou mais campos valida o conjunto inteiro; se for inválido, nada daquela gravação entra no banco. Campo definido por variável de ambiente não é gravado por cima. `index.auto_sync_external_changes` não pode ser ligado | Must |
-| RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, vaults, configuração e histórico. Sem `nix init`, o comando não sobe. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão Encerrar pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. A sincronização pode valer para o vault escolhido ou para todos. Os controles dessa tela seguem o RF-71 | Must |
+| RF-62 | `nix ui` deve abrir no navegador uma interface local de status, sincronização (com prévia e progresso), diagnóstico, wikis, Mega Brain, configuração e histórico. Sem `nix init`, o comando não sobe. `nix` no terminal abre a mesma interface mesmo antes dessa marca. A interface escuta só em `127.0.0.1`, exige o link impresso pelo comando e encerra com Ctrl+C ou pelo botão Encerrar. Com sincronização em andamento, o botão Encerrar pede para esperar e o Ctrl+C só fecha o índice depois que a thread termina. A sincronização pode valer para a wiki escolhida ou para todas. Os controles dessa tela seguem o RF-71 | Must |
 | RF-63 | Um servidor MCP já em execução deve passar a usar a configuração nova na chamada seguinte. Modelo de embedding e pasta do índice continuam os anteriores até o cliente reiniciar. Troca de modelo exige `nix sync --full` | Must |
-| RF-64 | A interface local deve consultar os vaults só para leitura, pelas mesmas ferramentas do MCP. A busca aceita um vault, vários ou todos e mostra o vault de cada trecho. As demais consultas usam o vault escolhido na página (o padrão, se nenhum for escolhido): lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Enquanto o vault consultado sincroniza, a consulta pede para esperar; outro vault continua legível | Should |
+| RF-64 | A interface local deve consultar as wikis só para leitura, pelas mesmas ferramentas do MCP. A busca aceita uma wiki, várias ou todas e mostra a wiki de cada trecho. As demais consultas usam a wiki escolhida na página (o padrão, se nenhuma for escolhida; o seletor é `?wiki=`): lista de notas com filtro por pasta ou tag, contorno, linhas e links de uma nota, tags com contagem e insights (resumo, órfãs, títulos duplicados e sugestões de link). Enquanto a wiki consultada sincroniza, a consulta pede para esperar; outra wiki continua legível | Should |
 | RF-65 | A interface deve gerar a configuração MCP de Cursor, VS Code, Claude Code e Codex, com o caminho real do executável, e listar as ferramentas expostas, marcadas como leitura, escrita ou destrutiva | Should |
 | RF-66 | O servidor MCP deve gravar cada chamada de ferramenta (quando, cliente, ferramenta, duração e situação) em `.nix/traffic.db`, mantendo as 5.000 mais recentes. Argumentos só entram com `logging.log_prompts`; o conteúdo das notas nunca entra. Falha ao gravar não derruba a chamada. A interface mostra esse registro com filtros por ferramenta e situação | Should |
 | RF-67 | A interface deve listar os backups de `safety.backup_dir`, comparar cada um com a nota atual, permitir baixá-lo e restaurá-lo. Restaurar exige confirmação, vale só para `.md`, grava backup do estado atual antes e reindexa a nota pelo write-through | Should |
-| RF-68 | O sistema deve cadastrar de 1 a 100 vaults nomeados, com exatamente um padrão. O `nix init` cria o primeiro com o nome `Default` (ou `--name`). O nome tem de 1 a 32 caracteres, começa com letra ou dígito e segue com letras, dígitos, `_` ou `-`. Um nome no formato de carimbo de backup (`AAAAMMDDTHHMMSS`) é recusado. A comparação ignora maiúsculas e a grafia original é preservada. Os caminhos não podem coincidir nem um ficar dentro do outro. Omitir o vault numa ferramenta usa o padrão. Remover o padrão é recusado até outro ser escolhido; remover o único vault também é recusado. Renomear troca o cadastro e não move o índice nem os backups. Inclusão, exclusão, pastas padrão e a pasta do vault mudam com `nix vault set` e `nix vault path`. Renomear, remover, trocar a pasta ou gravar um ajuste enquanto aquele vault sincroniza é recusado até o término | Must |
-| RF-69 | A busca e as operações que aceitam vários vaults (`search_notes`, `list_notes`, `list_all_tags`, `index_status`, `sync_index`) devem consultar um nome, uma lista de nomes ou todos os vaults quando o valor é `"*"` | Must |
-| RF-70 | Toda escrita deve ocorrer num único vault. Lista de nomes ou `"*"` é recusado, com mensagem que pede um nome só ou o padrão | Must |
+| RF-68 | O sistema deve cadastrar de 1 a 100 wikis nomeadas, com exatamente um padrão. O `nix init` cria a primeira com o nome `Default` (ou `--name`). A tela Wikis também cadastra; a primeira vira o padrão. O nome tem de 1 a 32 caracteres, começa com letra ou dígito e segue com letras, dígitos, `_` ou `-`. Um nome no formato de carimbo de backup (`AAAAMMDDTHHMMSS`) é recusado. A comparação ignora maiúsculas e a grafia original é preservada. Os caminhos não podem coincidir nem um ficar dentro do outro. Omitir a wiki numa ferramenta usa o padrão. Remover o padrão é recusado até outro ser escolhido; remover a única wiki também é recusado. Renomear troca o cadastro e não move o índice nem os backups. Inclusão, exclusão, pastas padrão e a pasta da wiki mudam com `nix wiki set` e `nix wiki path`. Renomear, remover, trocar a pasta ou gravar um ajuste enquanto aquela wiki sincroniza é recusado até o término | Must |
+| RF-69 | A busca e as operações que aceitam várias wikis (`search_notes`, `list_notes`, `list_all_tags`, `index_status`, `sync_index`) devem consultar um nome, uma lista de nomes ou todas as wikis quando o valor é `"*"`. O parâmetro é `wiki` | Must |
+| RF-70 | Toda escrita deve ocorrer numa única wiki. Lista de nomes ou `"*"` é recusado, com mensagem que pede um nome só ou o padrão | Must |
 | RF-71 | Na interface, os controles de sincronização ficam desligados desde o início do job até o fim, também quando a página de sincronizar é recarregada no meio. Há no máximo um job por processo. Um segundo pedido pede para esperar, sem substituir o progresso. A prévia, com job ativo, pede para esperar e não varre o vault | Must |
 
 ### 5.7 Mega Brain
@@ -174,7 +174,7 @@ Memória local entre agentes, desligada por padrão. `nix brain enable --wiki NO
 | RF-163 | `nix run <agente>` instala hook e MCP se faltarem (`--no-autowire` desliga). A cópia do histórico nativo é temporária, só leitura, permissão só do usuário, apontada por `NIX_PREVIOUS_SESSION_HISTORY` e apagada ao terminar. Leitores v1: Claude Code e Codex. Sem leitor, segue com aviso | Must |
 | RF-164 | O briefing do `session-start` sai nesta ordem: perfil (até 3000 bytes, 6000 se o projeto não tem memória), handoff oferecido e não consumido, resumo do projeto, aviso de mensagens, aviso de sessão interrompida. O texto é histórico, nunca uma ordem | Must |
 
-As ferramentas `brain_*` só aparecem no MCP com o Mega Brain ligado. `remember` continua gravando na wiki padrão e não faz parte do Mega Brain. Por uma versão, `nix vault`, `--vault`, o parâmetro `vault`, `list_vaults`, `vault_insights` e `nix://vault/...` devolvem o resultado normal mais um aviso.
+As ferramentas `brain_*` só aparecem no MCP com o Mega Brain ligado. `remember` continua gravando na wiki padrão e não faz parte do Mega Brain.
 
 ## 6. Histórias de usuário
 
@@ -217,7 +217,7 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 > Como usuário, quero que a sincronização da interface não seja disparada de novo enquanto a anterior não termina.
 
 **HU-16 — Wiki genérica**
-> Como usuário, quero chamar a base de wiki e ainda ser avisado quando um comando antigo disser vault.
+> Como usuário, quero chamar a base de wiki.
 
 **HU-17 — Captura do Mega Brain**
 > Como usuário, quero gravar a conversa só quando eu ligar o Mega Brain e instalar o hook, e quero excluir caminhos sensíveis.
@@ -279,20 +279,21 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 **Entregue**
 
 - Configuração em `settings.db` na pasta do aplicativo (ambiente ganha do banco; índice em `.nix/data`), sync incremental e `--full`, indexação de Markdown e PDFs referenciados, busca híbrida (densa + FTS5 + RRF).
-- Servidor MCP stdio com 20 ferramentas de vault (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend, `list_vaults`) e, com `sessions.enabled`, as 3 de sessão, recursos `nix://note/{+rel_path}` (vault padrão) e `nix://vault/{name}/note/{+rel_path}`, logs de tráfego em arquivo e em `.nix/traffic.db`.
-- CLI de bootstrap: `init [--name] [--vault] [--embedding-model] [--force]` (o primeiro vault chama-se `Default` se `--name` for omitido), `vault` (listar, cadastrar, renomear, remover, padrão, pasta e ajustes), `sync` e `status` com `--vault` repetível e `--all`, `doctor` (com `--json` em `sync`/`status`/`doctor`); `nix` sem argumentos inicia o servidor. Uma configuração anterior, de um vault só, vira o `Default` e conserva o índice e os backups já gravados.
-- Vários vaults nomeados (de 1 a 100, exatamente um padrão) no mesmo processo. Ferramenta sem `vault` usa o padrão. Busca em um, em vários ou em todos. Escrita num único vault.
-- Instalador `install.bat` / `install.ps1` / `install.sh` (`nix` e `nix-hook` da release, SHA-256, `NIX_HOME`/`nix` no PATH, `nix init`).
+- Servidor MCP stdio com 20 ferramentas de wiki (leitura parcial, frontmatter preservando o YAML, tags, movimentação com links e prepend, `list_wikis`, `wiki_insights`) e, com o Mega Brain ligado, as 18 `brain_*`. Recursos `nix://note/{+rel_path}` (wiki padrão) e `nix://wiki/{name}/note/{+rel_path}`. Logs de tráfego em arquivo e em `.nix/traffic.db`.
+- CLI de bootstrap: `init [--name] [--wiki] [--embedding-model] [--force]` (a primeira wiki chama-se `Default` se `--name` for omitido), `wiki` (listar, cadastrar, renomear, remover, padrão, pasta e ajustes), `sync` e `status` com `--wiki` repetível e `--all`, `doctor` (com `--json` em `sync`/`status`/`doctor`); no terminal, `nix` sem argumentos abre a interface mesmo antes do init; sem terminal, inicia o servidor, que exige o init. Uma configuração anterior, de uma wiki só, vira o `Default` e conserva o índice e os backups já gravados.
+- Várias wikis nomeadas (de 1 a 100, exatamente um padrão) no mesmo processo. Ferramenta sem `wiki` usa o padrão. Busca em uma, em várias ou em todas. Escrita numa única wiki.
+- Instalador `install.bat` / `install.ps1` / `install.sh` (`nix` e `nix-hook` da release, SHA-256, `NIX_HOME`/`nix` no PATH; a wiki fica para a interface).
 - Desinstalador `uninstall.bat` / `uninstall.ps1` / `uninstall.sh` (remove PATH/`NIX_HOME`, `nix` e `nix-hook`, `.nix/`, `settings.db` e o cache `onefile-*`/`hook-*`; apaga a pasta da instalação se ficar vazia; não toca no vault).
-- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local `nix ui` (status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em um ou mais vaults, notas, tags, insights, conexão de clientes, tráfego MCP, backups com restauração, tela Vaults, configuração e histórico).
+- CLI `nix config` (listar, gravar, remover, histórico e desfazer) e interface local (`nix` no terminal, ou `nix ui` depois do init): status, sincronização com progresso e controles desligados até o fim do job, diagnóstico, busca em uma ou mais wikis, notas, tags, insights, Mega Brain, conexão de clientes, tráfego MCP, backups com restauração, tela Wikis, configuração e histórico.
 - Servidor MCP recarrega a configuração entre chamadas; modelo de embedding e pasta do índice pedem reinício do cliente.
 - Registro MCP: `command` aponta para o binário em `NIX_HOME` (Windows: `${env:NIX_HOME}/bin/nix.exe` ou caminho absoluto; macOS/Linux: `{NIX_HOME}/bin/nix` absoluto). A interface gera o trecho de Cursor, VS Code, Claude Code e Codex.
 - Escrita com write-through, confirmação e backup.
-- Mega Brain: `brain.db`, `nix brain enable`, hooks com prévia e backup, páginas de sessão na wiki escolhida, briefing, handoff, perfil sem LLM, mensagens, tokens, `nix run` e o painel na interface. O nome vault segue aceito por uma versão, com aviso. A migração do `settings.db` renomeia `vaults` para `wikis` sem mexer em índices nem backups.
+- Mega Brain: `brain.db`, `nix brain enable`, hooks com prévia e backup, páginas de sessão na wiki escolhida, briefing, handoff, perfil sem LLM, mensagens, tokens, `nix run` e o painel na interface. A migração do `settings.db` renomeia `vaults` para `wikis` sem mexer em índices nem backups.
 - Filtros pasta/tag/data e wikilinks.
-- Memória de longo prazo (`remember` → `vault.longterm_folder`), insights (órfãs, duplicatas, links, resumo).
+- Memória de longo prazo (`remember` → `longterm_folder` da wiki), insights (órfãs, duplicatas, links, resumo).
 - Erros de domínio (`NixError`) na CLI e no MCP vão para stderr, sem traceback.
-- Seções globais graváveis: `index`, `retrieval`, `safety` e `logging`. O cadastro dos vaults fica à parte (`nix vault`). Um campo global definido por `NIX_SECAO__CAMPO` ganha do banco.
+- Seções globais graváveis: `index`, `retrieval`, `safety`, `logging`, `brain` e `profile`. O cadastro das wikis fica à parte (`nix wiki`). Um campo global definido por `NIX_SECAO__CAMPO` ganha do banco.
+- Guia publicado em `https://paulocesaaars.github.io/nix/` a cada push na `main` que altera `site/`. A release também publica a ficha `server.json` no MCP Registry.
 
 **Próximo**
 
@@ -315,7 +316,7 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 
 ## 13. Glossário
 
-- **Wiki** — diretório de notas em Markdown. O Nix guarda de 1 a 100, cada um com nome. O padrão é o usado quando o nome é omitido. O nome antigo "vault" segue aceito por uma versão e devolve aviso.
+- **Wiki** — diretório de notas em Markdown. O Nix guarda de 1 a 100, cada um com nome. O padrão é o usado quando o nome é omitido.
 - **Chunk** — trecho de uma nota, unidade indexada e recuperada.
 - **Embedding** — representação vetorial de um chunk, usada para busca por similaridade.
 - **MCP** — Model Context Protocol. O Nix expõe ferramentas exclusivamente via stdio.
@@ -326,5 +327,5 @@ Interface de edição de notas ou plugin do Obsidian; LLM/chat/agente próprio; 
 - **Perfil** — preferência repetida em projetos suficientes, em `profile/<categoria>/`, sem modelo de linguagem. Esquecer vira lápide.
 - **Hook de captura** — comando `nix-hook brain` que o agente chama a cada evento, instalado com `nix brain hooks install`.
 - **Wikilink** — referência entre notas no formato `[[Nome da Nota]]`.
-- **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa `nix` e `nix-hook`, confere o SHA-256, grava `NIX_HOME` e dispara `nix init`.
+- **Instalador** — `install.bat` / `install.ps1` / `install.sh`: baixa `nix` e `nix-hook`, confere o SHA-256, grava `NIX_HOME` e pede para executar `nix`. A wiki entra na interface ou com `nix init`. O MCP e `nix ui` exigem o `nix init`.
 - **Desinstalador** — `uninstall.bat` / `uninstall.ps1` / `uninstall.sh`: remove `NIX_HOME` e o `nix` do PATH, apaga `nix` e `nix-hook`, `.nix/`, `settings.db` e o cache `onefile-*`/`hook-*`, e a pasta da instalação se ficar vazia; não altera o vault.
