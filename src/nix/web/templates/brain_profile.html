@@ -15,7 +15,7 @@
   <article class="card">
     <p class="kpi-label">{{ item.category }}</p>
     <h2>{{ item.sentence }}</h2>
-    <p class="kpi-note"><a href="{{ wiki_url(item.href) }}">{{ item.page }}</a></p>
+    <p class="kpi-note"><a href="{{ wiki_url(item.href, brain_wiki) }}">{{ item.page }}</a></p>
   </article>
   {% endfor %}
 </div>

@@ -176,6 +176,17 @@ class IndexStore:
             row = self._conn.execute("SELECT COUNT(*) AS n FROM files").fetchone()
         return int(row["n"]) if row else 0
 
+    def indexed_markdown_stats(self) -> dict[str, tuple[float, int]]:
+        """mtime e tamanho das notas Markdown indexadas."""
+        rows = self._conn.execute(
+            "SELECT rel_path, mtime, size_bytes FROM files "
+            "WHERE status = 'indexed' AND lower(rel_path) LIKE '%.md'"
+        )
+        return {
+            str(row["rel_path"]): (float(row["mtime"]), int(row["size_bytes"]))
+            for row in rows
+        }
+
     def count_markdown(self, status: str = "indexed") -> int:
         row = self._conn.execute(
             "SELECT COUNT(*) AS n FROM files WHERE status = ? AND lower(rel_path) LIKE '%.md'",

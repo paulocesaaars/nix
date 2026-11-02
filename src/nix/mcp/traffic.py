@@ -8,6 +8,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
+from nix.config.editor import mark_editor_called
 from nix.core.admin.traffic import TrafficStore
 from nix.observability.logging import get_logger
 
@@ -144,6 +145,8 @@ class _TrafficRecorder:
         elapsed_ms: float,
         error: str | None = None,
     ) -> None:
+        if method == "tools/call":
+            await asyncio.to_thread(_remember_editor_called)
         if self._failures >= _MAX_FAILURES or method != "tools/call":
             return
         data = payload or {}
@@ -176,6 +179,18 @@ class _TrafficRecorder:
             )
         else:
             self._failures = 0
+
+
+def _remember_editor_called() -> None:
+    """A primeira tools/call marca a busca pedida. Falha aqui não derruba a ferramenta."""
+    try:
+        mark_editor_called(source="mcp")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Não foi possível gravar que o editor chamou uma ferramenta: %s. "
+            "A chamada segue; na próxima tools/call tento de novo.",
+            exc,
+        )
 
 
 def _make_traffic_logger(log_prompts: bool) -> Any:

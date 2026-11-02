@@ -14,7 +14,28 @@
 {{ notices(notice, error) }}
 
 {% if status %}
-{% if status.stale %}
+{% if checklist %}
+<section class="card stack" aria-labelledby="start-title">
+  <h2 id="start-title">Para começar</h2>
+  {% if checklist.intro %}<p>{{ checklist.intro }}</p>{% endif %}
+  <div>
+    {% for step in checklist.steps %}
+    <div class="list-row">
+      {% if step.done %}
+      <span class="badge b-ok"><span class="dot"></span>feito</span>
+      {% else %}
+      <span class="badge b-warn"><span class="dot"></span>pendente</span>
+      {% endif %}
+      <a class="grow" href="{{ wiki_url(step.href) }}">
+        <strong>{{ step.title }}</strong>
+        <span class="muted">{{ step.detail }}</span>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if status.stale and status.last_sync_at %}
 {% call alert("warn", (status.stale_reason or "Há mudanças na wiki que ainda não estão no índice.") ~ " Nada é vetorizado sem a sua autorização.", "O índice está desatualizado.") %}
 <a class="btn btn-sm" href="{{ wiki_url('/sync') }}">Ver o que mudou</a>
 {% endcall %}

@@ -100,7 +100,7 @@
   {% for item in project.pages %}
   <article class="card">
     <p class="kpi-label">{{ item.agent }}</p>
-    <p><a href="{{ wiki_url(item.href) }}">{{ item.path }}</a></p>
+    <p><a href="{{ wiki_url(item.href, brain_wiki) }}">{{ item.path }}</a></p>
   </article>
   {% endfor %}
 </div>

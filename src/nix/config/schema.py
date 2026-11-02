@@ -382,6 +382,20 @@ class BrainSettings(BaseModel):
         return cleaned
 
 
+class UiSettings(BaseModel):
+    """Estado da interface que não entra no formulário nem em `nix config set`.
+
+    `exclude=True` tira o campo de `iter_config_fields` e do `model_dump`.
+    `model_validate` continua lendo o valor gravado no settings.db.
+    """
+
+    editor_called: bool = Field(
+        default=False,
+        exclude=True,
+        description="O editor já chamou uma ferramenta. Gravado na primeira tools/call.",
+    )
+
+
 class ProfileSettings(BaseModel):
     """Perfil sem modelo de linguagem. A frase mais nova ganha; forget vira lápide."""
 
@@ -407,6 +421,7 @@ class NixConfig(AnchoredSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     brain: BrainSettings = Field(default_factory=BrainSettings)
     profile: ProfileSettings = Field(default_factory=ProfileSettings)
+    ui: UiSettings = Field(default_factory=UiSettings)
     settings_path: Path | None = Field(default=None, exclude=True)
     sources: dict[str, str] = Field(default_factory=dict, exclude=True)
 
@@ -510,6 +525,7 @@ _SECTION_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("logging", LoggingSettings),
     ("brain", BrainSettings),
     ("profile", ProfileSettings),
+    ("ui", UiSettings),
 )
 
 
@@ -639,12 +655,32 @@ def _choices(section: str, key: str, annotation: Any) -> tuple[str, ...] | None:
     return None
 
 
-def iter_config_fields() -> list[ConfigField]:
-    """Campos graváveis, na ordem das seções."""
+def excluded_setting_keys() -> tuple[tuple[str, str], ...]:
+    """Campos de seção com `exclude=True`, fora `path_anchor`.
+
+    Hoje só `ui.editor_called`. Ficam no settings.db e fora do histórico.
+    """
+    found: list[tuple[str, str]] = []
+    for section, model in _SECTION_MODELS:
+        for name, field in model.model_fields.items():
+            if name == "path_anchor" or not field.exclude:
+                continue
+            found.append((section, name))
+    return tuple(found)
+
+
+def iter_config_fields(*, include_excluded: bool = False) -> list[ConfigField]:
+    """Campos graváveis, na ordem das seções.
+
+    `include_excluded` alcança campos com `exclude=True` (a marca `ui.editor_called`).
+    O formulário e o `nix config set` usam o padrão e não os veem. `path_anchor` nunca entra.
+    """
     found: list[ConfigField] = []
     for section, model in _SECTION_MODELS:
         for name, field in model.model_fields.items():
-            if field.exclude or name == "path_anchor":
+            if name == "path_anchor":
+                continue
+            if field.exclude and not include_excluded:
                 continue
             lower, upper = _bounds(field)
             found.append(
@@ -663,8 +699,8 @@ def iter_config_fields() -> list[ConfigField]:
     return found
 
 
-def config_field(section: str, key: str) -> ConfigField:
-    for field in iter_config_fields():
+def config_field(section: str, key: str, *, include_excluded: bool = False) -> ConfigField:
+    for field in iter_config_fields(include_excluded=include_excluded):
         if field.section == section and field.key == key:
             return field
     raise KeyError(section, key)

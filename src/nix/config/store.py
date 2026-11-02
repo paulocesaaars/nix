@@ -331,15 +331,33 @@ class SettingsStore:
     def unset(self, section: str, key: str, *, source: str) -> bool:
         return self._write(section, key, None, source=source)
 
-    def write_many(self, updates: list[tuple[str, str, Any]], *, source: str) -> list[tuple[str, str]]:
-        """Grava vários campos e o histórico numa transação. Devolve o que mudou."""
+    def write_many(
+        self,
+        updates: list[tuple[str, str, Any]],
+        *,
+        source: str,
+        record_history: bool = True,
+    ) -> list[tuple[str, str]]:
+        """Grava vários campos numa transação. Devolve o que mudou.
+
+        `record_history` falso grava o settings.db sem linha em `settings_history`.
+        A marca `ui.editor_called` usa isso.
+        """
         if not updates:
             return []
         changed: list[tuple[str, str]] = []
         with self._connect() as conn:
             now = utc_now_iso()
             for section, key, value in updates:
-                if self._apply(conn, section, key, _encode(value), source=source, now=now):
+                if self._apply(
+                    conn,
+                    section,
+                    key,
+                    _encode(value),
+                    source=source,
+                    now=now,
+                    record_history=record_history,
+                ):
                     changed.append((section, key))
         return changed
 
@@ -356,6 +374,7 @@ class SettingsStore:
         *,
         source: str,
         now: str,
+        record_history: bool = True,
     ) -> bool:
         current = conn.execute(
             "SELECT value_json FROM settings WHERE section = ? AND key = ?",
@@ -377,27 +396,43 @@ class SettingsStore:
                 """,
                 (section, key, new_json, now),
             )
-        conn.execute(
-            """
-            INSERT INTO settings_history (section, key, old_value_json, new_value_json, source, changed_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (section, key, old_json, new_json, source, now),
-        )
+        if record_history:
+            conn.execute(
+                """
+                INSERT INTO settings_history (section, key, old_value_json, new_value_json, source, changed_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (section, key, old_json, new_json, source, now),
+            )
         return True
 
-    def history(self, limit: int = 50) -> list[SettingsChange]:
+    def history(
+        self,
+        limit: int = 50,
+        *,
+        skip: tuple[tuple[str, str], ...] = (),
+    ) -> list[SettingsChange]:
+        """Alterações recentes. `skip` tira campos que não são ajuste, como `ui.editor_called`."""
         if not self.path.is_file():
             return []
+        where = ""
+        params: list[Any] = []
+        if skip:
+            hidden = " OR ".join("(section = ? AND key = ?)" for _item in skip)
+            where = f"WHERE NOT ({hidden})"
+            for section, key in skip:
+                params.extend((section, key))
+        params.append(limit)
         with self._connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT id, section, key, old_value_json, new_value_json, source, changed_at
                 FROM settings_history
+                {where}
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (limit,),
+                params,
             ).fetchall()
         return [_change(row) for row in rows]
 

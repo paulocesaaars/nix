@@ -64,13 +64,13 @@ Rótulo de grupo na navegação: 11px, peso 600, caixa alta, espaçamento de 0.0
 
 ## Layout
 
-A página é uma barra lateral e uma coluna principal.
+A página é uma barra lateral em altura inteira e uma coluna principal. A coluna começa com a faixa **Wiki ativo** (nome e caminho na mesma linha). O conteúdo fica abaixo dessa faixa.
 
-A barra mostra a marca `nix`, a versão, o seletor **Wiki ativo** (nome e caminho) e cinco grupos: Operação (Status, Sincronizar, Diagnóstico), Wiki (Busca, Notas, Tags, Insights), Mega Brain (Painel, Caixa de entrada, Perfil), Integração (Conectar cliente, Tráfego MCP) e Manutenção (Backups, Wikis, Configuração, Histórico). No pé, o botão Encerrar. O painel do Mega Brain filtra os cartões pelo nome. A página do projeto usa as abas Visão geral, Agentes, Tokens, Sessões e Conhecimento (o componente **Abas**, classe `seg`); a aba fica na query `tab` da URL.
+A barra lateral mostra a marca `nix`, a versão e cinco grupos: Operação (Status, Sincronizar, Diagnóstico), Wiki (Busca, Notas, Tags, Insights), Mega Brain (Painel, Caixa de entrada, Perfil), Integração (Conectar cliente, Tráfego MCP) e Manutenção (Backups, Wikis, Configuração, Histórico). No pé, o botão Encerrar. O painel do Mega Brain filtra os cartões pelo nome. A página do projeto usa as abas Visão geral, Agentes, Tokens, Sessões e Conhecimento (o componente **Abas**, classe `seg`); a aba fica na query `tab` da URL.
 
 O item atual usa fundo `soft-2`, texto `ink` e peso 600. Os outros usam `muted`. Hover usa fundo `soft`.
 
-Abaixo de 760px a barra ocupa a largura inteira, os grupos viram uma faixa horizontal com rolagem, e os rótulos dos grupos e o botão Encerrar saem da barra. O caminho da wiki ativa fica numa linha só, com reticências.
+Abaixo de 760px a barra lateral ocupa a largura inteira, acima da faixa da wiki. Os grupos viram uma faixa horizontal com rolagem, e os rótulos dos grupos e o botão Encerrar saem da barra. O caminho da wiki ativa desce para a linha de baixo e fica truncado.
 
 ## Componentes
 
