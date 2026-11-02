@@ -408,7 +408,7 @@ O reprocessamento é de um único arquivo. Se a indexação falhar após a escri
 
 ### 6.4 Aviso de defasagem
 
-`index_status` compara a **contagem de notas Markdown** visíveis no vault com a de arquivos `.md` indexados, e o `mtime` e o tamanho de cada nota com a linha dela no índice. Uma nota gravada pelo write-through já está alinhada e não gera aviso, mesmo sendo mais nova que `last_sync_at`. PDFs anexos no índice não entram nessa conta (evita aviso falso de defasagem). Se houver divergência, devolve `stale=true`. A mensagem `stale_reason` só é preenchida quando `index.warn_when_stale=true`. Não há indexação implícita (RN-01).
+`index_status` compara a **contagem de notas Markdown** visíveis no vault com a de arquivos `.md` indexados, e o `mtime` e o tamanho de cada nota com a linha dela no índice. Uma nota gravada pelo write-through já está alinhada e não gera aviso, mesmo sendo mais nova que `last_sync_at`. PDFs anexos no índice não entram nessa conta (evita aviso falso de defasagem). Se houver divergência, devolve `stale=true`. A mensagem `stale_reason` só é preenchida quando `index.warn_when_stale=true`. `nix doctor` repete essa mensagem na checagem do índice e não imprime o valor do campo. Não há indexação implícita (RN-01).
 
 ### 6.5 Reaproveitamento de vetores (RF-150)
 
@@ -475,7 +475,14 @@ Definidas uma única vez em `core/tools/registry.py` (`SPECS`: 20 ferramentas de
 
 Ferramentas destrutivas (`update_note` em modo `replace`, `delete_note`) exigem `confirm=true` e levam `destructiveHint` para o cliente pedir aprovação ao usuário (RF-34). `move_note` e `move_file` não levam `destructiveHint`; sobrescrever o destino ainda exige `overwrite=true` e `confirm=true`. `read_note_lines` devolve no máximo 400 linhas (`truncated`, `next_start_line`). As linhas de `search_notes`, do outline e de `read_note_lines` são do arquivo bruto, com o frontmatter incluído.
 
-`wiki_insights` (órfãs, duplicatas, sugestão de wikilinks, resumo) usa o índice SQLite. A sugestão de links não relê a wiki. `brain_write_page`, `brain_patch_page` e `brain_delete_page` também levam `destructiveHint`.
+`wiki_insights` lê só o índice SQLite, sem reler a wiki. A ferramenta usa `limit=20` quando o argumento é omitido; a página Insights pede 100 e explica os quatro tipos. Nota com `status` diferente de `indexed` fica de fora.
+
+- **Órfãs:** nota sem vizinho no grafo (entrada ou saída) e cujo título, em minúsculas, não está entre os alvos de link gravados no índice.
+- **Duplicadas:** o mesmo título, sem diferenciar maiúsculas, em mais de um caminho. O título devolvido sai em minúsculas.
+- **Sugestões de link:** o corpo indexado contém o título de outra nota (pelo menos 4 caracteres), ainda sem `[[título]]` e sem aresta de saída para ela. Cada nota de origem entra no máximo uma vez, e a busca para no limite.
+- **Resumo:** contagem de notas indexadas, trechos, erros, órfãs e títulos duplicados, mais uma amostra de até 10 caminhos de órfãs.
+
+`brain_write_page`, `brain_patch_page` e `brain_delete_page` também levam `destructiveHint`.
 
 Todas as ferramentas de nota recebem `rel_path` relativo à wiki. `core/wiki/paths.py` resolve, normaliza, rejeita `..`, caminhos absolutos e links simbólicos que escapem da wiki (RN-03).
 
@@ -503,7 +510,7 @@ O mesmo job monta um `.mcpb` por plataforma (`scripts/release_registry.py`) e a 
 
 `NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. A instalação não cadastra a wiki. Ao terminar, pede para executar `nix` e, se o comando não funcionar, fechar e abrir o terminal. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
-O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação. Apaga também o cache de extração (`onefile-*` e `hook-*` em `{CACHE_DIR}/nix` e na pasta da instalação) e, se a pasta da instalação ficar vazia, a pasta. No Linux e no macOS esse cache não é a pasta da instalação; só entram diretórios com esses prefixos, para não apagar outros arquivos em `~/.cache/nix`. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração. O vault não é alterado. O modelo no cache do Hugging Face fica: pode ser compartilhado com outros programas.
+O desinstalador pede confirmação (dispensada com `--yes`). Remove `NIX_HOME` e a entrada do PATH só se apontarem para esta instalação. Apaga também o cache de extração (`onefile-*` e `hook-*` em `{CACHE_DIR}/nix` e na pasta da instalação) e, se a pasta da instalação ficar vazia, a pasta. No Linux e no macOS esse cache não é a pasta da instalação; só entram diretórios com esses prefixos, para não apagar outros arquivos em `~/.cache/nix`. `--keep-data` preserva `settings.db` e `.nix/` e ainda apaga o cache de extração. O vault não é alterado. O modelo no cache do Hugging Face fica: pode ser compartilhado com outros programas. No Windows, `uninstall.ps1` apaga `nix.exe` e `nix-hook.exe` antes do PATH. Se um dos dois estiver em uso, o script encerra nessa hora e o PATH permanece.
 
 No binário, `app_root()` ignora o checkout (o `__file__` da extração não é o repositório) e não usa o CWD: vale `$NIX_HOME` ou a pasta de dados da plataforma. `settings.db` e `.nix/` ficam nessa pasta. Copiar só o executável para outro diretório continua usando a mesma pasta de dados.
 
@@ -583,7 +590,7 @@ Telas: status do índice, sincronização (prévia, progresso por SSE, opção d
 
 Os controles de sincronização (prévia, incremental, reindexação e "todos os vaults") ficam num fieldset desligado enquanto o job existe. O primeiro clique desliga o fieldset inteiro antes da resposta. O POST de início devolve esse fieldset desligado fora da área do progresso, porque a resposta volta antes de o modelo terminar de carregar. O fim do job devolve o mesmo fieldset habilitado. Recarregar `/sync` no meio lê o job ainda em andamento e renderiza o fieldset desligado. Um segundo início, ou uma prévia com job ativo, recebe 409 no aviso da página e não substitui o progresso. A prévia não varre o vault nesse caso. Sem job, a prévia percorre um vault por vez e solta a trava daquele vault antes do próximo.
 
-O seletor de wiki fica numa faixa no topo da coluna principal, ao lado da barra lateral ("Wiki ativo", com o caminho da wiki escolhida na mesma linha). No celular a barra lateral ocupa a largura inteira acima dessa faixa, e o caminho desce truncado para a linha de baixo. É um formulário GET com `?wiki=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: uma wiki, várias ou todas (`wiki=*`), e cada trecho exibe a wiki de origem. O menu tem os grupos Operação, Wiki, Mega Brain, Integração e Manutenção.
+O seletor de wiki fica numa faixa no topo da coluna principal, ao lado da barra lateral ("Wiki ativo", com o caminho da wiki escolhida na mesma linha). No celular a barra lateral ocupa a largura inteira acima dessa faixa, e o caminho desce truncado para a linha de baixo. É um formulário GET com `?wiki=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: uma wiki, várias ou todas (`wiki=*`), e cada trecho exibe a wiki de origem. O menu tem os grupos Operação, Wiki, Mega Brain, Integração e Manutenção. No Mega Brain, o perfil e a aba Conhecimento montam o link da nota com a wiki de `brain.wiki`, não com a da faixa.
 
 Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP. `RuntimeGate` tem uma trava por vault, para ler um enquanto outro sincroniza. Se a trava daquele vault estiver ocupada, a tela pede para esperar em vez de bloquear. O diagnóstico da interface percorre os vaults deste processo; `nix doctor` no terminal abre o seu.
 
@@ -607,7 +614,7 @@ O Nix não instala skill de produto. Não há `src/nix/skills` nem o comando `ni
 
 ## 10. Configuração
 
-Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência dos campos globais: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_INDEX__EMBEDDING_MODEL`). `NIX_VAULT__*` e `NIX_WIKI__*` são ignorados: o cadastro vive na tabela `wikis`. `nix init` grava a primeira wiki, o modelo e a marca `initialized`. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`, com subpasta por wiki, exceto a wiki migrada do esquema 1, que permanece na raiz (seção 3.1).
+Banco `{app_root}/settings.db`, fora de `index.data_dir`. No binário, `app_root` é `$NIX_HOME` ou a pasta de dados da plataforma. No checkout, `app_root` é a pasta do repositório, senão `$NIX_HOME`, senão o CWD. Caminhos relativos (`data_dir`, `backup_dir`, `logging.file`) resolvem contra `app_root`, não contra o CWD. Precedência dos campos globais: **variável de ambiente > settings.db > padrão** (RF-03). Variáveis no formato `NIX_SECAO__CAMPO` (ex.: `NIX_INDEX__EMBEDDING_MODEL`). `NIX_VAULT__*` e `NIX_WIKI__*` são ignorados: o cadastro vive na tabela `wikis`. `NIX_UI__EDITOR_CALLED` também é ignorado: `ui.editor_called` não é configuração. `nix init` grava a primeira wiki, o modelo e a marca `initialized`. Estado do índice (SQLite, Chroma, backups, logs) continua em `{app_root}/.nix/`, com subpasta por wiki, exceto a wiki migrada do esquema 1, que permanece na raiz (seção 3.1).
 
 ```sql
 CREATE TABLE meta (
@@ -615,7 +622,7 @@ CREATE TABLE meta (
     value TEXT NOT NULL
 );
 CREATE TABLE settings (
-    section    TEXT NOT NULL,  -- index, retrieval, safety, logging, brain, profile
+    section    TEXT NOT NULL,  -- index, retrieval, safety, logging, brain, profile, ui
     key        TEXT NOT NULL,
     value_json TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -644,7 +651,7 @@ CREATE UNIQUE INDEX wikis_one_default
 
 `schema_version` é `3`. Na abertura, a versão 1 vira 2 (a seção `vault` vira a linha `Default`) e a 2 vira 3: a tabela `vaults` é renomeada para `wikis` e o histórico com `section = vaults` passa a `wikis`, sem mover índice nem backups. A wiki do esquema 1 fica com `legacy_layout` e continua na raiz de `index.data_dir` e `safety.backup_dir` (seção 3.1). As versões 1 e 2 não são erro. Qualquer outra pede `nix init --force`. `--force` apaga ajustes, wikis e histórico e recria o esquema; as notas não são alteradas. Lista vazia de wikis é o estado anterior ao init e é válida no `load_config`. A marca `initialized` só o `nix init` grava. Com wikis cadastradas, a validação exige de 1 a 100, exatamente um padrão, nomes únicos sem diferenciar maiúsculas (`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, grafia original preservada) e caminhos que não se sobrepõem. Um nome no formato `AAAAMMDDTHHMMSS` é recusado: é o carimbo das pastas de backup. `include`, `exclude`, `follow_symlinks`, `default_new_note_folder`, `default_frontmatter` e `longterm_folder` nascem em `settings_json` com o padrão do schema e mudam com `nix wiki set` (listas e objetos em JSON). O padrão de `exclude` é `.trash/**`, `Templates/**` e `Privado/**`. `nix wiki path` troca a pasta. O editor genérico não grava o cadastro e aponta para esses comandos.
 
-As seções `brain` (`enabled` falso, `wiki` vazio, `briefing_max_bytes` 3000, `idle_end_after_hours` 0) e `profile` (`min_projects` 2) aceitam `NIX_BRAIN__*` e `NIX_PROFILE__*`. Só `brain.enabled` exige reinício do cliente MCP para as ferramentas `brain_*` aparecerem.
+As seções `brain` (`enabled` falso, `wiki` vazio, `briefing_max_bytes` 3000, `idle_end_after_hours` 0) e `profile` (`min_projects` 2) aceitam `NIX_BRAIN__*` e `NIX_PROFILE__*`. Só `brain.enabled` exige reinício do cliente MCP para as ferramentas `brain_*` aparecerem. A seção `ui` só tem `editor_called` (falso). Ele fica fora do formulário, de `nix config` e do histórico. A primeira `tools/call` grava verdadeiro; o efeito no Status está na seção 9.3.
 
 O texto de ajuda de cada campo global está no schema Pydantic. `index.embedding_model` grava o id do Hugging Face: `lulu` é `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` e `spitz` é `BAAI/bge-m3`. A raça também é aceita na gravação. O número da tabela do `nix init` não é um id e só vale nesse comando. `index.auto_sync_external_changes` não pode ser ligado (RN-01). Trocar modelo, pasta-base do índice ou tamanho de chunk avisa que é preciso `nix sync --full` e, no caso do modelo e de `data_dir`, reiniciar o processo. Trocar `index.index_attachments` avisa que é preciso `nix sync`. O carimbo do recarregamento a quente junta a data mais recente, o maior id do histórico e a quantidade de wikis, para uma remoção também ser percebida.
 

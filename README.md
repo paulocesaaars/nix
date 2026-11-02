@@ -640,9 +640,9 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 
 `nix ui` abre as mesmas operações no navegador, sem precisar de um LLM:
 
-- **Operação:** status, sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
-- **Wiki (somente leitura):** busca em uma, em várias ou em todas, notas (com outline e trechos), tags e insights. O seletor "Wiki ativo", na faixa acima do conteúdo, usa `?wiki=`; sem ele, vale o padrão.
-- **Mega Brain:** painel, caixa de entrada e perfil.
+- **Operação:** status (o bloco Para começar fica até a wiki escolhida ter sido sincronizada e o editor ter chamado uma ferramenta; o aviso de índice desatualizado só aparece depois dessa sincronização), sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
+- **Wiki (somente leitura):** busca em uma, em várias ou em todas, notas (com outline e trechos), tags e insights. A página de insights explica órfãs, duplicadas, sugestões de link e o resumo. O seletor "Wiki ativo", na faixa acima do conteúdo, usa `?wiki=`; sem ele, vale o padrão.
+- **Mega Brain:** painel, caixa de entrada e perfil. Os links de uma página de perfil ou de sessão abrem a wiki configurada no Mega Brain.
 - **Integração:** trechos prontos para conectar Cursor, VS Code, Claude Code e Codex; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita na wiki feita pela interface, com confirmação; tela Wikis; formulário de configuração e histórico.
 
