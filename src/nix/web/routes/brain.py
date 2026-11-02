@@ -94,7 +94,12 @@ async def profile_page(request: Request) -> Response:
     return page(
         request,
         "brain_profile.html",
-        {"title": "Perfil", "active": "profile", "entries": rows},
+        {
+            "title": "Perfil",
+            "active": "profile",
+            "entries": rows,
+            "brain_wiki": load_brain_flags().wiki,
+        },
     )
 
 
@@ -129,6 +134,7 @@ async def project_page(request: Request) -> Response:
             "missing": False,
             "project": _project_view(store, project, sessions),
             "tab": tab,
+            "brain_wiki": load_brain_flags().wiki,
             "tabs": [
                 {"id": item_id, "label": label, "href": _project_href(project.key, item_id)}
                 for item_id, label in _TABS
