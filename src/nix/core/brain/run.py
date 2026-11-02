@@ -13,7 +13,7 @@ from nix.config.executables import packaged_hook_executable
 from nix.config.loader import load_config
 from nix.core.admin import agent_hooks
 from nix.core.admin.doctor import nix_command
-from nix.core.brain.agents import AGENTS
+from nix.core.brain.agents import AGENTS, executable_for
 from nix.core.brain.events import find_project
 from nix.core.brain.history import find_previous_history
 from nix.core.brain.history.stage import discard, stage_readonly
@@ -25,6 +25,7 @@ _MCP_PROJECT: dict[str, tuple[str, str]] = {
     "claude": (".mcp.json", "mcpServers"),
     "cursor": (".cursor/mcp.json", "mcpServers"),
     "copilot": (".vscode/mcp.json", "servers"),
+    "devin": (".devin/mcp_config.json", "mcpServers"),
 }
 
 
@@ -53,11 +54,12 @@ def launch(agent: str, extra: list[str], *, project: str | None = None, autowire
         staged = stage_readonly(source)
         env["NIX_PREVIOUS_SESSION_HISTORY"] = str(staged)
     _emit(notes)
-    command = [key, *extra]
-    if shutil.which(key) is None:
+    binary = executable_for(key)
+    command = [binary, *extra]
+    if shutil.which(binary) is None:
         discard(staged)
         raise ConfigError(
-            f"Não achei o executável {key!r} no PATH. Instale o agente ou informe o comando certo."
+            f"Não achei o executável {binary!r} no PATH. Instale o agente ou informe o comando certo."
         )
     try:
         completed = subprocess.run(command, env=env, check=False)

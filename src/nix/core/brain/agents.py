@@ -15,8 +15,42 @@ AGENT_LABELS: dict[str, str] = {
     "copilot": "VS Code",
     "claude": "Claude Code",
     "codex": "Codex",
+    "command-code": "Command Code",
+    "devin": "Devin (CLI e Desktop)",
+    "opencode": "OpenCode",
+    "gemini": "Gemini CLI",
+    "omp": "Oh My Pi",
+    "pi": "Pi",
+    "openclaw": "OpenClaw",
+    "antigravity": "Antigravity CLI",
+    "grok": "Grok Build CLI",
+    "zero": "Zero",
+    "zcode": "ZCode",
+    "kimi": "Kimi Code",
+    "kiro": "Kiro CLI",
+    "copilot-cli": "GitHub Copilot CLI",
+    "droid": "Factory Droid",
+    "muse": "Meta Muse Code",
+    "ibm-bob": "IBM Bob",
+    "qwen": "Qwen Code",
+    "qoder": "Qoder",
+    "hermes": "Hermes Agent",
 }
 AGENTS: tuple[str, ...] = tuple(AGENT_LABELS)
+
+# Binário chamado por `nix run` quando difere da chave. `copilot` é o VS Code; o CLI é o binário `copilot`.
+EXECUTABLES: dict[str, str] = {
+    "command-code": "cmd",
+    "antigravity": "agy",
+    "kiro": "kiro-cli",
+    "copilot-cli": "copilot",
+    "ibm-bob": "bob",
+    "qoder": "qodercli",
+}
+
+
+def executable_for(agent: str) -> str:
+    return EXECUTABLES.get(agent, agent)
 
 
 def _cursor(text: str) -> dict[str, object]:
