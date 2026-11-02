@@ -5,9 +5,24 @@
 <div class="head">
   <div>
     <h1>Insights</h1>
-    <p class="sub">Qualidade da wiki segundo o índice. A UI só aponta; quem edita é você ou o agente.</p>
+    <p class="sub">Diagnóstico só de leitura da wiki ativa, calculado pelo índice. A página só aponta; quem edita é você ou o agente.</p>
   </div>
 </div>
+
+<section class="card stack-md">
+  <h2>O que são insights</h2>
+  <p>Eles respondem o que está solto, repetido ou sem ligação nesta wiki. Os números saem do índice, sem reler os arquivos. Vale a wiki escolhida no seletor; cada lista mostra até 100 itens.</p>
+  <dl>
+    <dt>Órfãs</dt>
+    <dd>Notas indexadas sem vizinhos no grafo e cujo título ninguém aponta. Ninguém liga para elas e elas não ligam para ninguém.</dd>
+    <dt>Duplicadas</dt>
+    <dd>O mesmo título em mais de um caminho. A comparação ignora maiúsculas, então um wikilink pelo título fica ambíguo.</dd>
+    <dt>Sugestões de link</dt>
+    <dd>Uma nota menciona o título de outra, com pelo menos 4 caracteres, e ainda não tem o wikilink <span class="mono">[[título]]</span>.</dd>
+    <dt>Resumo</dt>
+    <dd>Contagens de notas indexadas, trechos, erros, órfãs e títulos duplicados, com uma amostra de até 10 órfãs.</dd>
+  </dl>
+</section>
 
 <nav class="seg" aria-label="Tipo de insight">
   {% for key, label in kinds %}<a href="{{ wiki_url('/insights?kind=' ~ key) }}" {% if kind == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
