@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "5.0.1"
+version = "5.1.0"
 description = "Servidor MCP stdio para wikis em Markdown"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -44,7 +44,7 @@ known-first-party = ["nix", "nix_launch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 addopts = "-ra --strict-markers"
 markers = [
     "bdd(id): cenário do BDD.md coberto pelo teste (ex.: \"HU-03.2\")",

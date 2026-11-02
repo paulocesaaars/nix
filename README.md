@@ -152,8 +152,9 @@ O projeto é a raiz Git, ou a pasta se não houver repositório. Um `.nix.toml` 
 | VS Code | `.github/hooks/nix.json` |
 | Claude Code | `.claude/settings.local.json` |
 | Codex | `.codex/hooks.json` (só executa depois de confiar em `/hooks`) |
+| Devin (CLI e Desktop) | `.devin/hooks.v1.json` |
 
-`nix brain hooks install --all` instala esses clientes, nesta ordem. O escopo global grava arquivo só quando o caminho está confirmado; nos demais, a captura fica parcial e nenhum JSON é inventado.
+`nix brain hooks install --all` instala esses clientes, nesta ordem. Os outros clientes da lista (Command Code, OpenCode, Gemini CLI, GitHub Copilot CLI e demais) ficam com captura parcial: nenhum JSON é inventado. O escopo global grava arquivo só quando o caminho está confirmado.
 
 A página da sessão vai para `projects/<projeto>/sessions/` na wiki do Mega Brain. Ela só é gravada quando a sessão encerra e o `nix brain work` roda. O handoff e o recado ficam na base, não nessa página.
 
@@ -437,7 +438,7 @@ Estes são os comandos que você roda no terminal. `nix --help` lista os grupos.
 | `nix status` | Mostra se o índice está atrás da wiki. Aceita `--json`, `--wiki` e `--all` |
 | `nix doctor` | Confere ambiente, configuração, o comando que o MCP deve chamar e o índice. `--json` entrega o relatório inteiro |
 | `nix ui` | Abre a interface no navegador. Exige o `nix init`. `--no-browser` só imprime a URL. `--port N` fixa a porta |
-| `nix run AGENTE` | Sobe Cursor, VS Code (`copilot`), Claude Code (`claude`) ou Codex (`codex`). Instala o hook e o MCP do projeto se faltarem. `--no-autowire` não mexe nesses arquivos. `--project PASTA` escolhe o repositório. Para Claude Code e Codex, deixa o histórico nativo anterior em `NIX_PREVIOUS_SESSION_HISTORY` até o agente terminar |
+| `nix run AGENTE` | Sobe o agente: Cursor, VS Code (`copilot`), Claude Code (`claude`), Codex (`codex`), Devin (`devin`) ou outro da lista (Command Code chama `cmd`; Antigravity, `agy`; Kiro, `kiro-cli`; GitHub Copilot CLI, `copilot`; IBM Bob, `bob`; Qoder, `qodercli`). Instala o hook e o MCP do projeto se faltarem; no MCP do projeto, só Claude Code, Cursor, VS Code e Devin. `--no-autowire` não mexe nesses arquivos. `--project PASTA` escolhe o repositório. Para Claude Code e Codex, deixa o histórico nativo anterior em `NIX_PREVIOUS_SESSION_HISTORY` até o agente terminar |
 | `nix wiki list` | Lista as wikis, a pasta e qual é a padrão. `--json` entrega a lista |
 | `nix wiki add NOME CAMINHO` | Cadastra outra wiki. O limite é 100 |
 | `nix wiki rename ANTIGO NOVO` | Troca o nome no cadastro. Não move a pasta nem o índice |
@@ -477,7 +478,7 @@ Estes são os comandos que você roda no terminal. `nix --help` lista os grupos.
 - **Trazer para o índice o que você editou fora do Nix.** Rode `nix sync`. `--dry-run` mostra o que mudaria. `--full` reconstrói o índice, e é obrigatório depois de trocar o modelo de embedding.
 - **Usar mais de uma wiki.** `nix wiki add Trabalho C:/Notas/Trabalho` cadastra a segunda. `nix wiki default Trabalho` passa a usá-la quando o nome é omitido. A busca pode pedir uma, várias ou todas.
 - **Descobrir por que o editor não conecta.** `nix doctor` confere o comando, a configuração e o índice.
-- **Guardar memória entre agentes.** `nix brain enable --wiki Default` liga o Mega Brain. `nix brain hooks install --scope global --all` faz Cursor, VS Code, Claude Code e Codex chamarem o Nix a cada evento da sessão. O VS Code não tem arquivo global: a captura dele fica parcial.
+- **Guardar memória entre agentes.** `nix brain enable --wiki Default` liga o Mega Brain. `nix brain hooks install --scope global --all` faz Cursor, VS Code, Claude Code, Codex e Devin chamarem o Nix a cada evento da sessão. O VS Code não tem arquivo global: a captura dele fica parcial.
 - **Continuar no Codex o que estava fazendo no Claude.** Os dois clientes precisam ter o MCP da Nix, o Mega Brain ligado e a mesma pasta do projeto. No Claude, peça para deixar registrado onde a sessão parou: ele chama `brain_handoff_create`. Abra o Codex e diga para continuar o que estava fazendo no Claude: ele chama `brain_handoff_accept` com o agente `codex` e, se precisar do resto, `brain_query` ou `brain_read_page`. Sem o MCP, o mesmo texto pode ser aberto e reivindicado no terminal com `nix brain handoff create` e `nix brain handoff accept --agent codex`. O hook, sozinho, só entrega no início da sessão um briefing com os últimos pedidos.
 - **Deixar um recado para o outro agente.** Com o Mega Brain ligado, `brain_message_send` coloca uma mensagem na fila do projeto. O outro agente pega com `brain_message_pop`, uma única vez.
 - **Ler o que o Mega Brain já guardou.** `brain_query` busca na wiki do Mega Brain e nas observações. `brain_recent_pages` lista as páginas de sessão. `brain_read_page` lê uma página pelo caminho. O texto encontrado é histórico.
@@ -643,7 +644,7 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 - **Operação:** status (o bloco Para começar fica até a wiki escolhida ter sido sincronizada e o editor ter chamado uma ferramenta; o aviso de índice desatualizado só aparece depois dessa sincronização), sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
 - **Wiki (somente leitura):** busca em uma, em várias ou em todas, notas (com outline e trechos), tags e insights. A página de insights explica órfãs, duplicadas, sugestões de link e o resumo. O seletor "Wiki ativo", na faixa acima do conteúdo, usa `?wiki=`; sem ele, vale o padrão.
 - **Mega Brain:** painel, caixa de entrada e perfil. Os links de uma página de perfil ou de sessão abrem a wiki configurada no Mega Brain.
-- **Integração:** trechos prontos para conectar Cursor, VS Code, Claude Code e Codex; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
+- **Integração:** trechos prontos para conectar Cursor, VS Code, Claude Code, Codex, Devin e outros 19 clientes; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita na wiki feita pela interface, com confirmação; tela Wikis; formulário de configuração e histórico.
 
 O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL; `--port` fixa a porta.

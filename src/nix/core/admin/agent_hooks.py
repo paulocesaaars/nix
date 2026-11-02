@@ -20,6 +20,7 @@ parcial e nenhum JSON é inventado.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import shutil
@@ -59,7 +60,15 @@ class AgentSpec:
     global_rel: str = ""
     # Sem arquivo: o formato não foi confirmado. O consentimento ainda pode ser registrado.
     partial: bool = False
+    # Layout do arquivo global quando difere do de projeto (Devin: raiz no projeto, `hooks` na conta).
+    global_layout: str = ""
+    # Caminho no Windows, relativo a %APPDATA%, quando a conta não usa a home.
+    global_appdata: str = ""
 
+
+_PARTIAL_NOTE = (
+    "Formato único de hook por comando não confirmado: a captura fica parcial e nenhum arquivo é gravado."
+)
 
 SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
@@ -126,6 +135,195 @@ SPECS: tuple[AgentSpec, ...] = (
         global_rel=".codex/hooks.json",
         note="O Codex só executa o hook depois de confiar em /hooks.",
     ),
+    AgentSpec(
+        key="command-code",
+        label=AGENT_LABELS["command-code"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="devin",
+        label=AGENT_LABELS["devin"],
+        rel_path=".devin/hooks.v1.json",
+        layout="devin",
+        events=(
+            ("SessionStart", "session-start"),
+            ("UserPromptSubmit", "user-prompt"),
+            ("PostToolUse", "post-tool"),
+            ("PostCompaction", "compact"),
+            ("Stop", "stop"),
+            ("SessionEnd", "session-end"),
+        ),
+        global_rel=".config/devin/config.json",
+        global_layout="claude",
+        global_appdata="devin/config.json",
+        note="O Desktop só lê esses arquivos; `nix run devin` chama o binário devin.",
+    ),
+    AgentSpec(
+        key="opencode",
+        label=AGENT_LABELS["opencode"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="gemini",
+        label=AGENT_LABELS["gemini"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="omp",
+        label=AGENT_LABELS["omp"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="pi",
+        label=AGENT_LABELS["pi"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="openclaw",
+        label=AGENT_LABELS["openclaw"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="antigravity",
+        label=AGENT_LABELS["antigravity"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="grok",
+        label=AGENT_LABELS["grok"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="zero",
+        label=AGENT_LABELS["zero"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="zcode",
+        label=AGENT_LABELS["zcode"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="kimi",
+        label=AGENT_LABELS["kimi"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="kiro",
+        label=AGENT_LABELS["kiro"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="copilot-cli",
+        label=AGENT_LABELS["copilot-cli"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="droid",
+        label=AGENT_LABELS["droid"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="muse",
+        label=AGENT_LABELS["muse"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="ibm-bob",
+        label=AGENT_LABELS["ibm-bob"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="qwen",
+        label=AGENT_LABELS["qwen"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="qoder",
+        label=AGENT_LABELS["qoder"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
+    AgentSpec(
+        key="hermes",
+        label=AGENT_LABELS["hermes"],
+        rel_path="",
+        layout="",
+        events=(),
+        partial=True,
+        note=_PARTIAL_NOTE,
+    ),
 )
 
 
@@ -156,6 +354,8 @@ def _powershell_command(exe: str, event: str, agent: str) -> str:
 def _single_command(exe: str, event: str, agent: str) -> str:
     """Um só `command` para agentes sem campo por sistema. No Windows não há `[ -x ]`."""
     if sys.platform == "win32":
+        if agent in {"codex", "cursor", "claude"}:
+            return _powershell_command(exe, event, agent)
         return f'"{exe}" brain --event {event} --agent {agent}'
     return _unix_command(exe, event, agent)
 
@@ -163,6 +363,8 @@ def _single_command(exe: str, event: str, agent: str) -> str:
 def _entry_nested(exe: str, event: str, agent: str) -> dict[str, Any]:
     """Claude Code e Codex: o comando fica dentro de uma lista `hooks`."""
     handler = {"type": "command", "command": _single_command(exe, event, agent), "timeout": _HOOK_TIMEOUT_S}
+    if sys.platform == "win32" and agent == "claude":
+        handler["shell"] = "powershell"
     return {"hooks": [handler]}
 
 
@@ -183,6 +385,7 @@ def _entry_copilot(exe: str, event: str, agent: str) -> dict[str, Any]:
 _ENTRY_BUILDERS: dict[str, Callable[[str, str, str], dict[str, Any]]] = {
     "claude": _entry_nested,
     "codex": _entry_nested,
+    "devin": _entry_nested,
     "cursor": _entry_cursor,
     "copilot": _entry_copilot,
 }
@@ -205,8 +408,19 @@ def _entry_is_nix(entry: Any) -> bool:
     return any(_is_nix(entry.get(key)) for key in ("command", "bash", "powershell"))
 
 
-def _table(doc: dict[str, Any], *, create: bool) -> dict[str, Any] | None:
-    """Tabela evento → lista, na chave `hooks`."""
+_NESTED = frozenset({"claude", "codex", "devin"})
+# Layouts em que o mapa de eventos é a própria raiz do arquivo, sem a chave `hooks`.
+_ROOT_MAP = frozenset({"devin"})
+
+
+def layout_for(spec: AgentSpec, scope: str) -> str:
+    return (spec.global_layout or spec.layout) if scope == "global" else spec.layout
+
+
+def _table(doc: dict[str, Any], *, create: bool, layout: str = "") -> dict[str, Any] | None:
+    """Tabela evento → lista, na chave `hooks` (ou a raiz, nos layouts de mapa na raiz)."""
+    if layout in _ROOT_MAP:
+        return doc
     table = doc.get("hooks")
     if isinstance(table, dict):
         return table
@@ -219,7 +433,7 @@ def _table(doc: dict[str, Any], *, create: bool) -> dict[str, Any] | None:
 
 def strip_nix(doc: dict[str, Any], layout: str) -> int:
     """Tira as entradas da Nix e devolve quantas saíram. Entradas do usuário ficam."""
-    table = _table(doc, create=False)
+    table = _table(doc, create=False, layout=layout)
     if table is None:
         return 0
     removed = 0
@@ -229,7 +443,7 @@ def strip_nix(doc: dict[str, Any], layout: str) -> int:
             continue
         kept: list[Any] = []
         for item in items:
-            nested = layout in {"claude", "codex"}
+            nested = layout in _NESTED
             if nested and isinstance(item, dict) and isinstance(item.get("hooks"), list):
                 inner = [h for h in item["hooks"] if not _entry_is_nix(h)]
                 removed += len(item["hooks"]) - len(inner)
@@ -243,7 +457,7 @@ def strip_nix(doc: dict[str, Any], layout: str) -> int:
             table[event] = kept
         else:
             del table[event]
-    if not table:
+    if not table and layout not in _ROOT_MAP:
         doc.pop("hooks", None)
     return removed
 
@@ -253,13 +467,16 @@ def count_nix(doc: dict[str, Any], layout: str) -> int:
     return strip_nix(copy, layout)
 
 
-def build_document(existing: dict[str, Any] | None, spec: AgentSpec, exe: str) -> dict[str, Any]:
+def build_document(
+    existing: dict[str, Any] | None, spec: AgentSpec, exe: str, scope: str = "project"
+) -> dict[str, Any]:
     """O arquivo com as entradas da Nix no lugar. Rodar de novo troca as dela, sem duplicar (RF-124)."""
     doc: dict[str, Any] = json.loads(json.dumps(existing)) if existing else {}
-    strip_nix(doc, spec.layout)
-    if spec.layout in {"cursor", "copilot"}:
+    layout = layout_for(spec, scope)
+    strip_nix(doc, layout)
+    if layout in {"cursor", "copilot"}:
         doc.setdefault("version", 1)
-    table = _table(doc, create=True)
+    table = _table(doc, create=True, layout=layout)
     if table is None:
         raise ConfigError(f"Não foi possível montar a tabela de hooks de {spec.label}. Reporte este erro.")
     for agent_event, nix_event in spec.events:
@@ -316,8 +533,15 @@ def _scope_base(root: Path, scope: str) -> Path:
     return Path.home() if scope == "global" else root
 
 
-def _scope_relative(spec: AgentSpec, scope: str) -> str:
-    return spec.global_rel if scope == "global" else spec.rel_path
+def _scope_path(root: Path, spec: AgentSpec, scope: str) -> Path:
+    """Arquivo do agente no escopo. No Windows, alguns globais ficam em %APPDATA%."""
+    if scope == "global":
+        if spec.global_appdata and sys.platform == "win32":
+            appdata = os.environ.get("APPDATA")
+            base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+            return base / spec.global_appdata
+        return Path.home() / spec.global_rel
+    return root / spec.rel_path
 
 
 def plan_install(root: Path, agents: list[str], exe: str, *, scope: str = "project") -> list[AgentPlan]:
@@ -329,11 +553,9 @@ def plan_install(root: Path, agents: list[str], exe: str, *, scope: str = "proje
         if _fileless(spec, scope):
             plans.append(AgentPlan(spec, root, False, "parcial", "", 0, scope))
             continue
-        rel = _scope_relative(spec, scope)
-        base = _scope_base(root, scope)
-        path = base / rel
+        path = _scope_path(root, spec, scope)
         existing = _load(path)
-        doc = build_document(existing, spec, exe)
+        doc = build_document(existing, spec, exe, scope)
         text = _dump(doc)
         current = path.read_text(encoding="utf-8") if existing is not None else None
         if current is None:
@@ -358,7 +580,11 @@ def _fileless(spec: AgentSpec, scope: str) -> bool:
 def backup_file(path: Path, root: Path, backup_dir: Path) -> Path:
     """Cópia antes de alterar um arquivo existente (RF-124)."""
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    dest = backup_dir / "hooks" / stamp / root.name / path.relative_to(root)
+    try:
+        tail = Path(root.name) / path.relative_to(root)
+    except ValueError:  # arquivo fora da base (ex.: %APPDATA%)
+        tail = Path("fora-da-base") / path.parent.name / path.name
+    dest = backup_dir / "hooks" / stamp / tail
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copy2(path, dest)
@@ -434,11 +660,11 @@ def remove_hooks(
 
 def _remove_one(root: Path, spec: AgentSpec, backup_dir: Path, scope: str) -> RemoveResult:
     base = _scope_base(root, scope)
-    path = base / _scope_relative(spec, scope)
+    path = _scope_path(root, spec, scope)
     doc = _load(path)
     if doc is None:
         return RemoveResult(spec, 0, False, None)
-    removed = strip_nix(doc, spec.layout)
+    removed = strip_nix(doc, layout_for(spec, scope))
     if removed == 0:
         return RemoveResult(spec, 0, False, None)
     backup = backup_file(path, base, backup_dir).as_posix()
@@ -447,7 +673,8 @@ def _remove_one(root: Path, spec: AgentSpec, backup_dir: Path, scope: str) -> Re
         _write_utf8(path, _dump(doc))
         return RemoveResult(spec, removed, False, backup)
     path.unlink()
-    prune_empty_dirs(path.parent, base)
+    if path.is_relative_to(base):
+        prune_empty_dirs(path.parent, base)
     return RemoveResult(spec, removed, True, backup)
 
 
@@ -515,9 +742,9 @@ def status(root: Path, project: str, store: BrainStore) -> list[AgentStatus]:
                 if has_consent:
                     fileless_consent = True
                 continue
-            path = _scope_base(root, item_scope) / _scope_relative(spec, item_scope)
+            path = _scope_path(root, spec, item_scope)
             file_exists = file_exists or path.is_file()
-            count = _nix_entries(path, spec.layout)
+            count = _nix_entries(path, layout_for(spec, item_scope))
             entries += count
             if count and has_consent:
                 continue

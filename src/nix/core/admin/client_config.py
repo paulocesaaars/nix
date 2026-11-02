@@ -91,11 +91,52 @@ def _codex(path: str) -> ClientSnippet:
     )
 
 
+def _generic(key: str, file_hint: str, notes: tuple[str, ...]) -> Callable[[str], ClientSnippet]:
+    """Cliente sem formato de arquivo confirmado: só o comando stdio, para registrar pela interface dele."""
+
+    def build(path: str) -> ClientSnippet:
+        return ClientSnippet(
+            key=key,
+            label=AGENT_LABELS[key],
+            file_hint=file_hint,
+            language="text",
+            content=f"nome: nix\ntransporte: stdio\ncommand: {path}",
+            notes=notes,
+        )
+
+    return build
+
+
+def _devin(path: str) -> ClientSnippet:
+    return ClientSnippet(
+        key="devin",
+        label=AGENT_LABELS["devin"],
+        file_hint=(
+            ".devin/mcp_config.json (projeto) ou ~/.config/devin/mcp_config.json "
+            "(global; no Windows, %APPDATA%\\devin\\mcp_config.json)"
+        ),
+        language="json",
+        content=_json({"mcpServers": {"nix": {"command": path}}}),
+        notes=("Vale para o Devin CLI e para o Devin Desktop; os dois leem o mesmo arquivo.",),
+    )
+
+
+_PARTIAL = "A captura de sessão fica parcial neste cliente: o formato de hook por comando não está confirmado."
+
 _SNIPPETS: dict[str, Callable[[str], ClientSnippet]] = {
     "cursor": _cursor,
     "copilot": _copilot,
     "claude": _claude,
     "codex": _codex,
+    "devin": _devin,
+    **{
+        key: _generic(key, "configuração MCP do cliente (servidor stdio)", (
+            "Registre um servidor MCP stdio com este comando, pela configuração do cliente.",
+            _PARTIAL,
+        ))
+        for key in AGENTS
+        if key not in {"cursor", "copilot", "claude", "codex", "devin"}
+    },
 }
 
 

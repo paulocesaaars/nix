@@ -38,22 +38,37 @@ Funcionalidade: Capturar sessões no Mega Brain
   Cenário: Explicar o instalador antes de gravar
     Dado o Mega Brain ligado
     Quando rodo `nix brain hooks install` e ainda não confirmo
-    Então vejo a escolha entre um, alguns ou os quatro clientes
+    Então vejo a escolha entre um, alguns ou todos os clientes da lista
     E vejo a escolha entre a conta inteira e só o repositório
     E nenhum arquivo de hook é gravado
 
   @HU-17.6
-  Cenário: Instalar nos quatro clientes confirmados
+  Cenário: Instalar os clientes de formato confirmado
     Dado `--all` e `--scope project` confirmados
     Quando o plano é aplicado
-    Então os quatro clientes com formato confirmado são instalados
-    E Gemini, OpenCode, Kimi, Kiro, Grok, Antigravity, Devin CLI e Devin Desktop não são oferecidos
+    Então cada cliente com formato de hook confirmado é instalado
+    E Devin (CLI e Desktop) é um único cliente
+    E cliente sem formato único confirmado não ganha arquivo
 
   @HU-17.7
   Cenário: Não inventar arquivo sem formato confirmado
-    Dado um cliente dos quatro cujo formato de hook não está confirmado
+    Dado um cliente da lista cujo formato de hook não está confirmado
     Quando peço para instalá-lo
     Então a captura fica parcial
     E nenhum arquivo de hook é gravado
     E a mensagem explica isso
+
+  @HU-17.8
+  Cenário: Separar o Copilot CLI do VS Code
+    Quando instalo o hook do GitHub Copilot CLI
+    Então o agente registrado é copilot-cli
+    E o agente copilot continua sendo o VS Code
+
+  @HU-17.9
+  Cenário: Ligar o Devin no projeto pelo nix run
+    Dado um projeto sem hook e sem MCP do Devin
+    Quando executo `nix run devin`
+    Então o hook do projeto é gravado em `.devin/hooks.v1.json`
+    E o servidor nix é gravado em `.devin/mcp_config.json`
+    E o processo chamado é o binário devin
 ```

@@ -78,8 +78,10 @@ Funcionalidade: Configurar e operar pela interface
   Cenário: Mostrar os clientes na ordem de conexão
     Dado o executável do Nix encontrado
     Quando abro Conectar cliente
-    Então as abas aparecem nesta ordem: Cursor, VS Code, Claude Code, Codex
+    Então as abas começam nesta ordem: Cursor, VS Code, Claude Code, Codex
+    E em seguida vêm Command Code, Devin (CLI e Desktop), OpenCode, Gemini CLI, Oh My Pi, Pi, OpenClaw, Antigravity CLI, Grok Build CLI, Zero, ZCode, Kimi Code, Kiro CLI, GitHub Copilot CLI, Factory Droid, Meta Muse Code, IBM Bob, Qwen Code, Qoder e Hermes Agent
     E o Codex mostra o bloco `[mcp_servers.nix]` com o caminho absoluto
+    E o Devin mostra `mcpServers` com `command` apontando para o binário do Nix
 
   @HU-08.12
   Cenário: Explicar os hooks na página
@@ -163,4 +165,11 @@ Funcionalidade: Configurar e operar pela interface
     Então o bloco Para começar continua visível
     E sincronizar aparece feito
     E pedir uma busca aparece pendente
+
+  @HU-08.22
+  Cenário: Trecho MCP só por comando local
+    Dado o executável do Nix encontrado
+    Quando abro a aba de um cliente da lista
+    Então o trecho traz o caminho desse executável
+    E o trecho não traz URL http
 ```

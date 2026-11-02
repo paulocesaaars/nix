@@ -21,14 +21,14 @@ from nix.core.brain.store import BrainStore
 
 runner = CliRunner()
 
-_REMOVED = ("gemini", "opencode", "kimi", "kiro", "grok", "antigravity", "devin", "devin-desktop")
-_FOUR_FILES = {
+_CONFIRMED_FILES = {
     "cursor": ".cursor/hooks.json",
     "copilot": ".github/hooks/nix.json",
     "claude": ".claude/settings.local.json",
     "codex": ".codex/hooks.json",
+    "devin": ".devin/hooks.v1.json",
 }
-_ACCEPTED = "cursor, copilot, claude, codex"
+_UNKNOWN = ("devin-desktop", "grizzybot")
 
 
 class _PromptRunner(CliRunner):
@@ -116,19 +116,22 @@ def test_install_explains_choices_before_writing(
 
 
 @pytest.mark.bdd("HU-17.6")
-def test_all_installs_only_the_four_clients(
+def test_all_installs_every_confirmed_client_and_leaves_partial_ones_without_file(
     configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     del configured
     repo = _repo(tmp_path)
     monkeypatch.setattr("nix.cli.commands.brain_cmds._hook_exe", lambda: "C:/nix/nix.exe")
-    assert agent_hooks.CONFIRMED_CLIENTS == ("cursor", "copilot", "claude", "codex")
-    assert set(_REMOVED).isdisjoint(AGENTS)
+    assert agent_hooks.CONFIRMED_CLIENTS == AGENTS
+    assert set(_UNKNOWN).isdisjoint(AGENTS)
+    assert "devin" in AGENTS
+    written = {spec.key for spec in agent_hooks.SPECS if not spec.partial}
+    assert written == set(_CONFIRMED_FILES)
 
     args = ["brain", "hooks", "install", "--all", "--scope", "project", "--yes", "--project", str(repo)]
     first = runner.invoke(app, args)
     assert first.exit_code == 0, _text(first)
-    assert _json_files(repo) == set(_FOUR_FILES.values())
+    assert _json_files(repo) == set(_CONFIRMED_FILES.values())
 
     codex = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     events = codex["hooks"]
@@ -142,7 +145,13 @@ def test_all_installs_only_the_four_clients(
     again = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert len(again["hooks"]["SessionStart"]) == 1
 
-    for name in _REMOVED:
+    devin = json.loads((repo / ".devin" / "hooks.v1.json").read_text(encoding="utf-8"))
+    assert "hooks" not in devin
+    assert set(devin) == {"SessionStart", "UserPromptSubmit", "PostToolUse", "PostCompaction", "Stop", "SessionEnd"}
+    assert "--agent devin" in devin["PostCompaction"][0]["hooks"][0]["command"]
+    assert "--event compact" in devin["PostCompaction"][0]["hooks"][0]["command"]
+
+    for name in _UNKNOWN:
         refused = runner.invoke(
             app,
             ["brain", "hooks", "install", "--scope", "project", "--agent", name, "--yes", "--project", str(repo)],
@@ -150,8 +159,8 @@ def test_all_installs_only_the_four_clients(
         refused_text = _text(refused)
         assert refused.exit_code == 1, refused_text
         assert name in refused_text
-        assert _ACCEPTED in refused_text
-    assert _json_files(repo) == set(_FOUR_FILES.values())
+        assert "cursor, copilot, claude, codex" in refused_text
+    assert _json_files(repo) == set(_CONFIRMED_FILES.values())
 
 
 @pytest.mark.bdd("HU-17.7")
@@ -313,3 +322,52 @@ def test_project_hook_without_file_cites_project_scope(
     assert "project" in claude.hint
     assert "--scope project" in claude.hint
     assert "global" not in claude.hint
+
+
+@pytest.mark.bdd("HU-17.8")
+def test_copilot_cli_is_separate_from_vscode_copilot(
+    configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del configured
+    repo = _repo(tmp_path)
+    monkeypatch.setattr("nix.cli.commands.brain_cmds._hook_exe", lambda: "C:/nix/nix.exe")
+    assert agent_hooks.spec_for("copilot-cli").key == "copilot-cli"
+    assert agent_hooks.spec_for("copilot").label == "VS Code"
+
+    result = runner.invoke(
+        app,
+        ["brain", "hooks", "install", "--scope", "project", "--agent", "copilot-cli", "--yes", "--project", str(repo)],
+    )
+
+    assert result.exit_code == 0, _text(result)
+    registered = {agent for agent, _scope in BrainStore().installed_agents(repo.as_posix())}
+    assert "copilot-cli" in registered
+    assert "copilot" not in registered
+    assert not (repo / ".github" / "hooks" / "nix.json").exists()
+
+
+@pytest.mark.bdd("HU-17.9")
+def test_nix_run_devin_wires_project_files_and_calls_devin(
+    configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del configured
+    from nix.core.brain import run as brain_run
+
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(brain_run, "_hook_exe", lambda: "C:/nix/nix.exe")
+    monkeypatch.setattr(brain_run, "_nix_command", lambda: "C:/nix/nix.exe")
+    monkeypatch.setattr(brain_run.shutil, "which", lambda name: name)
+    calls: list[list[str]] = []
+
+    class _Done:
+        returncode = 0
+
+    monkeypatch.setattr(brain_run.subprocess, "run", lambda command, **_kw: calls.append(command) or _Done())
+
+    assert brain_run.launch("devin", ["--help"], project=str(repo)) == 0
+
+    hooks = json.loads((repo / ".devin" / "hooks.v1.json").read_text(encoding="utf-8"))
+    assert "SessionStart" in hooks
+    mcp = json.loads((repo / ".devin" / "mcp_config.json").read_text(encoding="utf-8"))
+    assert mcp == {"mcpServers": {"nix": {"command": "C:/nix/nix.exe"}}}
+    assert calls == [["devin", "--help"]]
