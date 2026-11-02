@@ -169,9 +169,34 @@ A página da sessão vai para `projects/<projeto>/sessions/` na wiki do Mega Bra
 
 `remember` continua gravando na wiki padrão e não faz parte do Mega Brain.
 
+## Atualizar
+
+Para trocar a versão que já está instalada, encerre `nix` e `nix-hook`, apague só esses dois binários e rode o instalador de novo. A wiki, o `settings.db` e a pasta `.nix` (índice e Mega Brain) ficam. O desinstalador da seção seguinte também apaga `settings.db` e `.nix`, salvo `--keep-data`.
+
+**Windows (PowerShell):**
+
+```powershell
+Stop-Process -Name nix,nix-hook -Force -ErrorAction SilentlyContinue
+$root = if ($env:NIX_HOME) { $env:NIX_HOME } else { Join-Path $env:LOCALAPPDATA "nix" }
+Remove-Item -Force (Join-Path $root "bin\nix.exe"), (Join-Path $root "bin\nix-hook.exe")
+irm https://raw.githubusercontent.com/paulocesaaars/nix/main/install.ps1 | iex
+```
+
+Feche e abra de novo o cliente MCP para ele carregar o binário novo.
+
+**Linux e macOS:** o instalador substitui os arquivos. Encerre os processos e rode o instalador de novo:
+
+```bash
+pkill -x nix || true
+pkill -x nix-hook || true
+curl -fsSL https://raw.githubusercontent.com/paulocesaaars/nix/main/install.sh | sh
+```
+
 ## Desinstalar
 
-O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `nix` e `nix-hook`, o cache de extração (`onefile-*` e `hook-*`) e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. Se a pasta da instalação ficar vazia, ela também sai. **A pasta da wiki não é alterada.**
+O desinstalador remove `NIX_HOME` e o comando `nix` do PATH, apaga `nix` e `nix-hook`, o cache de extração (`onefile-*` e `hook-*`) e, por padrão, também `.nix/` (índice, backups, logs) e `settings.db`. Se a pasta da instalação ficar vazia, ela também sai. **A pasta da wiki não é alterada.** Para só trocar a versão, use [Atualizar](#atualizar).
+
+No Windows, se `nix.exe` ou `nix-hook.exe` estiver aberto, o desinstalador para antes de alterar o PATH e avisa que o arquivo está em uso. Feche o cliente que mantém o Nix aberto, ou encerre os processos, e rode de novo.
 
 Confirme com `s`. Em script, passe `--yes`. `--keep-data` preserva `settings.db` e o índice.
 
@@ -184,7 +209,14 @@ irm https://raw.githubusercontent.com/paulocesaaars/nix/main/uninstall.ps1 -OutF
 & "$env:TEMP\uninstall-nix.ps1"
 ```
 
-Responda `s` em `Continuar? [s/N]`. O script também apaga o cache `onefile-*` e `hook-*`. Se `%LOCALAPPDATA%\nix` ficar vazia, a pasta sai. A linha que confirma o fim diz que a pasta foi apagada, ou que o que restava foi removido dela. Abra um terminal novo em seguida.
+Responda `s` em `Continuar? [s/N]`. Se a resposta for que o arquivo está em uso, encerre os processos e rode o mesmo desinstalador de novo:
+
+```powershell
+Stop-Process -Name nix,nix-hook -Force -ErrorAction SilentlyContinue
+& "$env:TEMP\uninstall-nix.ps1"
+```
+
+O script também apaga o cache `onefile-*` e `hook-*`. Se `%LOCALAPPDATA%\nix` ficar vazia, a pasta sai. A linha que confirma o fim diz que a pasta foi apagada, ou que o que restava foi removido dela. Abra um terminal novo em seguida.
 
 ```powershell
 & "$env:TEMP\uninstall-nix.ps1" --yes

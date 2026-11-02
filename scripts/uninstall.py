@@ -83,6 +83,14 @@ def _remove_path(path: Path) -> str | None:
         else:
             path.unlink()
     except OSError as exc:
+        text = str(exc).lower()
+        winerror = getattr(exc, "winerror", None)
+        in_use = winerror in {32, 33} or "being used by another process" in text or "usado por outro processo" in text
+        if in_use:
+            return (
+                f"{path.name} está em uso. Feche o cliente que mantém o Nix aberto "
+                "e rode o desinstalador de novo."
+            )
         return (
             f"{path}: {exc}. Feche programas que usem esta pasta "
             "(terminais, editor, servidor MCP) e rode o desinstalador de novo."

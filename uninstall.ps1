@@ -72,6 +72,27 @@ function Remove-NixUserPath([string]$Root, [bool]$RemoveExpand) {
     }
 }
 
+function Remove-InstalledFile([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    try {
+        $item = Get-Item -Force -LiteralPath $Path
+        if ($item.PSIsContainer) {
+            Remove-Item -Recurse -Force -LiteralPath $Path -ErrorAction Stop
+        }
+        else {
+            Remove-Item -Force -LiteralPath $Path -ErrorAction Stop
+        }
+    }
+    catch {
+        $text = $_.Exception.Message
+        if ($text -match "em uso|usado por outro|being used by another") {
+            $leaf = Split-Path -Leaf $Path
+            Die "$leaf está em uso. Feche o cliente que mantém o Nix aberto e rode o desinstalador de novo."
+        }
+        throw
+    }
+}
+
 function Remove-NixRcBlock([string]$Path, [string]$Root) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
     $text = [IO.File]::ReadAllText($Path)
@@ -108,6 +129,11 @@ if (-not $Yes) {
     }
 }
 
+$bin = Join-Path $Root "bin"
+foreach ($file in @("nix.exe", "nix", "nix.cmd", "nix-hook.exe", "nix-hook")) {
+    Remove-InstalledFile (Join-Path $bin $file)
+}
+
 Write-Host "Removendo NIX_HOME e o comando nix do PATH..."
 Remove-NixUserPath $Root $Ours
 if ($Stored -and (Same-Path $Stored $Root)) {
@@ -117,11 +143,6 @@ foreach ($name in @(".bashrc", ".zshrc", ".bash_profile", ".profile")) {
     Remove-NixRcBlock (Join-Path $env:USERPROFILE $name) $Root
 }
 
-$bin = Join-Path $Root "bin"
-foreach ($file in @("nix.exe", "nix", "nix.cmd", "nix-hook.exe", "nix-hook")) {
-    $path = Join-Path $bin $file
-    if (Test-Path -LiteralPath $path) { Remove-Item -Force -LiteralPath $path }
-}
 if ((Test-Path -LiteralPath $bin) -and -not (Get-ChildItem -Force -LiteralPath $bin | Select-Object -First 1)) {
     Remove-Item -Force -LiteralPath $bin
 }
@@ -129,10 +150,10 @@ if ((Test-Path -LiteralPath $bin) -and -not (Get-ChildItem -Force -LiteralPath $
 if (-not $KeepData) {
     foreach ($name in @("settings.db", "settings.db-wal", "settings.db-shm")) {
         $path = Join-Path $Root $name
-        if (Test-Path -LiteralPath $path) { Remove-Item -Force -LiteralPath $path }
+        Remove-InstalledFile $path
     }
     $nixDir = Join-Path $Root ".nix"
-    if (Test-Path -LiteralPath $nixDir) { Remove-Item -Recurse -Force -LiteralPath $nixDir }
+    Remove-InstalledFile $nixDir
 }
 
 function Remove-NixExtractionCache([string]$Dir) {
