@@ -17,7 +17,14 @@ from nix.config.loader import (
     load_config,
 )
 from nix.config.paths import app_root
-from nix.config.schema import WIKI_SETTING_KEYS, ConfigField, NixConfig, config_field, iter_config_fields
+from nix.config.schema import (
+    WIKI_SETTING_KEYS,
+    ConfigField,
+    NixConfig,
+    config_field,
+    excluded_setting_keys,
+    iter_config_fields,
+)
 from nix.config.store import WIKIS_SECTION, SettingsChange, SettingsStore
 from nix.core.errors import ConfigError
 
@@ -63,11 +70,11 @@ def split_key(dotted: str) -> tuple[str, str]:
     return section, key
 
 
-def require_field(section: str, key: str) -> ConfigField:
+def require_field(section: str, key: str, *, include_excluded: bool = False) -> ConfigField:
     if section == "wiki":
         raise ConfigError(_wiki_field_message(key))
     try:
-        return config_field(section, key)
+        return config_field(section, key, include_excluded=include_excluded)
     except KeyError:
         raise ConfigError(
             f"Campo {section}.{key} não existe. Rode `nix config list` para ver os campos."
@@ -129,22 +136,65 @@ def snapshot() -> list[ConfigEntry]:
 
 
 def history(limit: int = 50) -> list[SettingsChange]:
-    return SettingsStore().history(limit)
+    """Alterações recentes, sem campos ocultos como `ui.editor_called`."""
+    return SettingsStore().history(limit, skip=excluded_setting_keys())
 
 
-def set_value(section: str, key: str, value: Any, *, source: Source, persist: bool = False) -> SetResult:
-    """Valida e grava. `persist` grava mesmo quando o valor é o padrão."""
-    field = require_field(section, key)
-    batch = set_many([(section, key, value)], source=source, persist=persist)
+def set_value(
+    section: str,
+    key: str,
+    value: Any,
+    *,
+    source: Source,
+    persist: bool = False,
+    include_excluded: bool = False,
+    record_history: bool = True,
+) -> SetResult:
+    """Valida e grava. `persist` grava mesmo quando o valor é o padrão.
+
+    `include_excluded` grava um campo oculto do formulário, como `ui.editor_called`.
+    O `nix config set` não passa essa opção.
+    `record_history` falso deixa a gravação fora do histórico.
+    """
+    field = require_field(section, key, include_excluded=include_excluded)
+    batch = set_many(
+        [(section, key, value)],
+        source=source,
+        persist=persist,
+        include_excluded=include_excluded,
+        record_history=record_history,
+    )
     warning = batch.warnings[0] if batch.warnings else None
     return SetResult(field.dotted, changed=field.dotted in batch.changed, warning=warning)
 
 
-def set_many(updates: list[tuple[str, str, Any]], *, source: Source, persist: bool = False) -> BatchResult:
+def mark_editor_called(*, source: Source) -> None:
+    """Grava `ui.editor_called` se ainda for falso. Não grava de novo nem cria histórico."""
+    if load_config().ui.editor_called:
+        return
+    set_value(
+        "ui",
+        "editor_called",
+        True,
+        source=source,
+        persist=True,
+        include_excluded=True,
+        record_history=False,
+    )
+
+
+def set_many(
+    updates: list[tuple[str, str, Any]],
+    *,
+    source: Source,
+    persist: bool = False,
+    include_excluded: bool = False,
+    record_history: bool = True,
+) -> BatchResult:
     """Valida o conjunto e grava numa transação. Se falhar, nada entra no histórico."""
     prepared: dict[tuple[str, str], tuple[ConfigField, Any]] = {}
     for section, key, value in updates:
-        field = require_field(section, key)
+        field = require_field(section, key, include_excluded=include_excluded)
         _reject_locked(field)
         prepared[(section, key)] = (field, coerce(field, value))
 
@@ -165,7 +215,11 @@ def set_many(updates: list[tuple[str, str, Any]], *, source: Source, persist: bo
         return BatchResult((), ())
 
     _validate_overrides(candidate)
-    store.write_many([(field.section, field.key, value) for field, value in pending], source=source)
+    store.write_many(
+        [(field.section, field.key, value) for field, value in pending],
+        source=source,
+        record_history=record_history,
+    )
     clear_config_cache()
     changed: list[str] = []
     warnings: list[str] = []
@@ -199,6 +253,11 @@ def revert_change(change_id: int, *, source: Source) -> SetResult:
     change = SettingsStore().get_change(change_id)
     if change is None:
         raise ConfigError(f"Alteração {change_id} não está no histórico. Rode `nix config history`.")
+    if (change.section, change.key) in excluded_setting_keys():
+        raise ConfigError(
+            "Essa marca não se desfaz por aqui. "
+            "Ela registra que o editor já chamou uma ferramenta e não é um ajuste da configuração."
+        )
     if change.section == WIKIS_SECTION:
         raise ConfigError(
             "Mudanças de wiki não se desfazem com `nix config undo`. "

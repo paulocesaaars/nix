@@ -15,19 +15,24 @@ from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 
+from nix.config.editor import mark_editor_called
 from nix.config.embedding_present import sync_model_hint
+from nix.config.loader import load_config
 from nix.core.admin.doctor import DoctorCheck, DoctorReport, build_doctor_report
 from nix.core.admin.traffic import TrafficCall, TrafficStore
-from nix.core.errors import NixError
+from nix.core.errors import ConfigError, NixError
 from nix.core.index.lock import mark_sync_job, unmark_sync_job
 from nix.core.index.sync import combine_sync_reports
 from nix.core.index.tokenize import approximate_tokenizer_hint
 from nix.core.models import IndexStatus, SyncProgress, SyncReport
 from nix.core.runtime import Runtime, WikiSpec
+from nix.observability.logging import get_logger
 from nix.web.jobs import RuntimeGate, SyncJobs, SyncRun, launch_sync, vault_busy_message
 from nix.web.render import fragment, page
 from nix.web.routes.common import BUSY, Gated, form_data, is_hx, note, run_gated
 from nix.web.state import ServerControl, WebState, web_state
+
+logger = get_logger("nix.web")
 
 _SHUTDOWN_BUSY = "Há uma sincronização em andamento. Espere ela terminar e clique em Encerrar de novo."
 _PREVIEW_WAIT = "Há uma sincronização em andamento. Espere ela terminar e peça a prévia de novo."
@@ -62,6 +67,23 @@ class SyncRunView:
 class Overview:
     status: IndexStatus
     runs: list[SyncRunView]
+    wiki_name: str
+
+
+@dataclass(frozen=True)
+class StartStep:
+    title: str
+    done: bool
+    detail: str
+    href: str
+
+
+@dataclass(frozen=True)
+class StartChecklist:
+    """Caminho inicial. Some quando a wiki selecionada já sincronizou e a busca foi pedida."""
+
+    intro: str | None
+    steps: tuple[StartStep, ...]
 
 
 @dataclass(frozen=True)
@@ -72,8 +94,9 @@ class SyncContext:
 
 async def status_page(request: Request) -> Response:
     result = await run_gated(request, _overview)
-    calls = await asyncio.to_thread(_recent_calls)
+    calls, traffic_ok = await asyncio.to_thread(_recent_calls)
     overview = result.value
+    checklist = await asyncio.to_thread(_start_checklist, overview, calls, traffic_ok)
     return page(
         request,
         "status.html",
@@ -85,6 +108,7 @@ async def status_page(request: Request) -> Response:
             "status": overview.status if overview else None,
             "runs": overview.runs if overview else [],
             "calls": calls,
+            "checklist": checklist,
             "settings_path": _settings_path(web_state(request).gate),
         },
     )
@@ -211,7 +235,67 @@ async def shutdown(request: Request) -> Response:
 
 
 def _overview(runtime: Runtime) -> Overview:
-    return Overview(status=runtime.status(), runs=_runs(runtime, 3))
+    return Overview(status=runtime.status(), runs=_runs(runtime, 3), wiki_name=runtime.wiki.name)
+
+
+def _start_checklist(
+    overview: Overview | None,
+    calls: list[TrafficCall],
+    traffic_ok: bool,
+) -> StartChecklist | None:
+    """Monta o bloco só com o índice lido e enquanto faltar sync ou busca pedida.
+
+    Linha em `mcp_calls` com a marca apagada grava a marca uma vez. Falha de leitura
+    do tráfego não derruba a página: a busca fica pendente só se a marca também for falsa.
+    """
+    try:
+        config = load_config()
+    except (ConfigError, NixError) as exc:
+        logger.warning(
+            "Não foi possível ler a configuração para o caminho inicial: %s. Atualize a página de Status.",
+            exc,
+        )
+        return None
+    called = config.ui.editor_called
+    has_calls = traffic_ok and bool(calls)
+    if has_calls and not called:
+        try:
+            mark_editor_called(source="ui")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Não foi possível gravar que o editor chamou uma ferramenta: %s. "
+                "A página de Status segue; a próxima visita tenta de novo.",
+                exc,
+            )
+        else:
+            called = True
+    if overview is None:
+        return None
+    search_done = called or has_calls
+    synced = bool(overview.status.last_sync_at)
+    if synced and search_done:
+        return None
+    selected = overview.wiki_name
+    default = config.default_wiki.name
+    intro = None
+    if selected.casefold() != default.casefold():
+        intro = f"Você está em {selected}. A padrão é {default}."
+    sync_detail = (
+        f"A wiki {selected} já foi sincronizada."
+        if synced
+        else f"A wiki {selected} ainda não foi sincronizada."
+    )
+    search_detail = (
+        "O editor já pediu uma busca." if search_done else "Abra o editor e peça para buscar uma nota."
+    )
+    return StartChecklist(
+        intro=intro,
+        steps=(
+            StartStep("Wiki cadastrada", True, f"A wiki padrão é {default}.", "/wikis"),
+            StartStep("Sincronizar o índice", synced, sync_detail, "/sync"),
+            StartStep("Pedir uma busca ao editor", search_done, search_detail, "/connect"),
+        ),
+    )
 
 
 def _sync_context(runtime: Runtime) -> SyncContext:
@@ -314,12 +398,16 @@ def _seconds(start: str, end: str) -> float | None:
     return max((last - first).total_seconds(), 0.0)
 
 
-def _recent_calls() -> list[TrafficCall]:
-    """O card de atividade é secundário: sem leitura do tráfego, a página segue sem ele."""
+def _recent_calls() -> tuple[list[TrafficCall], bool]:
+    """Chamadas recentes e se a leitura deu certo.
+
+    Sem o arquivo ou com falha, a página segue. A falha deixa a busca do caminho
+    inicial pendente só quando a marca `ui.editor_called` também é falsa.
+    """
     try:
-        return TrafficStore().recent(6)
+        return TrafficStore().recent(6), True
     except (sqlite3.Error, OSError):
-        return []
+        return [], False
 
 
 def _doctor_report(gate: RuntimeGate) -> tuple[DoctorReport, str | None]:

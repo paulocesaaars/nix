@@ -88,4 +88,79 @@ Funcionalidade: Configurar e operar pela interface
     Então vejo a explicação de instalar um, alguns ou todos
     E vejo a explicação de escopo global ou só o repositório
     E o comando mostrado é `nix brain hooks install`
+
+  @HU-08.13
+  Cenário: Mostrar o caminho inicial no Status
+    Dado que a wiki padrão existe e a selecionada nunca foi sincronizada
+    E nenhum editor chamou uma ferramenta
+    Quando abro o Status
+    Então vejo a wiki padrão como feita, com o nome dela
+    E vejo sincronizar como pendente
+    E vejo "Pedir uma busca ao editor" como pendente, pedindo para buscar uma nota
+    E cada pendência leva à página correspondente
+    E não vejo a faixa de índice desatualizado
+
+  @HU-08.14
+  Cenário: Esconder o caminho quando a wiki selecionada já andou
+    Dado que a wiki selecionada já foi sincronizada
+    E o editor já pediu uma busca
+    Quando abro o Status
+    Então o bloco Para começar não aparece
+
+  @HU-08.15
+  Cenário: Trazer o caminho de volta numa wiki sem sync
+    Dado que a wiki padrão já foi sincronizada e o editor já pediu uma busca
+    E outra wiki nunca foi sincronizada
+    Quando abro o Status nessa outra wiki
+    Então o bloco volta
+    E sincronizar está pendente para ela
+    E pedir uma busca ao editor continua feito
+
+  @HU-08.16
+  Cenário: Índice desatualizado não desfaz o sync já feito
+    Dado que a wiki selecionada já foi sincronizada e depois ficou desatualizada
+    E o editor já pediu uma busca
+    Quando abro o Status
+    Então o bloco Para começar não aparece
+    E vejo o aviso de índice desatualizado
+
+  @HU-08.17
+  Cenário: Avisar quando a wiki selecionada não é a padrão
+    Dado que a wiki selecionada não é a padrão
+    E o caminho inicial ainda está pendente
+    Quando abro o Status
+    Então vejo o nome da selecionada e o nome da padrão acima dos passos
+
+  @HU-08.18
+  Cenário: Manter a busca pedida sem o tráfego
+    Dado que a marca de busca pedida está gravada
+    E o tráfego não tem chamadas
+    E a wiki selecionada já foi sincronizada
+    Quando abro o Status
+    Então o bloco Para começar não aparece
+
+  @HU-08.19
+  Cenário: Completar a marca ao abrir o Status com tráfego já gravado
+    Dado uma chamada no tráfego
+    E a marca de busca pedida ainda é falsa
+    Quando abro o Status
+    Então a marca fica verdadeira
+
+  @HU-08.20
+  Cenário: Gravar a marca na primeira chamada de ferramenta
+    Dado que a marca de busca pedida ainda é falsa
+    Quando uma chamada de ferramenta termina bem
+    Então a marca fica verdadeira
+    E uma chamada que termina em erro também grava a marca
+    E uma falha ao gravar a marca não derruba a chamada da ferramenta
+
+  @HU-08.21
+  Cenário: Manter o caminho quando a busca ainda não foi pedida
+    Dado que a wiki selecionada já foi sincronizada
+    E a marca de busca pedida está apagada
+    E o tráfego não tem chamadas
+    Quando abro o Status
+    Então o bloco Para começar continua visível
+    E sincronizar aparece feito
+    E pedir uma busca aparece pendente
 ```

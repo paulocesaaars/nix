@@ -43,11 +43,16 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+# Não é ajuste: o valor do settings.db vale, e a variável não pode apagar a marca.
+_IGNORED_ENV_FIELDS = (("ui", "editor_called"),)
+
+
 def env_overrides() -> dict[str, Any]:
     """Lê NIX_SECTION__FIELD dos campos globais. O ambiente ganha do settings.db.
 
     Wikis ficam na tabela `wikis`. `NIX_VAULT__*` e `NIX_WIKI__*` não entram nessa precedência.
     O `nix doctor` avisa quando `NIX_VAULT__*` ainda está definido.
+    `NIX_UI__EDITOR_CALLED` fica de fora: a marca não é configuração. Outros `NIX_UI__*` continuam.
     """
     nested: dict[str, dict[str, Any]] = {}
     prefix = "NIX_"
@@ -59,7 +64,19 @@ def env_overrides() -> dict[str, Any]:
             continue
         section, field = rest.split("__", 1)
         nested.setdefault(section.lower(), {})[field.lower()] = _coerce_env(raw_value)
+    _drop_ignored_env(nested)
     return nested
+
+
+def _drop_ignored_env(nested: dict[str, dict[str, Any]]) -> None:
+    """Tira campos que não são configuração. A seção vazia sai junto."""
+    for section, field in _IGNORED_ENV_FIELDS:
+        table = nested.get(section)
+        if not isinstance(table, dict) or field not in table:
+            continue
+        del table[field]
+        if not table:
+            del nested[section]
 
 
 def _coerce_env(value: str) -> Any:
