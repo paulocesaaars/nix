@@ -44,7 +44,7 @@ known-first-party = ["nix", "nix_launch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 addopts = "-ra --strict-markers"
 markers = [
     "bdd(id): cenário do BDD.md coberto pelo teste (ex.: \"HU-03.2\")",

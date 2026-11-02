@@ -354,6 +354,8 @@ def _powershell_command(exe: str, event: str, agent: str) -> str:
 def _single_command(exe: str, event: str, agent: str) -> str:
     """Um só `command` para agentes sem campo por sistema. No Windows não há `[ -x ]`."""
     if sys.platform == "win32":
+        if agent in {"codex", "cursor", "claude"}:
+            return _powershell_command(exe, event, agent)
         return f'"{exe}" brain --event {event} --agent {agent}'
     return _unix_command(exe, event, agent)
 
@@ -361,6 +363,8 @@ def _single_command(exe: str, event: str, agent: str) -> str:
 def _entry_nested(exe: str, event: str, agent: str) -> dict[str, Any]:
     """Claude Code e Codex: o comando fica dentro de uma lista `hooks`."""
     handler = {"type": "command", "command": _single_command(exe, event, agent), "timeout": _HOOK_TIMEOUT_S}
+    if sys.platform == "win32" and agent == "claude":
+        handler["shell"] = "powershell"
     return {"hooks": [handler]}
 
 
