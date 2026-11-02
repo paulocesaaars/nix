@@ -5,7 +5,7 @@
 | Produto | **Nix** (nome inspirado na Lulu, cachorra do autor) |
 | Tipo | Servidor MCP que expõe wikis em Markdown a agentes de desenvolvimento |
 | Interfaces | MCP stdio (único transporte do protocolo); CLI (`init`, `wiki`, `config`, `sync`, `status`, `doctor`, `ui`, `brain`, `run`); interface local só enquanto `nix ui` está aberto; instalador `install.bat` / `install.sh` (`nix` e `nix-hook` em `NIX_HOME`, `nix` no PATH, sem Python); desinstalador `uninstall.bat` / `uninstall.sh` |
-| Status | Implementado — v5.0.1 |
+| Status | Implementado — v5.1.0 |
 | Autor | Paulo |
 | Data | 2026-11-02 |
 
