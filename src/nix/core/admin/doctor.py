@@ -308,7 +308,15 @@ def _index_supplied(
 
 
 def _index_message(status: IndexStatus) -> str:
-    return f"{status.files} notas, {status.chunks} chunks, stale={status.stale}"
+    summary = f"{status.files} notas, {status.chunks} chunks"
+    if not status.stale:
+        return summary
+    if status.stale_reason:
+        return f"{summary}. {status.stale_reason}"
+    return (
+        f"{summary}. O índice está desatualizado. "
+        "Rode `nix sync` ou a ferramenta `sync_index`."
+    )
 
 
 def _import_fix_hint(mod: str, exc: BaseException) -> str:

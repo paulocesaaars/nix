@@ -408,7 +408,7 @@ O reprocessamento é de um único arquivo. Se a indexação falhar após a escri
 
 ### 6.4 Aviso de defasagem
 
-`index_status` compara a **contagem de notas Markdown** visíveis no vault com a de arquivos `.md` indexados, e o `mtime` máximo com `index_meta.last_sync_at`. PDFs anexos no índice não entram nessa conta (evita aviso falso de defasagem). Se houver divergência, devolve `stale=true`. A mensagem `stale_reason` só é preenchida quando `index.warn_when_stale=true`. Não há indexação implícita (RN-01).
+`index_status` compara a **contagem de notas Markdown** visíveis no vault com a de arquivos `.md` indexados, e o `mtime` e o tamanho de cada nota com a linha dela no índice. Uma nota gravada pelo write-through já está alinhada e não gera aviso, mesmo sendo mais nova que `last_sync_at`. PDFs anexos no índice não entram nessa conta (evita aviso falso de defasagem). Se houver divergência, devolve `stale=true`. A mensagem `stale_reason` só é preenchida quando `index.warn_when_stale=true`. Não há indexação implícita (RN-01).
 
 ### 6.5 Reaproveitamento de vetores (RF-150)
 

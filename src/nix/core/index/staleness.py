@@ -2,24 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from nix.core.index.store import IndexStore
-from nix.core.models import IndexStatus
+from nix.core.models import FileMeta, IndexStatus
 from nix.core.wiki.reader import WikiReader
-
-
-def parse_iso(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = value.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
 
 
 def compute_status(
@@ -35,14 +20,15 @@ def compute_status(
     embedding = store.get_meta("embedding_model")
     # `vault_path` é a chave gravada por versões anteriores. Não reescrevemos o índice na migração.
     wiki_path = store.get_meta("wiki_path") or store.get_meta("vault_path")
-    indexed_files = store.count_markdown("indexed")
+    indexed = store.indexed_markdown_stats()
+    indexed_files = len(indexed)
     sessions = store.count_markdown_under(sessions_folder) if sessions_folder else 0
     errors = store.count_files("error")
     chunks = store.count_chunks()
-    max_mtime, wiki_count = reader.max_mtime_and_count()
+    on_disk = list(reader.iter_markdown())
+    wiki_count = len(on_disk)
     stale = False
     reason: str | None = None
-    sync_dt = parse_iso(last_sync)
     sync_hint = f"`nix sync --wiki {wiki_name}`" if wiki_name else "`nix sync`"
     if last_sync is None:
         stale = True
@@ -54,10 +40,10 @@ def compute_status(
             f"Rode {sync_hint} ou a ferramenta `sync_index` para alinhar "
             "(nenhuma indexação automática será feita)."
         )
-    elif sync_dt is not None and max_mtime > sync_dt.timestamp() + 1:
+    elif _markdown_drift(on_disk, indexed):
         stale = True
         reason = (
-            "Há arquivos na wiki mais recentes que o último sync. "
+            "Há notas na wiki diferentes da versão indexada. "
             f"Rode {sync_hint} ou a ferramenta `sync_index` se quiser incluir "
             "as edições feitas fora do Nix."
         )
@@ -75,3 +61,19 @@ def compute_status(
         data_dir=data_dir,
         sessions=sessions,
     )
+
+
+def _markdown_drift(on_disk: list[FileMeta], indexed: dict[str, tuple[float, int]]) -> bool:
+    """Nota fora do índice, ou com mtime/tamanho diferentes da linha indexada.
+
+    O write-through grava o mtime e o tamanho da escrita. Enquanto o arquivo
+    continuar igual, a nota não fica desatualizada — mesmo que seja mais nova
+    que `last_sync_at`.
+    """
+    seen: set[str] = set()
+    for meta in on_disk:
+        seen.add(meta.rel_path)
+        known = indexed.get(meta.rel_path)
+        if known is None or known != (meta.mtime, meta.size_bytes):
+            return True
+    return len(seen) != len(indexed)
