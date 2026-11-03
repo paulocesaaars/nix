@@ -308,7 +308,23 @@ No Windows a IDE lê a variável de usuário `NIX_HOME`. Também vale o caminho 
 
 Troque pelo caminho da linha `comando nix:` do `nix doctor`. No Linux a pasta padrão é `~/.local/share/nix/bin/nix`. `"command": "nix"` falha na IDE. `${env:NIX_HOME}` em geral **não** expande: o app não lê `.zshrc` / `.bashrc`.
 
-O mesmo padrão vale para Claude Code e o VS Code. O Codex usa `~/.codex/config.toml`. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
+Na interface, abra **Integração → Conectar cliente** para copiar a configuração com o caminho absoluto desta instalação. As instruções dos clientes com formato confirmado usam o escopo de projeto:
+
+- **Cursor:** `.cursor/mcp.json`, com o bloco `mcpServers` dos exemplos acima.
+- **VS Code:** `.vscode/mcp.json`, com `servers.nix` contendo `type: "stdio"` e `command` apontando para o executável.
+- **Claude Code:** na pasta do projeto, execute `claude mcp add nix --scope project -- "CAMINHO_ABSOLUTO_DO_NIX"`. A configuração fica em `.mcp.json`.
+- **Codex:** crie ou edite `.codex/config.toml` no projeto confiável:
+
+```toml
+[mcp_servers.nix]
+command = "C:/Users/voce/AppData/Local/nix/bin/nix.exe"
+```
+
+Confie no projeto no Codex para carregar essa configuração. No Linux ou macOS, substitua o comando pelo caminho absoluto do executável correspondente.
+
+- **Devin:** `.devin/mcp_config.json`, com o bloco `mcpServers` dos exemplos acima.
+
+Reinicie o cliente ou recarregue os servidores MCP depois de salvar. stdout é do protocolo MCP: logs só em `.nix/logs/nix.log` na pasta do Nix.
 
 Na instalação por Python, sem `nix.exe`, use o interpretador do `.venv` como em [Quando o executável, o PowerShell e os links de download estão bloqueados](#quando-o-executável-o-powershell-e-os-links-de-download-estão-bloqueados).
 
@@ -544,7 +560,7 @@ Editar notas fora do Nix não atualiza o índice. Rode `nix sync` quando quiser 
 
 ### Interface
 
-`nix ui` abre o navegador em `127.0.0.1` com status, sync, diagnóstico, busca, Mega Brain (painel, caixa de entrada e perfil), conexão dos clientes, tráfego MCP, backups, wikis e configuração. Exige o `nix init`. Encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL. `--port N` fixa a porta.
+`nix ui` abre o navegador em `127.0.0.1` com status, sync, diagnóstico, busca, Mega Brain (painel, configuração, caixa de entrada e perfil), conexão dos clientes, tráfego MCP, backups, wikis e configuração. Exige o `nix init`. Encerra com Ctrl+C ou pelo botão Encerrar. `--no-browser` só imprime a URL. `--port N` fixa a porta.
 
 ### Mega Brain
 
@@ -645,7 +661,7 @@ Fica em `settings.db`, na pasta do Nix (`NIX_HOME`; no checkout de desenvolvimen
 
 - **Operação:** status (o bloco Para começar fica até a wiki escolhida ter sido sincronizada e o editor ter chamado uma ferramenta; o aviso de índice desatualizado só aparece depois dessa sincronização), sincronização com prévia e progresso (os botões ficam desligados até o job terminar, também se a página for recarregada) e diagnóstico.
 - **Wiki (somente leitura):** busca em uma, em várias ou em todas, notas (com outline e trechos), tags e insights. A página de insights explica órfãs, duplicadas, sugestões de link e o resumo. O seletor "Wiki ativo", na faixa acima do conteúdo, usa `?wiki=`; sem ele, vale o padrão.
-- **Mega Brain:** painel, caixa de entrada e perfil. Os links de uma página de perfil ou de sessão abrem a wiki configurada no Mega Brain.
+- **Mega Brain:** painel, configuração da wiki e do estado, caixa de entrada e perfil. Os links de uma página de perfil ou de sessão abrem a wiki configurada no Mega Brain.
 - **Integração:** trechos prontos para conectar Cursor, VS Code, Claude Code, Codex, Devin e outros 19 clientes; tráfego MCP, com as chamadas que os clientes fazem, gravadas em `.nix/traffic.db`.
 - **Manutenção:** backups das escritas (comparação e download) e a restauração de um backup, a única escrita na wiki feita pela interface, com confirmação; tela Wikis; formulário de configuração e histórico.
 

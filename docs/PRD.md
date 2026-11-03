@@ -235,7 +235,7 @@ Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, 
 > Como usuário, quero o uso de cada resposta uma vez, e ver desconhecido quando o agente não informa números.
 
 **HU-22 — Painel do Mega Brain**
-> Como usuário, quero filtrar os projetos pelo nome e abrir as abas do projeto com a aba na URL.
+> Como usuário, quero filtrar os projetos pelo nome, abrir as abas do projeto com a aba na URL e escolher a wiki e o estado do Mega Brain numa tela própria de configuração.
 
 ## 7. Requisitos não funcionais
 
