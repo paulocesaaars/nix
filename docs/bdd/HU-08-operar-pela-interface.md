@@ -81,6 +81,7 @@ Funcionalidade: Configurar e operar pela interface
     Então as abas começam nesta ordem: Cursor, VS Code, Claude Code, Codex
     E em seguida vêm Command Code, Devin (CLI e Desktop), OpenCode, Gemini CLI, Oh My Pi, Pi, OpenClaw, Antigravity CLI, Grok Build CLI, Zero, ZCode, Kimi Code, Kiro CLI, GitHub Copilot CLI, Factory Droid, Meta Muse Code, IBM Bob, Qwen Code, Qoder e Hermes Agent
     E o Codex mostra o bloco `[mcp_servers.nix]` com o caminho absoluto
+    E a configuração do Codex fica em `.codex/config.toml` no projeto, com orientação para confiar no projeto
     E o Devin mostra `mcpServers` com `command` apontando para o binário do Nix
 
   @HU-08.12

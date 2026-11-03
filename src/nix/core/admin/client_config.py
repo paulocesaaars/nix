@@ -48,7 +48,7 @@ def _cursor(path: str) -> ClientSnippet:
     return ClientSnippet(
         key="cursor",
         label=AGENT_LABELS["cursor"],
-        file_hint=".cursor/mcp.json (projeto) ou ~/.cursor/mcp.json (global)",
+        file_hint=".cursor/mcp.json (projeto)",
         language="json",
         content=_json({"mcpServers": {"nix": {"command": path}}}),
         notes=("Depois de salvar, ative o servidor nix em Settings → MCP.",),
@@ -70,9 +70,9 @@ def _claude(path: str) -> ClientSnippet:
     return ClientSnippet(
         key="claude",
         label=AGENT_LABELS["claude"],
-        file_hint="terminal, em qualquer pasta (escopo do usuário)",
+        file_hint="terminal, na pasta do projeto",
         language="shell",
-        content=f'claude mcp add nix --scope user -- "{path}"',
+        content=f'claude mcp add nix --scope project -- "{path}"',
         notes=(
             "Rode claude mcp list para conferir se o nix aparece conectado.",
             "Prefere arquivo? Use .mcp.json com o mesmo bloco mcpServers do Cursor.",
@@ -84,10 +84,10 @@ def _codex(path: str) -> ClientSnippet:
     return ClientSnippet(
         key="codex",
         label=AGENT_LABELS["codex"],
-        file_hint="~/.codex/config.toml",
+        file_hint=".codex/config.toml (projeto confiável)",
         language="toml",
         content=f"[mcp_servers.nix]\ncommand = {_toml_string(path)}\n",
-        notes=("Cole este bloco em ~/.codex/config.toml. O valor de command é o caminho absoluto.",),
+        notes=("Cole este bloco em .codex/config.toml e confie no projeto no Codex.",),
     )
 
 
@@ -111,10 +111,7 @@ def _devin(path: str) -> ClientSnippet:
     return ClientSnippet(
         key="devin",
         label=AGENT_LABELS["devin"],
-        file_hint=(
-            ".devin/mcp_config.json (projeto) ou ~/.config/devin/mcp_config.json "
-            "(global; no Windows, %APPDATA%\\devin\\mcp_config.json)"
-        ),
+        file_hint=".devin/mcp_config.json (projeto)",
         language="json",
         content=_json({"mcpServers": {"nix": {"command": path}}}),
         notes=("Vale para o Devin CLI e para o Devin Desktop; os dois leem o mesmo arquivo.",),

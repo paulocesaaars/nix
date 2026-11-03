@@ -57,7 +57,9 @@ def test_connect_page_lists_clients_in_order(client: WebClient, monkeypatch: pyt
     panel = _panel(html, "codex")
     assert "[mcp_servers.nix]" in panel
     assert _COMMAND in panel
-    assert "~/.codex/config.toml" in panel
+    assert ".codex/config.toml" in panel
+    assert "~/.codex/config.toml" not in panel
+    assert "confie no projeto" in panel
     assert "codex mcp" not in panel.lower()
 
     devin = _panel(html, "devin")
