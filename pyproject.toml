@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nix"
-version = "5.1.1"
+version = "5.2.0"
 description = "Servidor MCP stdio para wikis em Markdown"
 readme = "README.md"
 requires-python = ">=3.11"
