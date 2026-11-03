@@ -25,6 +25,8 @@ def build_routes() -> list[BaseRoute]:
         Route("/tags", wiki.tags_page, methods=["GET"]),
         Route("/insights", wiki.insights_page, methods=["GET"]),
         Route("/brain", brain.panel_page, methods=["GET"]),
+        Route("/brain/settings", brain.settings_page, methods=["GET"]),
+        Route("/brain/settings", brain.settings_save, methods=["POST"]),
         Route("/brain/inbox", brain.inbox_page, methods=["GET"]),
         Route("/brain/profile", brain.profile_page, methods=["GET"]),
         Route("/brain/project", brain.project_page, methods=["GET"]),

@@ -131,6 +131,8 @@ As skills de desenvolvimento (implementar SDD pelo fluxo inteiro, especificar, c
 
 ## Mega Brain
 
+Na interface, abra **Mega Brain → Configuração** para selecionar uma wiki cadastrada e habilitar ou desabilitar o recurso. Salve e reinicie o cliente MCP. As ferramentas de memória funcionam sem hooks; a captura automática das sessões exige hooks. Um campo definido por variável de ambiente fica bloqueado individualmente; o outro continua editável.
+
 Desligado por padrão. Escolha a wiki das páginas e ligue:
 
 ```bash

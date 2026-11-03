@@ -14,9 +14,9 @@
 </div>
 
 {% if not enabled %}
-{{ alert("info", "O Mega Brain está desligado. Rode nix brain enable --wiki NOME para gravar páginas e capturar.") }}
+{{ alert("info", "O Mega Brain est? desabilitado. Abra Configura??o na se??o Mega Brain para escolher a wiki e habilit?-lo.") }}
 {% elif wiki_name %}
-<p class="sub">Páginas na wiki {{ wiki_name }}.</p>
+<p class="sub">P?ginas na wiki {{ wiki_name }}.</p>
 {% endif %}
 
 {% if not cards %}

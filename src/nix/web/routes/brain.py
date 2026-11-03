@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from urllib.parse import quote
 
 from starlette.requests import Request
 from starlette.responses import Response
 
+from nix.config.loader import load_config
 from nix.core.brain.agents import AGENT_LABELS
 from nix.core.brain.limits import load_brain_flags
+from nix.core.brain.settings import configure
 from nix.core.brain.store import BrainStore, ProjectRecord, SessionRecord
+from nix.core.errors import NixError
 from nix.web.render import page
-from nix.web.routes.common import query
+from nix.web.routes.common import form_data, query
 
 _TABS: tuple[tuple[str, str], ...] = (
     ("visao", "Visão geral"),
@@ -24,6 +28,43 @@ _TAB_IDS = {item[0] for item in _TABS}
 
 
 async def panel_page(request: Request) -> Response:
+    return _panel_response(request)
+
+
+async def settings_page(request: Request) -> Response:
+    return _settings_response(request)
+
+
+async def settings_save(request: Request) -> Response:
+    form = await form_data(request)
+    if "enabled" in form and form["enabled"] not in {"true", "false"}:
+        return _settings_response(request, error="Estado inválido. Atualize a página e tente de novo.", status_code=400)
+    try:
+        enabled = form["enabled"] == "true" if "enabled" in form else None
+        await asyncio.to_thread(configure, form.get("brain_wiki"), enabled, source="ui")
+    except NixError as exc:
+        return _settings_response(request, error=exc.message, status_code=400)
+    return _settings_response(
+        request,
+        message="Estado gravado. Reinicie o cliente MCP para atualizar as ferramentas disponíveis.",
+    )
+
+
+def _settings_response(
+    request: Request, *, error: str | None = None, message: str | None = None, status_code: int = 200
+) -> Response:
+    config = load_config()
+    return page(request, "brain_settings.html", {
+        "title": "Configuração do Mega Brain", "active": "brain_settings",
+        "brain_wiki": config.brain.wiki, "enabled": config.brain.enabled,
+        "wiki_choices": [wiki.name for wiki in config.wikis],
+        "wiki_locked": config.sources.get("brain.wiki") == "env",
+        "enabled_locked": config.sources.get("brain.enabled") == "env",
+        "error": error, "message": message,
+    }, status_code=status_code)
+
+
+def _panel_response(request: Request) -> Response:
     needle = query(request, "q")
     store = BrainStore()
     cards = []
@@ -44,7 +85,8 @@ async def panel_page(request: Request) -> Response:
                 "href": _project_href(project.key, "visao"),
             }
         )
-    flags = load_brain_flags()
+    config = load_config()
+    flags = config.brain
     return page(
         request,
         "brain.html",

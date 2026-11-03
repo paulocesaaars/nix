@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_ui.html" import alert %}
+{% block content %}
+<div class="head"><div><h1>Configuração do Mega Brain</h1><p class="sub">Escolha a wiki das páginas e o estado da memória entre agentes.</p></div></div>
+{% if error %}{{ alert("err", error) }}{% endif %}
+{% if message %}{{ alert("ok", message) }}{% endif %}
+{% if wiki_locked %}{{ alert("info", "A wiki está definida por NIX_BRAIN__WIKI. Remova essa variável e reinicie a interface para editar a wiki aqui.") }}{% endif %}
+{% if enabled_locked %}{{ alert("info", "O estado está definido por NIX_BRAIN__ENABLED. Remova essa variável e reinicie a interface para editar o estado aqui.") }}{% endif %}
+<form method="post" action="{{ wiki_url('/brain/settings') }}" class="card stack">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label for="brain-wiki">Wiki do Mega Brain</label>
+  <select class="input" name="brain_wiki" id="brain-wiki" required {% if wiki_locked %}disabled{% endif %}>
+    <option value="">Selecione uma wiki</option>
+    {% for name in wiki_choices %}<option value="{{ name }}" {% if name|lower == brain_wiki|lower %}selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <p class="small muted">A wiki recebe as páginas de memória e conta no limite de 100 wikis. Enquanto o Mega Brain estiver habilitado, ela não pode ser removida.</p>
+  <label for="brain-enabled">Estado do Mega Brain</label>
+  <select class="input" name="enabled" id="brain-enabled" {% if enabled_locked %}disabled{% endif %}>
+    <option value="false" {% if not enabled %}selected{% endif %}>Desabilitado</option>
+    <option value="true" {% if enabled %}selected{% endif %}>Habilitado</option>
+  </select>
+  <p class="small muted">As ferramentas de memória funcionam pelo MCP mesmo sem hooks. A captura automática de sessões exige <a href="{{ wiki_url('/connect') }}#hooks">hooks de sessão</a>. Reinicie o cliente MCP após alterar o estado.</p>
+  <div><button class="btn btn-primary" type="submit" {% if (wiki_locked and enabled_locked) or not wiki_choices %}disabled{% endif %}>Salvar configuração</button></div>
+</form>
+{% endblock %}

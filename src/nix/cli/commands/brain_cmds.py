@@ -9,7 +9,6 @@ import typer
 from nix.cli.agents import choose_agents, project_root
 from nix.cli.deps import with_errors
 from nix.cli.render import print_header, print_note, print_plan, print_success, print_table, print_warning
-from nix.config.editor import set_value
 from nix.config.executables import packaged_hook_executable
 from nix.config.loader import load_config
 from nix.core.admin import agent_hooks
@@ -18,6 +17,7 @@ from nix.core.brain.agents import AGENTS
 from nix.core.brain.events import find_project
 from nix.core.brain.handoff import accept, cancel, create, listed
 from nix.core.brain.profile import active, apply, forget, rebuild, review
+from nix.core.brain.settings import configure
 from nix.core.brain.store import BrainStore
 from nix.core.brain.worker import run_work
 from nix.core.errors import ConfigError
@@ -115,10 +115,7 @@ def _resolve_agents(agent: list[str] | None, install_all: bool) -> list[str]:
 def cmd_enable(
     wiki: str = typer.Option(..., "--wiki", help="Wiki que recebe as páginas. Conta no limite de 100 wikis."),
 ) -> None:
-    config = load_config()
-    config.get_wiki(wiki)
-    set_value("brain", "wiki", wiki.strip(), source="cli", persist=True)
-    set_value("brain", "enabled", True, source="cli", persist=True)
+    configure(wiki, True, source="cli")
     print_success(f"Mega Brain ligado. As páginas vão para a wiki {wiki.strip()}.")
     print_note("Ela conta no limite de 100 wikis e não pode ser removida enquanto o Mega Brain estiver ligado.")
     print_note("Para capturar, rode `nix brain hooks install --scope project` ou `--scope global`.")

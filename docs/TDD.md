@@ -736,3 +736,7 @@ def test_sync_without_changes(vault: Path, fake_embedder: type[FakeEmbedder]) ->
   teste apontar para um ID inexistente e confere se o índice e a pasta `docs/bdd/`
   batem. `--strict` também falha
   com cenário sem teste. Cenários `@manual` viram checklist da release.
+
+### Configuração do Mega Brain na interface
+
+`GET /brain/settings` apresenta a wiki e o estado efetivos. `POST /brain/settings`, protegido pelo CSRF comum, delega a `core.brain.settings.configure`: valida a wiki efetiva e grava apenas os campos enviados numa transação por `config.editor.set_many`, com histórico e precedência de ambiente. Campos definidos por ambiente ficam bloqueados individualmente e são omitidos do formulário. A CLI `nix brain enable` usa a mesma operação, informando a origem `cli`; a interface informa `ui`. A interface orienta reiniciar o cliente MCP para atualizar as ferramentas expostas.
