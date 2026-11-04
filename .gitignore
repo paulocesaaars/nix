@@ -31,3 +31,4 @@ nix.toml
 # Sistema
 .DS_Store
 Thumbs.db
+.codex/config.toml
