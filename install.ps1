@@ -77,6 +77,48 @@ function Add-NixUserPath([string]$Root) {
     [Environment]::SetEnvironmentVariable("Path", $updated, "User")
 }
 
+function Install-NixBinaries([string[]]$Sources, [string[]]$Destinations) {
+    $backups = @{}
+    $installed = @()
+    try {
+        # Renomear no mesmo diretório evita sobrescrever um executável existente.
+        foreach ($target in $Destinations) {
+            if (Test-Path -LiteralPath $target) {
+                $backup = "$target." + [guid]::NewGuid().ToString() + ".bak"
+                Move-Item -LiteralPath $target -Destination $backup -ErrorAction Stop
+                $backups[$target] = $backup
+            }
+        }
+        for ($index = 0; $index -lt $Sources.Count; $index++) {
+            Move-Item -LiteralPath $Sources[$index] -Destination $Destinations[$index] -ErrorAction Stop
+            $installed += $Destinations[$index]
+        }
+    }
+    catch {
+        $failure = $_
+        foreach ($target in $installed) {
+            Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+        }
+        foreach ($target in $backups.Keys) {
+            try {
+                Move-Item -LiteralPath $backups[$target] -Destination $target -ErrorAction Stop
+            }
+            catch {
+                Write-Warning "Não foi possível restaurar $target. A cópia anterior está em $($backups[$target]); feche os clientes do Nix e restaure esse arquivo."
+            }
+        }
+        throw "Não foi possível atualizar os executáveis em $BinDir. Feche a interface e os clientes MCP que usam o Nix e rode o instalador novamente. Confira também as permissões da pasta. Detalhe: $failure"
+    }
+    foreach ($backup in $backups.Values) {
+        try {
+            Remove-Item -LiteralPath $backup -Force -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Instalação atualizada, mas a cópia anterior continua em $backup. Feche os clientes do Nix e remova esse arquivo quando ele não estiver em uso."
+        }
+    }
+}
+
 $Arch = Get-NixArch
 $Tag = $env:NIX_VERSION
 $Headers = @{
@@ -135,8 +177,7 @@ try {
     }
 
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-    Move-Item -Force (Join-Path $Work $Asset) $Dest
-    Move-Item -Force (Join-Path $Work $HookAsset) $HookDest
+    Install-NixBinaries -Sources @((Join-Path $Work $Asset), (Join-Path $Work $HookAsset)) -Destinations @($Dest, $HookDest)
     Write-Host "nix-install: instalado em $Dest e $HookDest"
 
     $env:NIX_HOME = $Root
