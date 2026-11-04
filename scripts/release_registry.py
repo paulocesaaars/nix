@@ -2,9 +2,9 @@
 
 No job de publicação, com os binários já compilados em `artifacts`:
 
-  python scripts/release_registry.py pack --version 5.2.0 --artifacts artifacts
+  python scripts/release_registry.py pack --version 5.2.1 --artifacts artifacts
   sha256sum nix-* | tee checksums.txt
-  python scripts/release_registry.py card --version 5.2.0 --tag v5.2.0 \\
+  python scripts/release_registry.py card --version 5.2.1 --tag v5.2.1 \\
       --repo paulocesaaars/nix --checksums checksums.txt --output server.json
 
 O SHA de cada pacote é o que o `sha256sum` acabou de gravar. Este script não
