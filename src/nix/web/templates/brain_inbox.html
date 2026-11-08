@@ -19,7 +19,7 @@
         <td>{{ item.project }}</td>
         <td>{{ item.recipient }}</td>
         <td>{{ item.body }}</td>
-        <td>{{ item.status }}</td>
+        <td><span class="badge b-{{ item.tone }}">{{ item.status }}</span></td>
       </tr>
       {% endfor %}
     </tbody>

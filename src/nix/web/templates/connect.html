@@ -78,7 +78,7 @@
   <pre class="code" id="code-hooks">nix brain hooks install
 nix brain hooks install --scope project --agent claude
 nix brain hooks install --scope global --all</pre>
-  {% for item in hooks if item.note %}<p class="small muted"><strong>{{ item.label }}.</strong> {{ item.note }}</p>{% endfor %}
+  {% for note, items in hooks | selectattr("note") | groupby("note") %}<p class="small muted"><strong>{{ items | map(attribute="label") | join(", ") }}.</strong> {{ note }}</p>{% endfor %}
   {{ alert("info", "A gravação só acontece no terminal, depois da confirmação. nix brain hooks remove apaga apenas o que a Nix marcou. Este comando não escreve skill.") }}
 </section>
 

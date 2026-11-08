@@ -113,6 +113,7 @@ async def inbox_page(request: Request) -> Response:
                 "recipient": recipient or "qualquer agente",
                 "body": body,
                 "status": _message_status(status),
+                "tone": _MESSAGE_TONES.get(status, "n"),
             }
         )
     return page(
@@ -232,6 +233,9 @@ def _project_view(store: BrainStore, project: ProjectRecord, sessions: list[Sess
 
 def _project_href(key: str, tab: str) -> str:
     return f"/brain/project?project={quote(key)}&tab={tab}"
+
+
+_MESSAGE_TONES = {"pending": "warn", "delivered": "ok"}
 
 
 def _message_status(status: str) -> str:

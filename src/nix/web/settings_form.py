@@ -15,6 +15,8 @@ _SECTIONS = {
     "retrieval": "Busca",
     "safety": "Segurança",
     "logging": "Log",
+    "brain": "Mega Brain",
+    "profile": "Perfil",
 }
 _ORIGINS = {"env": "ambiente", "db": "settings.db", "default": "padrão"}
 
