@@ -13,18 +13,20 @@ regras e **não as copie para cá**.
 
 Consulte o documento certo para cada necessidade — **não duplique** regras que
 já estão nos outros arquivos. Se o repositório usar outros nomes, siga os
-documentos que existirem; o que o projeto não tem não se aplica.
+documentos que existirem e tiverem conteúdo. Documentos ausentes, vazios ou
+contendo apenas espaços em branco são ignorados e não ativam regras nem
+exigem preenchimento.
 
 | Necessidade | Documento |
 |-------------|-----------|
 | Escopo, funcionalidades, regras de negócio, roadmap | [`PRD.md`](docs/PRD.md) |
 | Arquitetura, componentes, dependências, configuração, segurança | [`TDD.md`](docs/TDD.md) |
 | Estilo visual: cores, tipografia, espaçamento, raios, elevação, componentes, layout | [`DESIGN.md`](docs/DESIGN.md) |
+| Critérios de aceite em Gherkin (se o projeto usa BDD) | [`BDD.md`](docs/BDD.md) |
 | Regras específicas deste projeto, que complementam este arquivo | [`HARNESS.md`](HARNESS.md) |
-| Critérios de aceite em Gherkin (se o projeto usa BDD), cada cenário com um teste de mesmo ID | [`BDD.md`](docs/BDD.md) (índice) e [`bdd/`](docs/bdd) |
 
-Este arquivo vale para qualquer projeto. Leia também o `HARNESS.md`, se
-existir, e siga **tudo** o que estiver nele: ele traz as regras específicas
+Este arquivo contém regras compartilhadas entre projetos. Leia também o
+`HARNESS.md`, se tiver conteúdo, e siga **tudo** o que estiver nele: ele traz as regras específicas
 deste projeto. Se uma decisão do `HARNESS.md` conflitar com este arquivo, vale o
 `HARNESS.md`, inclusive sobre as regras daqui que se declaram prevalentes.
 
@@ -78,42 +80,26 @@ prevalece sobre qualquer outra deste documento.
    camadas, dependências ou configuração.
 3. Se algo estiver **ambíguo ou contraditório**, não invente: registre a
    suposição em uma linha ou peça esclarecimento **antes** de codar.
-4. Leia [`DESIGN.md`](docs/DESIGN.md) quando a tarefa envolver interface, layout ou
+4. Leia a documentação de design quando a tarefa envolver interface, layout ou
    aparência.
 
 ### Estilo visual
 
-Interface, layout e aparência seguem [`DESIGN.md`](docs/DESIGN.md). Esta regra vale
-para qualquer alteração visível ao usuário.
+Quando a documentação de design tiver conteúdo, siga suas definições nas
+alterações de interface, layout e aparência. Desvios exigem autorização
+explícita do usuário antes da implementação. Se o documento estiver vazio,
+ignore-o: ele não impõe restrições visuais nem exige aprovação de estilo.
 
-- Use os tokens e componentes definidos lá: cores, tipografia, espaçamento,
-  raios, elevação, componentes e comportamento responsivo.
-- Cor, tipo, raio, sombra, espaçamento ou componente ficam dentro do documento.
-- Se a alteração **não seguir** o estilo do `DESIGN.md`, pare e peça permissão
-  **antes** de implementar. Descreva o desvio e aguarde autorização explícita.
-  Sem essa autorização, mantenha o estilo do documento.
-- Pedido direto de implementação **não** autoriza o desvio. A permissão para
-  sair do `DESIGN.md` é separada e vem antes da alteração.
-- Se o `DESIGN.md` estiver vazio, o projeto ainda não definiu um estilo: peça
-  orientação ao usuário antes de escolher cores e tipografia.
+### BDD e testes
 
-### Critérios de aceite (BDD)
-
-Esta seção vale quando o projeto usa BDD, isto é, tem um [`BDD.md`](docs/BDD.md). Ele
-é o índice dos casos de uso; os critérios de aceite ficam em Gherkin na pasta
-[`bdd/`](docs/bdd), um arquivo por caso de uso. Cada cenário tem um ID estável (por
-exemplo `@US-03.2`) e é coberto por um teste com o mesmo ID; o que não dá para
-automatizar leva `@manual` e vira checklist do usuário.
-
-- Ao especificar uma funcionalidade, especifique também os cenários BDD:
-  sugira os novos e os que mudam, e só grave em `docs/bdd/` (e no índice, se o caso
-  de uso for novo) com a aprovação do usuário.
-- Ao implementar um cenário, escreva o teste dele. Ao terminar uma
-  implementação, e sempre antes de commit ou release, rode os testes e confira
-  a cobertura dos cenários de `docs/bdd/`. Teste falhando bloqueia a entrega.
-- **Nunca** altere um cenário nem o resultado esperado de um teste para fazê-lo
-  passar. Mudar o comportamento esperado exige a aprovação do usuário.
-- **Nunca** contorne as checagens: corrija a causa.
+- BDD só está ativado ou iniciado quando `docs/BDD.md` (ou o documento
+  equivalente do projeto) tiver conteúdo. A existência de um arquivo vazio
+  não ativa BDD.
+- Implemente testes somente quando o usuário pedir ou quando uma mudança
+  quebrar um teste já existente. Essa regra também vale quando houver BDD.
+- Não altere um cenário BDD nem o resultado esperado de um teste apenas para
+  fazê-lo passar. Mudanças no comportamento esperado exigem aprovação do
+  usuário.
 
 ### Ferramentas de pesquisa e versionamento
 
@@ -129,30 +115,8 @@ qualquer uma (outro host de código, outro serviço de documentação).
 Se a ferramenta indicada estiver indisponível ou sem autenticação, informe o
 usuário e diga qual alternativa foi usada.
 
-### Princípios de implementação
-
-- Separe a regra de negócio da entrega (CLI, API, interface, protocolo): quem
-  entrega faz entrada, saída e delegação. A regra de negócio fica no núcleo.
-- Cada capacidade exposta ao cliente tem **uma única definição**, reutilizada
-  por todas as interfaces.
-- Arquivos, persistência e SDKs externos passam pelo módulo que a documentação
-  técnica designar.
-- A configuração é lida por um único ponto, validado. Segredos ficam em
-  variáveis de ambiente ou num cofre, fora do repositório.
-- Mensagens de erro indicam a **ação corretiva**.
-- Em linguagem tipada, as funções públicas têm tipos. O linter e o verificador
-  de tipos do projeto ficam sem erros.
-- Com BDD (`docs/BDD.md`), os testes nascem dos cenários de `docs/bdd/`; outros testes só
-  quando o usuário pedir. A validação padrão é a checagem estática limpa e os
-  testes passando, mais o checklist dos cenários `@manual`.
-- Sem BDD, não crie nem execute testes por iniciativa própria; escreva-os
-  quando o usuário pedir. A validação padrão é a checagem estática limpa, mais
-  uma verificação manual do comportamento.
-
 ### Comunicação e idioma
 
 - **Português (Brasil):** explicações ao usuário, comentários, docstrings, logs,
   mensagens de erro e textos exibidos ao usuário.
 - **Inglês:** nomes de variáveis, funções, classes, módulos, tabelas e ferramentas.
-
-Estes são os padrões; o `HARNESS.md` pode definir outro idioma.
