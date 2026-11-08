@@ -127,7 +127,7 @@ O mesmo fluxo, com registro de PATH, é `python scripts/bootstrap.py`. Para desf
 
 ### Skills de agente (desenvolvedor)
 
-As skills de desenvolvimento (implementar SDD pelo fluxo inteiro, especificar, criar testes, revisar código, atualizar a documentação, commitar, guardrails, gerar uma skill, iniciar o projeto e publicar a release) ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor e VS Code). O `skills-lock.json` registra a origem das que estão sincronizadas.
+As skills de desenvolvimento (atualizar a documentação, revisar código e commitar) ficam versionadas neste repositório, em `.claude/skills/` (Claude Code e Cursor) e `.agents/skills/` (Cursor e VS Code). O `skills-lock.json` registra a origem das que estão sincronizadas.
 
 ## Mega Brain
 
@@ -162,7 +162,7 @@ A página da sessão vai para `projects/<projeto>/sessions/` na wiki do Mega Bra
 
 **Painel.** Cada cartão é um projeto: a raiz Git da pasta em que o agente trabalhou, ou a própria pasta se não houver repositório. O nome é o da pasta, ou o campo `project` do `.nix.toml`. O cartão aparece depois da primeira sessão capturada e mostra a quantidade de sessões, os agentes e a última atividade. Abrir o projeto mostra visão geral, agentes, tokens, sessões e conhecimento.
 
-**Caixa de entrada.** É a fila de recados entre agentes, separada do handoff. `brain_message_send` grava o texto para um destinatário ou para qualquer um do projeto. O estado fica esperando. `brain_message_pop` entrega o mais antigo uma única vez e marca entregue. Cancelar tira da fila antes disso. A tela lista projeto, destinatário, texto e estado, inclusive os já entregues.
+**Caixa de entrada.** É a fila de recados entre agentes, separada do handoff. `brain_message_send` grava o texto para um destinatário ou para qualquer um do projeto. O estado fica esperando. `brain_message_pop` entrega o mais antigo uma única vez e marca entregue. Cancelar tira da fila antes disso. A tela lista projeto, destinatário, texto e estado (esperando, entregue ou cancelada), inclusive os já entregues.
 
 **Perfil.** São preferências que você escreveu nos pedidos, sem modelo de linguagem. A Nix procura “sempre use”, “prefiro”, “nunca use” e o equivalente em inglês, seguidos de uma palavra. Ferramentas conhecidas (`pnpm`, `pytest`, `ruff`, `docker`, `git` e outras) vão para `profile/tools/`. O resto vai para `profile/habits/`. A frase só entra quando o mesmo assunto apareceu em pelo menos dois projetos (`profile.min_projects`, padrão 2). A frase mais nova prevalece. `nix brain profile rebuild` reaprende; `forget` vira lápide e a passada seguinte não recria a entrada. No início da sessão o briefing inclui as frases ativas, salvo `[profile] consume = false` no `.nix.toml`.
 
@@ -185,7 +185,7 @@ Remove-Item -Force (Join-Path $root "bin\nix.exe"), (Join-Path $root "bin\nix-ho
 irm https://raw.githubusercontent.com/paulocesaaars/nix/main/install.ps1 | iex
 ```
 
-Feche e abra de novo o cliente MCP para ele carregar o binário novo.
+Feche e abra de novo o cliente MCP para ele carregar o binário novo. No Windows o instalador renomeia os binários existentes antes de gravar os novos e os restaura se algo falhar; se não conseguir apagar a cópia anterior (`.bak`), avisa e deixa o arquivo para você remover.
 
 **Linux e macOS:** o instalador substitui os arquivos. Encerre os processos e rode o instalador de novo:
 
@@ -679,22 +679,16 @@ O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou 
 
 ## Publicar uma versão
 
-Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no remoto. O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) confere a versão, roda `ruff` e `mypy`, compila `nix` e `nix-hook` por plataforma (Windows amd64, Linux amd64, Linux arm64, macOS arm64) e publica os arquivos com `checksums.txt` em [Releases](https://github.com/paulocesaaars/nix/releases).
+Este repositório não traz workflow de publicação: nada cria a release sozinho quando uma tag `vX.Y.Z` chega ao remoto. Os scripts que montam e conferem os artefatos continuam em `scripts/`:
 
-1. Atualize `[project].version` em `pyproject.toml` (ex.: `1.2.3`). A tag **precisa** bater com esse valor — senão o job falha.
-2. Faça o commit e o push na branch principal.
-3. Crie e envie a tag (o `v` no prefixo é obrigatório):
+- `check_version.py` confere se a versão da tag bate com `[project].version` do `pyproject.toml`.
+- `build_frozen.py` compila `nix` e `nix-hook` na plataforma local (Nuitka, Python 3.12).
+- `smoke_frozen.py` confere o binário compilado.
+- `release_registry.py` monta o `.mcpb` por plataforma e a ficha `server.json`.
 
-```bash
-git tag v1.2.3
-git push origin v1.2.3
-```
+O instalador baixa os binários e o `checksums.txt` da última release estável em [Releases](https://github.com/paulocesaaars/nix/releases), ou da tag indicada em `NIX_VERSION`. O zip de código-fonte da tag traz só o que instala e usa o Nix; skills de desenvolvimento, documentação e testes ficam de fora.
 
-4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz `nix` e `nix-hook` por plataforma, um `.mcpb` por plataforma, o `checksums.txt` e o `server.json`. O mesmo job publica a ficha no [MCP Registry](https://github.com/modelcontextprotocol/registry). O zip de código-fonte da tag traz só o que instala e usa o Nix; skills de desenvolvimento, documentação e testes ficam de fora.
-
-O guia em `site/` é publicado à parte, em [paulocesaaars.github.io/nix](https://paulocesaaars.github.io/nix/), quando um push na `main` altera essa pasta.
-
-Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.2.3`).
+O guia em `site/` não tem publicação automática neste repositório.
 
 ## Documentação
 

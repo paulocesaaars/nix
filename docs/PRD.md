@@ -9,7 +9,7 @@
 | Autor | Paulo |
 | Data | 2026-11-03 |
 
-Especificações técnicas: [TDD.md](./TDD.md). Critérios de aceite: [BDD.md](./BDD.md).
+Especificações técnicas: [TDD.md](./TDD.md).
 
 ---
 
@@ -177,8 +177,6 @@ Memória local entre agentes, desligada por padrão. `nix brain enable --wiki NO
 As ferramentas `brain_*` só aparecem no MCP com o Mega Brain ligado. `remember` continua gravando na wiki padrão e não faz parte do Mega Brain.
 
 ## 6. Histórias de usuário
-
-Os critérios de aceite de cada história ficam em [`bdd/`](./bdd), em Gherkin, com o mesmo ID (`@HU-01`, `@HU-01.1`…). O [BDD.md](./BDD.md) é o índice.
 
 **HU-01 — Primeira configuração**
 > Como usuário, quero apontar o caminho do meu vault e indexá-lo, para o editor passar a consultá-lo.

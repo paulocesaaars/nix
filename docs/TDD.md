@@ -19,7 +19,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 
 | Camada | Tecnologia | Justificativa |
 | --- | --- | --- |
-| Linguagem | Python 3.11+ (CI e tipos em 3.14) | Ecossistema de IA e requisito do projeto |
+| Linguagem | Python 3.11+ (checagem de tipos em 3.14) | Ecossistema de IA e requisito do projeto |
 | Embeddings | FastEmbed ONNX na CPU. Padrão `lulu` (MiniLM multilíngue, ~220 MB); `spitz` é o `BAAI/bge-m3` (~2,3 GB) | Local, gratuito, multilíngue, sem GPU, sem PyTorch |
 | Banco vetorial | ChromaDB 1.5.x em modo persistente | Local, gratuito, embutido; faixa pinada pelo grafo de import (OTEL/gRPC) |
 | Busca léxica | SQLite FTS5 | Já disponível na stdlib; complementa a busca vetorial em termos exatos |
@@ -109,7 +109,8 @@ nix/
 ├── scripts/bootstrap.py    # venv + pip + PATH (desenvolvimento); não roda nix init
 ├── scripts/build_frozen.py # Nuitka onefile, Python 3.12, na plataforma local
 ├── scripts/smoke_frozen.py # gate de --version, doctor --json e nix-hook
-├── scripts/check_bdd.py    # cobertura dos cenários de docs/bdd/ pelos testes
+├── scripts/check_version.py # a versão da tag bate com o pyproject.toml
+├── scripts/check_bdd.py    # cobertura dos cenários do BDD pelos testes (depende de docs/bdd/, que não existe mais)
 ├── scripts/release_registry.py # MCPB por plataforma e a ficha server.json
 ├── scripts/register_path.py # NIX_HOME e PATH do checkout de desenvolvimento
 ├── scripts/uninstall.py    # desfaz PATH, artefatos do checkout e o cache onefile/hook
@@ -123,13 +124,9 @@ nix/
 ├── docs/
 │   ├── PRD.md
 │   ├── TDD.md
-│   ├── BDD.md              # índice dos casos de uso do BDD
-│   ├── bdd/                # critérios de aceite em Gherkin, um arquivo por caso de uso (um teste por cenário)
+│   ├── BDD.md              # vazio: o repositório não traz critérios de aceite em Gherkin
 │   └── DESIGN.md           # estilo visual da CLI e da interface local
-├── site/                   # guia publicado no GitHub Pages (index.html, PDF, ícone)
-├── .github/workflows/
-│   ├── release.yml         # tag vX.Y.Z: checagens, binários, MCP Registry
-│   └── pages.yml           # push na main que altera site/ publica o guia
+├── site/                   # guia (index.html, PDF, ícone); sem publicação automática
 ├── tests/                  # pytest; conftest.py isola NIX_HOME e troca o embedder
 ├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
 ├── HARNESS.md              # regras específicas deste repositório
@@ -502,11 +499,11 @@ scripts/build_frozen.py           # Nuitka --mode=onefile com Python 3.12; tamb�
 scripts/smoke_frozen.py           # --version só com a versão; doctor --json com cada Import em ok; nix-hook em 300 ms
 ```
 
-O binário publicado cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
+O binário das releases cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04), Linux arm64 e macOS arm64. Windows arm64 e macOS Intel não têm artefato: o instalador recusa com a arquitetura esperada. O modelo ONNX continua fora do arquivo; o primeiro `nix sync` baixa do Hugging Face.
 
-O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive`. O `.gitattributes` usa `export-ignore` para tirar skills de desenvolvimento, documentação, testes, exemplos, configuração de editor e de CI e os scripts que só compilam ou conferem. Permanecem o pacote, o manifesto, as dependências de execução, os wrappers e os instaladores. A compilação da release usa o checkout inteiro, não esse zip.
+O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive`. O `.gitattributes` usa `export-ignore` para tirar skills de desenvolvimento, documentação, testes, exemplos, configuração de editor e os scripts que só compilam ou conferem. Permanecem o pacote, o manifesto, as dependências de execução, os wrappers e os instaladores. A compilação da release usa o checkout inteiro, não esse zip.
 
-O mesmo job monta um `.mcpb` por plataforma (`scripts/release_registry.py`) e a ficha `server.json` (`io.github.paulocesaaars/nix`). Os dois sobem na release. Em seguida o `mcp-publisher` publica a ficha no MCP Registry, com login OIDC do GitHub. O guia em `site/` sai por outro workflow: push na `main` que altera `site/` publica `https://paulocesaaars.github.io/nix/`.
+`scripts/release_registry.py` monta um `.mcpb` por plataforma e a ficha `server.json` (`io.github.paulocesaaars/nix`) a partir dos binários já compilados. O repositório não traz workflow que compile, publique a release ou o MCP Registry, nem que publique o guia de `site/`.
 
 `NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. A instalação não cadastra a wiki. Ao terminar, pede para executar `nix` e, se o comando não funcionar, fechar e abrir o terminal. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 
@@ -592,7 +589,7 @@ Telas: status do índice, sincronização (prévia, progresso por SSE, opção d
 
 Os controles de sincronização (prévia, incremental, reindexação e "todos os vaults") ficam num fieldset desligado enquanto o job existe. O primeiro clique desliga o fieldset inteiro antes da resposta. O POST de início devolve esse fieldset desligado fora da área do progresso, porque a resposta volta antes de o modelo terminar de carregar. O fim do job devolve o mesmo fieldset habilitado. Recarregar `/sync` no meio lê o job ainda em andamento e renderiza o fieldset desligado. Um segundo início, ou uma prévia com job ativo, recebe 409 no aviso da página e não substitui o progresso. A prévia não varre o vault nesse caso. Sem job, a prévia percorre um vault por vez e solta a trava daquele vault antes do próximo.
 
-O seletor de wiki fica numa faixa no topo da coluna principal, ao lado da barra lateral ("Wiki ativo", com o caminho da wiki escolhida na mesma linha). No celular a barra lateral ocupa a largura inteira acima dessa faixa, e o caminho desce truncado para a linha de baixo. É um formulário GET com `?wiki=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: uma wiki, várias ou todas (`wiki=*`), e cada trecho exibe a wiki de origem. O menu tem os grupos Operação, Wiki, Mega Brain, Integração e Manutenção. No Mega Brain, o perfil e a aba Conhecimento montam o link da nota com a wiki de `brain.wiki`, não com a da faixa.
+O seletor de wiki fica numa faixa no topo da coluna principal, ao lado da barra lateral ("Wiki ativo", com o caminho da wiki escolhida na mesma linha). Acima de 760px a barra lateral fica fixa ao rolar a página e a coluna principal nunca desce para baixo dela. No celular a barra lateral ocupa a largura inteira acima dessa faixa, e o caminho desce truncado para a linha de baixo. É um formulário GET com `?wiki=`; os outros parâmetros da URL são preservados. Nome vazio ou ausente cai no padrão. A Busca tem a própria escolha: uma wiki, várias ou todas (`wiki=*`), e cada trecho exibe a wiki de origem. O menu tem os grupos Operação, Wiki, Mega Brain, Integração e Manutenção. Na Configuração, os campos de `brain` e `profile` aparecem nos grupos Mega Brain e Perfil. No Mega Brain, o perfil e a aba Conhecimento montam o link da nota com a wiki de `brain.wiki`, não com a da faixa.
 
 Telas de consulta (só leitura): busca, notas (lista, contorno, linhas e links), tags e insights chamam `call_tool` do registro, o mesmo caminho do MCP. `RuntimeGate` tem uma trava por vault, para ler um enquanto outro sincroniza. Se a trava daquele vault estiver ocupada, a tela pede para esperar em vez de bloquear. O diagnóstico da interface percorre os vaults deste processo; `nix doctor` no terminal abre o seu.
 
@@ -713,9 +710,7 @@ O carregamento do modelo de embedding é preguiçoso. Modelos que o FastEmbed 0.
 
 ## 15. Testes e critérios de aceite
 
-Os critérios de aceite das funcionalidades ficam em Gherkin na pasta [`bdd/`](./bdd), um arquivo por
-caso de uso; o [BDD.md](./BDD.md) é o índice. Cada cenário
-tem um ID (`@HU-03.2`) e o teste que o cobre leva o mesmo ID:
+O repositório não traz critérios de aceite em Gherkin: `docs/BDD.md` está vazio e a pasta `docs/bdd/` não existe. Os testes continuam marcando o cenário de origem com `@pytest.mark.bdd("HU-03.2")`; o marcador está registrado no `pyproject.toml`:
 
 ```python
 @pytest.mark.bdd("HU-03.2")
@@ -734,7 +729,4 @@ def test_sync_without_changes(vault: Path, fake_embedder: type[FakeEmbedder]) ->
   `tests/web/conftest.py` sobe a interface com sessão e CSRF (`client`);
   `embed_hold` segura o embedding enquanto o teste de sincronização em andamento
   precisa que os controles continuem desligados.
-- **Cobertura:** `python scripts/check_bdd.py` lista os cenários sem teste, falha se um
-  teste apontar para um ID inexistente e confere se o índice e a pasta `docs/bdd/`
-  batem. `--strict` também falha
-  com cenário sem teste. Cenários `@manual` viram checklist da release.
+- **Cobertura:** `scripts/check_bdd.py` lê `docs/bdd/` e confere os IDs dos testes contra ele; sem essa pasta, acusa os IDs dos testes como inexistentes. Não faz parte da validação padrão.
