@@ -16,7 +16,8 @@ Não há build, fonte remota nem modo escuro. O fundo do terminal é o do usuár
 | `soft-2` | `#F2F2F2` | Item de navegação atual, aviso informativo |
 | `on-ink` | `#FFFFFF` | Texto sobre fundo `ink` ou sobre o acento |
 | `accent` | `#FF385C` | Ação principal, barra de progresso, caixa marcada |
-| `accent-active` | `#E00B41` | Ação principal sob o ponteiro; link de título em hover |
+| `accent-active` | `#E00B41` | Fundo da ação principal (4,9:1 com texto branco); link de título em hover |
+| `accent-deep` | `#C20A38` | Ação principal sob o ponteiro |
 | `accent-line` | `#FFD1DA` | Contorno claro do acento, quando um selo precisa da marca sem preencher |
 | `ok` / `ok-soft` | `#04694A` / `#E3F3EB` | Sucesso, diff de linha adicionada |
 | `warn` / `warn-ink` / `warn-soft` | `#8A5300` / `#6B4100` / `#FCF1DD` | Aviso; o texto do aviso usa `warn-ink` |
@@ -64,7 +65,7 @@ Rótulo de grupo na navegação: 11px, peso 600, caixa alta, espaçamento de 0.0
 
 ## Layout
 
-A página é uma barra lateral em altura inteira e uma coluna principal. A coluna começa com a faixa **Wiki ativo** (nome e caminho na mesma linha). O conteúdo fica abaixo dessa faixa.
+A página é uma barra lateral em altura inteira, fixa ao rolar, e uma coluna principal ao lado dela. A coluna principal nunca desce para baixo da barra acima de 760px. A coluna começa com a faixa **Wiki ativo** (nome e caminho na mesma linha). O conteúdo fica abaixo dessa faixa.
 
 A barra lateral mostra a marca `nix`, a versão e cinco grupos: Operação (Status, Sincronizar, Diagnóstico), Wiki (Busca, Notas, Tags, Insights), Mega Brain (Painel, Configuração, Caixa de entrada, Perfil), Integração (Conectar cliente, Tráfego MCP) e Manutenção (Backups, Wikis, Configuração, Histórico). No pé, o botão Encerrar. O painel do Mega Brain filtra os cartões pelo nome. A página do projeto usa as abas Visão geral, Agentes, Tokens, Sessões e Conhecimento (o componente **Abas**, classe `seg`); a aba fica na query `tab` da URL.
 
@@ -76,7 +77,7 @@ Abaixo de 760px a barra lateral ocupa a largura inteira, acima da faixa da wiki.
 
 **Botão.** Fundo branco, borda `ink`, texto `ink`, raio 8px. Hover: fundo `soft`.
 
-**Botão primário.** Fundo e borda `accent`, texto branco. Hover: `accent-active`. É a ação da tela (por exemplo Sincronizar).
+**Botão primário.** Fundo e borda `accent-active`, texto branco. Hover: `accent-deep`. O `accent` puro (3,5:1 com branco) não serve de fundo para texto. É a ação da tela (por exemplo Sincronizar).
 
 **Botão destrutivo.** Texto e borda `err`. Hover: fundo `err-soft`.
 
