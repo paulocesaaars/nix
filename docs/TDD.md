@@ -19,7 +19,7 @@ Contexto de negócio e requisitos: [PRD.md](./PRD.md).
 
 | Camada | Tecnologia | Justificativa |
 | --- | --- | --- |
-| Linguagem | Python 3.11+ (checagem de tipos em 3.14) | Ecossistema de IA e requisito do projeto |
+| Linguagem | Python 3.11+ (CI e tipos em 3.14) | Ecossistema de IA e requisito do projeto |
 | Embeddings | FastEmbed ONNX na CPU. Padrão `lulu` (MiniLM multilíngue, ~220 MB); `spitz` é o `BAAI/bge-m3` (~2,3 GB) | Local, gratuito, multilíngue, sem GPU, sem PyTorch |
 | Banco vetorial | ChromaDB 1.5.x em modo persistente | Local, gratuito, embutido; faixa pinada pelo grafo de import (OTEL/gRPC) |
 | Busca léxica | SQLite FTS5 | Já disponível na stdlib; complementa a busca vetorial em termos exatos |
@@ -127,6 +127,8 @@ nix/
 │   ├── BDD.md              # vazio: o repositório não traz critérios de aceite em Gherkin
 │   └── DESIGN.md           # estilo visual da CLI e da interface local
 ├── site/                   # guia (index.html, PDF, ícone); sem publicação automática
+├── .github/workflows/
+│   └── release.yml         # tag vX.Y.Z: checagens, binários, MCP Registry
 ├── tests/                  # pytest; conftest.py isola NIX_HOME e troca o embedder
 ├── AGENTS.md / CLAUDE.md   # instruções de agente (CLAUDE.md importa o AGENTS.md)
 ├── HARNESS.md              # regras específicas deste repositório
@@ -503,7 +505,7 @@ O binário das releases cobre Windows amd64, Linux amd64 (glibc do Ubuntu 22.04)
 
 O GitHub também anexa o zip e o tar do código da tag, gerados por `git archive`. O `.gitattributes` usa `export-ignore` para tirar skills de desenvolvimento, documentação, testes, exemplos, configuração de editor e os scripts que só compilam ou conferem. Permanecem o pacote, o manifesto, as dependências de execução, os wrappers e os instaladores. A compilação da release usa o checkout inteiro, não esse zip.
 
-`scripts/release_registry.py` monta um `.mcpb` por plataforma e a ficha `server.json` (`io.github.paulocesaaars/nix`) a partir dos binários já compilados. O repositório não traz workflow que compile, publique a release ou o MCP Registry, nem que publique o guia de `site/`.
+O mesmo job monta um `.mcpb` por plataforma (`scripts/release_registry.py`) e a ficha `server.json` (`io.github.paulocesaaars/nix`). Os dois sobem na release. Em seguida o `mcp-publisher` publica a ficha no MCP Registry, com login OIDC do GitHub. O repositório não tem workflow que publique o guia de `site/`.
 
 `NIX_HOME` já definido (variável de usuário no Windows, ou o bloco dos rc no Unix) é a pasta da instalação, e o binário novo substitui `{NIX_HOME}/bin`. Sem `NIX_HOME`, a pasta é `%LOCALAPPDATA%\nix`, `~/Library/Application Support/nix` ou `${XDG_DATA_HOME:-~/.local/share}/nix`. A instalação não cadastra a wiki. Ao terminar, pede para executar `nix` e, se o comando não funcionar, fechar e abrir o terminal. O instalador roda `nix --version` uma vez para aquecer o cache do modo onefile (`{CACHE_DIR}/nix/onefile-{VERSION}`) e `nix-hook hook` para aquecer o cache `hook-{VERSION}`. O comando `nix` vale num **novo** terminal. Se já existir outro `nix` no PATH (gerenciador NixOS), o instalador avisa.
 

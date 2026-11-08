@@ -679,16 +679,22 @@ O comando exige o `nix init`, escuta só em `127.0.0.1` e encerra com Ctrl+C ou 
 
 ## Publicar uma versão
 
-Este repositório não traz workflow de publicação: nada cria a release sozinho quando uma tag `vX.Y.Z` chega ao remoto. Os scripts que montam e conferem os artefatos continuam em `scripts/`:
+Uma release no GitHub é criada automaticamente quando uma tag `vX.Y.Z` chega no remoto. O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) confere a versão, roda `ruff` e `mypy`, compila `nix` e `nix-hook` por plataforma (Windows amd64, Linux amd64, Linux arm64, macOS arm64) e publica os arquivos com `checksums.txt` em [Releases](https://github.com/paulocesaaars/nix/releases).
 
-- `check_version.py` confere se a versão da tag bate com `[project].version` do `pyproject.toml`.
-- `build_frozen.py` compila `nix` e `nix-hook` na plataforma local (Nuitka, Python 3.12).
-- `smoke_frozen.py` confere o binário compilado.
-- `release_registry.py` monta o `.mcpb` por plataforma e a ficha `server.json`.
+1. Atualize `[project].version` em `pyproject.toml` (ex.: `1.2.3`). A tag **precisa** bater com esse valor — senão o job falha.
+2. Faça o commit e o push na branch principal.
+3. Crie e envie a tag (o `v` no prefixo é obrigatório):
 
-O instalador baixa os binários e o `checksums.txt` da última release estável em [Releases](https://github.com/paulocesaaars/nix/releases), ou da tag indicada em `NIX_VERSION`. O zip de código-fonte da tag traz só o que instala e usa o Nix; skills de desenvolvimento, documentação e testes ficam de fora.
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+4. Acompanhe o workflow **Release** em Actions. Em caso de sucesso, a release traz `nix` e `nix-hook` por plataforma, um `.mcpb` por plataforma, o `checksums.txt` e o `server.json`. O mesmo job publica a ficha no [MCP Registry](https://github.com/modelcontextprotocol/registry). O zip de código-fonte da tag traz só o que instala e usa o Nix; skills de desenvolvimento, documentação e testes ficam de fora.
 
 O guia em `site/` não tem publicação automática neste repositório.
+
+Para republicar os artefatos de uma tag que já existe, dispare o workflow à mão: Actions → Release → Run workflow, e informe a tag (ex.: `v1.2.3`).
 
 ## Documentação
 
