@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "nix": {
-      "command": "C:/Users/paulo/AppData/Local/nix/bin/nix.exe"
-    }
-  }
-}
